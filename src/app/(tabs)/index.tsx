@@ -1,5 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -68,22 +69,31 @@ export default function ExploreScreen() {
             <View style={styles.header}>
               <Wordmark size={22} />
               <ThemedText type="title">Find a court</ThemedText>
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Venue, city, or barangay"
-                placeholderTextColor={theme.placeholder}
-                autoCapitalize="none"
-                returnKeyType="search"
+              <View
                 style={[
-                  styles.search,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: theme.input,
-                    color: theme.cardForeground,
-                  },
-                ]}
-              />
+                  styles.searchPill,
+                  { backgroundColor: theme.card, borderColor: theme.input },
+                ]}>
+                <Ionicons name="search" size={18} color={theme.mutedForeground} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Venue, court, city, or barangay"
+                  placeholderTextColor={theme.placeholder}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  style={[styles.searchInput, { color: theme.cardForeground }]}
+                />
+                {search.length > 0 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear search"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={() => setSearch('')}>
+                    <Ionicons name="close-circle" size={18} color={theme.mutedForeground} />
+                  </Pressable>
+                ) : null}
+              </View>
               {error ? (
                 <ThemedText type="small" themeColor="destructive">
                   {error}
@@ -128,19 +138,26 @@ const styles = StyleSheet.create({
   list: {
     padding: Spacing.four,
     paddingBottom: BottomTabInset + Spacing.three,
-    gap: Spacing.three,
+    gap: Spacing.five,
   },
   header: {
     gap: Spacing.two,
     marginBottom: Spacing.one,
   },
-  search: {
-    minHeight: 48,
-    borderRadius: Radius.lg,
+  searchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 52,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     paddingHorizontal: Spacing.three,
-    fontSize: 16,
     marginTop: Spacing.two,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 0,
   },
   skeletons: {
     gap: Spacing.three,
