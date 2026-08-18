@@ -127,17 +127,39 @@ target. No real money moved at any point.
     restoring the persisted session. Not conclusively a product bug:
     Expo Go's AsyncStorage is scoped to the dev project and was churned
     by many Metro restarts and reinstalls during testing, which a real
-    build never does. Worth re-checking deliberately on an
-    `expo-dev-client` build (leave signed in overnight, cold start) —
-    if a session genuinely doesn't survive, that is a serious UX defect
-    and would point at refresh-token rotation rather than storage.
-14. **Production still has none of this.** The `device_push_tokens`
-    migration is applied to staging only. Production
-    (`hrpbjudsrqcgyrkkodop`) has never been touched in this work, and
-    the web repo's mobile-support changes (checkout + cancel routes,
-    payment-return page, checkoutSession extraction, push webhook) are
-    still uncommitted. Ordering when it does go out: additive migration
-    first, then the code deploy.
+    build never does. **Partial exoneration on the dev client:** in the
+    standalone dev-client build, the session DID survive an immediate
+    terminate → cold relaunch. The overnight-idle case (refresh-token
+    rotation) remains untested.
+14. **Production now has the push schema (2026-08-19).** With the
+    user's explicit approval, `20260810000066_device_push_tokens` was
+    applied to production via the bounded runner (`--from 066 --to 066`)
+    after a read-only pre-flight, and verified read-only afterward
+    (table present, 0 rows). Note the renumbering: three files had
+    collided on prefix `065` across parallel sessions (two still in the
+    git stash — renumber before restoring); see
+    MIGRATION-NUMBERING.md. The web repo's mobile-support routes remain
+    uncommitted/undeployed, so the production trigger's webhook target
+    404s harmlessly (fire-and-forget) until that deploy.
+15. **Dev client (EAS cloud build) verified in the simulator.** The
+    first build shipped without env and would have crashed — EAS never
+    sees the gitignored `.env.local`, so the public Supabase URL/anon
+    key now live in `eas.json` build env (client-public by design).
+    The corrected build installed and ran: sign-in, Explore, and the
+    REAL `airrally://venue/<id>` scheme routing straight to the venue
+    screen (warm). One dev-only artifact: a COLD scheme launch lands on
+    the dev-client launcher (it wants a dev server chosen before
+    running the app) and the link is not replayed — production builds
+    have no launcher, and cold-link routing itself was proven via
+    Expo Go's `exp://` path plus the splash gate. Device-typing quirk
+    logged: long `text` injections truncate (~16–27 chars) —
+    split into chunks when driving the simulator keyboard.
+16. **Push on a real device requires a PAID Apple Developer account.**
+    Free personal teams cannot use the push entitlement at all, so
+    device installs on a free Apple ID (local Xcode builds only, 7-day
+    expiry, Homebrew+CocoaPods prerequisite on this Mac) cannot test
+    push delivery. The `development-device` EAS profile is ready for
+    the paid path (device registration QR → signed build → install).
 13. **iOS offers to save the app password** to the keychain on sign-in
     (standard for a native text-field login). Declined during testing.
     Harmless; worth a deliberate product decision on whether to support
