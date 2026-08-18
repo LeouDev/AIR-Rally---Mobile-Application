@@ -155,6 +155,15 @@ export type AvailableSlot = {
   slot_end: string;
 };
 
+/** AIR/Rally Credits wallet — balance in integer centavos. One row per
+ * user, created lazily; no row means zero balance, not an error. */
+export type UserCreditWallet = {
+  user_id: string;
+  balance: number;
+  created_at: string;
+  updated_at: string;
+};
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row;
   Insert: Insert;
@@ -176,6 +185,7 @@ export type Database = {
       court_images: TableDef<CourtImage, never, never>;
       venue_operating_hours: TableDef<VenueOperatingHours, never, never>;
       bookings: TableDef<Booking, never, never>;
+      user_credit_wallets: TableDef<UserCreditWallet, never, never>;
     };
     Views: Record<string, never>;
     Functions: {

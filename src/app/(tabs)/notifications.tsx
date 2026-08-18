@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -41,6 +41,36 @@ export default function NotificationsScreen() {
     setRefreshing(false);
   }, [load]);
 
+  /** Mark read (optimistically) and follow the notification into the app.
+   * link_url uses the web's paths — "/bookings/<id>" maps onto the app's
+   * booking screen; a bare "/bookings" stays on the tab bar. */
+  const openNotification = useCallback((notification: Notification) => {
+    if (notification.read_at === null) {
+      const readAt = new Date().toISOString();
+      setNotifications((prev) =>
+        prev?.map((n) => (n.id === notification.id ? { ...n, read_at: readAt } : n)) ?? prev
+      );
+      supabase
+        .from('notifications')
+        .update({ read_at: readAt })
+        .eq('id', notification.id)
+        .then(({ error }) => {
+          if (error) {
+            setNotifications((prev) =>
+              prev?.map((n) => (n.id === notification.id ? { ...n, read_at: null } : n)) ?? prev
+            );
+          }
+        });
+    }
+
+    const bookingMatch = notification.link_url?.match(/\/bookings\/([0-9a-f-]{36})/i);
+    if (bookingMatch) {
+      router.push({ pathname: '/booking/[id]', params: { id: bookingMatch[1] } });
+    } else if (notification.link_url?.startsWith('/bookings')) {
+      router.push('/(tabs)/bookings');
+    }
+  }, []);
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -64,7 +94,17 @@ export default function NotificationsScreen() {
             )
           }
           renderItem={({ item }) => (
-            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openNotification(item)}
+              style={({ pressed }) => [
+                styles.card,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}>
               <View style={styles.cardHeader}>
                 {item.read_at === null ? (
                   <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />
@@ -76,7 +116,7 @@ export default function NotificationsScreen() {
               <ThemedText type="small" themeColor="subtle">
                 {item.message}
               </ThemedText>
-            </View>
+            </Pressable>
           )}
         />
       </SafeAreaView>

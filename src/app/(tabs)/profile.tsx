@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { formatCentavos } from '@/lib/bookings';
 import type { Profile } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/providers/session';
@@ -16,6 +17,7 @@ export default function ProfileScreen() {
   const theme = useTheme();
   const { session, signOut } = useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
   useFocusEffect(
@@ -28,6 +30,15 @@ export default function ProfileScreen() {
         .maybeSingle()
         .then(({ data }) => {
           if (!cancelled && data) setProfile(data);
+        });
+      // No wallet row means no credit has ever moved — a zero balance.
+      supabase
+        .from('user_credit_wallets')
+        .select('balance')
+        .eq('user_id', session?.user.id ?? '')
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (!cancelled && !error) setCreditBalance(data?.balance ?? 0);
         });
       return () => {
         cancelled = true;
@@ -67,6 +78,20 @@ export default function ProfileScreen() {
                 {roleLabel}
               </ThemedText>
             </View>
+          </View>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
+          <View style={styles.identity}>
+            <ThemedText type="small" style={{ color: theme.navyForeground }}>
+              AIR/Rally Credits
+            </ThemedText>
+            <ThemedText type="heading" style={{ color: theme.navyForeground }}>
+              {creditBalance === null ? '—' : formatCentavos(creditBalance)}
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: theme.navyForeground }}>
+              Credits apply automatically at checkout. Bookings paid with credits are final.
+            </ThemedText>
           </View>
         </View>
 

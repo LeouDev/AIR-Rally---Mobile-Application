@@ -23,36 +23,53 @@ export type CheckoutResult =
   | { success: true; data: CheckoutOutcome }
   | { success: false; error: string };
 
-export async function createCheckoutSession(input: {
-  courtId: string;
-  startTime: string;
-  endTime: string;
-}): Promise<CheckoutResult> {
+type ApiResult<T> = { success: true; data: T } | { success: false; error: string };
+
+async function postToApi<T>(path: string, payload: unknown, fallbackError: string): Promise<ApiResult<T>> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) {
-    return { success: false, error: 'Sign in to book a court.' };
+    return { success: false, error: 'Sign in first.' };
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/mobile/checkout`, {
+    const response = await fetch(`${API_URL}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
     });
-    const body = (await response.json().catch(() => null)) as CheckoutResult | null;
+    const body = (await response.json().catch(() => null)) as ApiResult<T> | null;
     if (body && typeof body === 'object' && 'success' in body) {
       return body;
     }
-    return { success: false, error: "We couldn't start checkout. Please try again." };
+    return { success: false, error: fallbackError };
   } catch {
     return {
       success: false,
       error: 'Could not reach AIR/Rally. Check your connection and try again.',
     };
   }
+}
+
+export async function createCheckoutSession(input: {
+  courtId: string;
+  startTime: string;
+  endTime: string;
+}): Promise<CheckoutResult> {
+  return postToApi('/api/mobile/checkout', input, "We couldn't start checkout. Please try again.");
+}
+
+export type CancelOutcome = {
+  booking: { id: string; status: string };
+  /** The server's decision about the customer's money — always shown, so
+   * cancelling never reads as "they kept it". */
+  credit: { amount: number; eligible: boolean; reason: string; issued: boolean };
+};
+
+export async function cancelBookingViaApi(bookingId: string): Promise<ApiResult<CancelOutcome>> {
+  return postToApi('/api/mobile/cancel', { bookingId }, "We couldn't cancel that booking.");
 }

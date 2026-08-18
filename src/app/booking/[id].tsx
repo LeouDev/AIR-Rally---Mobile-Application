@@ -14,6 +14,7 @@ import {
   getBookingWithCourt,
   type BookingWithCourt,
 } from '@/lib/bookings';
+import { cancelBookingViaApi, type CancelOutcome } from '@/lib/checkout';
 
 /** How long to keep polling a pending booking before assuming the payment
  * isn't coming through this sitting — matches the web's in-flight window
@@ -55,11 +56,41 @@ export default function BookingStatusScreen() {
     };
   }, [id]);
 
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [creditOutcome, setCreditOutcome] = useState<CancelOutcome['credit'] | null>(null);
+
   const timezone = booking?.courts?.venues?.timezone ?? 'Asia/Manila';
   const totalCharged =
     booking !== undefined && booking !== null
       ? booking.price_amount - booking.credit_amount_applied + booking.processing_fee_amount
       : 0;
+
+  // Mirrors the server's own rules so the button only shows when the
+  // cancel can succeed: pending always; confirmed only when it used no
+  // credits (credit bookings are final) and hasn't started.
+  const cancellable =
+    booking != null &&
+    (booking.status === 'pending' ||
+      (booking.status === 'confirmed' &&
+        booking.credit_amount_applied === 0 &&
+        new Date(booking.start_time).getTime() > Date.now()));
+
+  const performCancel = async () => {
+    if (!booking || cancelling) return;
+    setCancelling(true);
+    setCancelError(null);
+    const result = await cancelBookingViaApi(booking.id);
+    setCancelling(false);
+    if (!result.success) {
+      setCancelError(result.error);
+      return;
+    }
+    setConfirmingCancel(false);
+    setCreditOutcome(result.data.credit);
+    setBooking({ ...booking, status: 'cancelled' });
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -153,6 +184,79 @@ export default function BookingStatusScreen() {
               <Row label="Total" value={formatCentavos(Math.max(totalCharged, 0))} bold />
             </View>
 
+            {creditOutcome ? (
+              <View
+                style={[
+                  styles.card,
+                  creditOutcome.issued
+                    ? { backgroundColor: theme.successSoft, borderColor: theme.successSoft }
+                    : { backgroundColor: theme.neutralSoft, borderColor: theme.neutralSoft },
+                ]}>
+                <ThemedText
+                  type="smallBold"
+                  style={{
+                    color: creditOutcome.issued
+                      ? theme.successSoftForeground
+                      : theme.neutralSoftForeground,
+                  }}>
+                  {creditOutcome.issued
+                    ? `${formatCentavos(creditOutcome.amount)} in AIR/Rally Credits added to your wallet`
+                    : 'About your payment'}
+                </ThemedText>
+                <ThemedText
+                  type="small"
+                  style={{
+                    color: creditOutcome.issued
+                      ? theme.successSoftForeground
+                      : theme.neutralSoftForeground,
+                  }}>
+                  {creditOutcome.reason}
+                </ThemedText>
+              </View>
+            ) : null}
+
+            {cancellable ? (
+              confirmingCancel ? (
+                <View
+                  style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <ThemedText type="smallBold">Cancel this booking?</ThemedText>
+                  <ThemedText type="small" themeColor="subtle">
+                    {booking.status === 'pending'
+                      ? 'The slot is released immediately and nothing is charged.'
+                      : 'Cancelling at least 48 hours ahead earns AIR/Rally Credits for what you paid; closer than that, no compensation is due.'}
+                  </ThemedText>
+                  {cancelError ? (
+                    <ThemedText type="small" themeColor="destructive">
+                      {cancelError}
+                    </ThemedText>
+                  ) : null}
+                  <View style={styles.confirmRow}>
+                    <View style={styles.confirmButton}>
+                      <Button
+                        title="Keep booking"
+                        variant="secondary"
+                        onPress={() => setConfirmingCancel(false)}
+                        disabled={cancelling}
+                      />
+                    </View>
+                    <View style={styles.confirmButton}>
+                      <Button
+                        title={cancelling ? 'Cancelling…' : 'Yes, cancel'}
+                        onPress={performCancel}
+                        loading={cancelling}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <Button
+                  title="Cancel booking"
+                  variant="ghost"
+                  onPress={() => setConfirmingCancel(true)}
+                />
+              )
+            ) : null}
+
             <Button title="See my bookings" onPress={() => router.replace('/(tabs)/bookings')} />
           </View>
         )}
@@ -202,5 +306,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: Spacing.two,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  confirmButton: {
+    flex: 1,
   },
 });
