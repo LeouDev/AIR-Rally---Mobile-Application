@@ -8,11 +8,21 @@
       "distribution": "internal",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://vdxdmtsnptzodabaojlc.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkeGRtdHNucHR6b2RhYmFvamxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4MjM1NTAsImV4cCI6MjEwMjM5OTU1MH0.Vaj6gkMiOkQpgpvRuN5XGJhQuVdDqDlveUllrJErZMY",
+        "EXPO_PUBLIC_API_URL": "https://air-rally.com"
       }
     },
     "development-device": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://vdxdmtsnptzodabaojlc.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkeGRtdHNucHR6b2RhYmFvamxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4MjM1NTAsImV4cCI6MjEwMjM5OTU1MH0.Vaj6gkMiOkQpgpvRuN5XGJhQuVdDqDlveUllrJErZMY",
+        "EXPO_PUBLIC_API_URL": "https://air-rally.com"
+      }
     },
     "preview": {
       "distribution": "internal"
