@@ -122,6 +122,37 @@ function formatTimeRange(start: string, end: string): string {
 
 export type DaySchedule = { day: string; hours: string };
 
+export type CondensedSchedule = { label: string; hours: string };
+
+/**
+ * The weekly schedule with consecutive same-hours days folded together —
+ * most venues run one schedule all week, and seven identical rows bury
+ * everything below them. "Daily · 6 AM – 12 PM, 1 PM – 11 PM" says the
+ * same thing in one line; a split week comes out as "Mon – Fri · …" plus
+ * "Sat – Sun · …".
+ */
+export function condensedSchedule(rows: VenueOperatingHours[]): CondensedSchedule[] {
+  const week = weeklySchedule(rows);
+  const groups: { days: string[]; hours: string }[] = [];
+  for (const entry of week) {
+    const last = groups[groups.length - 1];
+    if (last && last.hours === entry.hours) {
+      last.days.push(entry.day);
+    } else {
+      groups.push({ days: [entry.day], hours: entry.hours });
+    }
+  }
+  return groups.map((g) => ({
+    label:
+      g.days.length === 7
+        ? 'Daily'
+        : g.days.length === 1
+          ? g.days[0]
+          : `${g.days[0].slice(0, 3)} – ${g.days[g.days.length - 1].slice(0, 3)}`,
+    hours: g.hours,
+  }));
+}
+
 /** One line per weekday, Monday-first, "Closed" where no row exists. */
 export function weeklySchedule(rows: VenueOperatingHours[]): DaySchedule[] {
   const byDay = new Map<number, VenueOperatingHours[]>();

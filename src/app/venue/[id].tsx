@@ -9,7 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { getVenueDetail, publicImageUrl, weeklySchedule, type VenueDetail } from '@/lib/venues';
+import { condensedSchedule, getVenueDetail, publicImageUrl, type VenueDetail } from '@/lib/venues';
 
 export default function VenueDetailScreen() {
   const theme = useTheme();
@@ -113,53 +113,28 @@ export default function VenueDetailScreen() {
               </View>
 
               {venue.description ? (
-                <ThemedText type="small" themeColor="subtle">
+                <ThemedText type="small" themeColor="subtle" numberOfLines={2}>
                   {venue.description}
                 </ThemedText>
               ) : null}
 
-              <View style={styles.block}>
-                <ThemedText type="subtitle">Courts</ThemedText>
-                {venue.courts.length === 0 ? (
-                  <ThemedText type="small" themeColor="subtle">
-                    No active courts listed right now.
-                  </ThemedText>
-                ) : (
-                  venue.courts.map((court) => (
-                    <View
-                      key={court.id}
-                      style={[
-                        styles.card,
-                        styles.courtRow,
-                        { backgroundColor: theme.card, borderColor: theme.border },
-                      ]}>
-                      <View style={styles.courtInfo}>
-                        <ThemedText type="smallBold">{court.name}</ThemedText>
-                        <ThemedText type="caption">
-                          {[
-                            court.surface_type,
-                            court.indoor_outdoor,
-                            court.capacity ? `up to ${court.capacity}` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </ThemedText>
-                      </View>
-                      <ThemedText type="smallBold">
-                        ₱{court.hourly_price}
-                        <ThemedText type="small" themeColor="mutedForeground">
-                          /hr
-                        </ThemedText>
-                      </ThemedText>
-                    </View>
-                  ))
-                )}
-              </View>
+              {venue.courts.length === 0 ? (
+                <ThemedText type="small" themeColor="subtle">
+                  No active courts listed right now.
+                </ThemedText>
+              ) : (
+                <BookingPanel venue={venue} />
+              )}
 
               {venue.amenities.length > 0 ? (
                 <View style={styles.block}>
-                  <ThemedText type="subtitle">Amenities</ThemedText>
-                  <View style={styles.chipWrap}>
+                  <ThemedText type="caption" themeColor="mutedForeground" style={styles.metaLabel}>
+                    AMENITIES
+                  </ThemedText>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.chipStrip}>
                     {venue.amenities.map((amenity) => (
                       <View
                         key={amenity.id}
@@ -169,28 +144,25 @@ export default function VenueDetailScreen() {
                         </ThemedText>
                       </View>
                     ))}
-                  </View>
+                  </ScrollView>
                 </View>
               ) : null}
 
               {venue.hours.length > 0 ? (
                 <View style={styles.block}>
-                  <ThemedText type="subtitle">Opening hours</ThemedText>
-                  <View
-                    style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    {weeklySchedule(venue.hours).map((row) => (
-                      <View key={row.day} style={styles.hoursRow}>
-                        <ThemedText type="small" themeColor="subtle">
-                          {row.day}
-                        </ThemedText>
-                        <ThemedText type="smallBold">{row.hours}</ThemedText>
-                      </View>
-                    ))}
-                  </View>
+                  <ThemedText type="caption" themeColor="mutedForeground" style={styles.metaLabel}>
+                    OPENING HOURS
+                  </ThemedText>
+                  {condensedSchedule(venue.hours).map((row) => (
+                    <View key={row.label} style={styles.hoursRow}>
+                      <ThemedText type="smallBold">{row.label}</ThemedText>
+                      <ThemedText type="small" themeColor="subtle">
+                        {row.hours}
+                      </ThemedText>
+                    </View>
+                  ))}
                 </View>
               ) : null}
-
-              <BookingPanel venue={venue} />
             </View>
           </>
         )}
@@ -257,14 +229,19 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     gap: Spacing.half,
   },
-  chipWrap: {
+  chipStrip: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Spacing.two,
+    paddingRight: Spacing.two,
+  },
+  metaLabel: {
+    letterSpacing: 1.2,
   },
   hoursRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Spacing.two,
     paddingVertical: Spacing.half,
   },
 });
