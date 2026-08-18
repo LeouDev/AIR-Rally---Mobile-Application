@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -80,6 +80,30 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {profile?.role === 'venue_owner' || profile?.role === 'admin' ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/owner')}
+            style={({ pressed }) => [
+              styles.card,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+                opacity: pressed ? 0.9 : 1,
+              },
+            ]}>
+            <View style={styles.identity}>
+              <ThemedText type="subtitle">Your venues</ThemedText>
+              <ThemedText type="small" themeColor="subtle">
+                Bookings and customer payments, read-only. Manage venues at air-rally.com.
+              </ThemedText>
+            </View>
+            <ThemedText type="heading" themeColor="mutedForeground">
+              ›
+            </ThemedText>
+          </Pressable>
+        ) : null}
 
         <View style={[styles.card, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
           <View style={styles.identity}>

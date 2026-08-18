@@ -164,6 +164,30 @@ export type UserCreditWallet = {
   updated_at: string;
 };
 
+/** Owner-facing slice of the venues TABLE (not the marketplace view) —
+ * an owner reads their venues at any status via their own RLS. */
+export type OwnedVenue = {
+  id: string;
+  owner_id: string;
+  name: string;
+  city: string | null;
+  status: 'draft' | 'pending' | 'active' | 'inactive' | 'rejected';
+  timezone: string;
+  created_at: string;
+};
+
+/** Refund legs attached to a booking; venue_refund_amount comes only
+ * from PayMongo's real split_refund response — null means "not yet
+ * known", never zero. */
+export type BookingRefund = {
+  id: string;
+  booking_id: string;
+  amount: number;
+  status: string;
+  venue_refund_amount: number | null;
+  created_at: string;
+};
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row;
   Insert: Insert;
@@ -186,6 +210,8 @@ export type Database = {
       venue_operating_hours: TableDef<VenueOperatingHours, never, never>;
       bookings: TableDef<Booking, never, never>;
       user_credit_wallets: TableDef<UserCreditWallet, never, never>;
+      venues: TableDef<OwnedVenue, never, never>;
+      booking_refunds: TableDef<BookingRefund, never, never>;
     };
     Views: Record<string, never>;
     Functions: {
