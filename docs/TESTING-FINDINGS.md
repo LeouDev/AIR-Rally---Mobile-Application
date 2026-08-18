@@ -50,14 +50,19 @@ Expo web target. No real money moved at any point.
    nowhere yet (migration unapplied). Needs an `expo-dev-client` build
    plus applying the migration, then a device test. (Both repos; next
    phase.)
-4. **Owner dashboard with real data is untested.** The demo venues
-   belong to the "Venue Owner (Test)" account whose password isn't on
-   hand, and permission tooling (correctly) blocked service-role
-   mutation scripts for reassigning ownership or resetting that
-   password. The screen is code-complete and its empty state verified.
-   Unblock by any of: signing the simulator into the test owner account,
-   reassigning one demo venue to the admin account, or approving the
-   reassignment script. (Blocked on operator input.)
+4. **Owner dashboard with real data — RESOLVED.** With the user's
+   in-chat approval, a Supabase magic link was generated for the test
+   owner account (owner-test@air-rally.invalid, derived from the [DEMO]
+   BGC venue's actual owner_id, not a relayed identifier), its one-time
+   OTP verified into a session, and that session injected into the web
+   target. The read-only dashboard then rendered all five owned venues
+   (including archived/draft ones), the archived-venue note, the
+   paid-by-customers summary, and BGC's real booking history — the four
+   Rooftop Court bookings from today's testing with correct status pills
+   and prices. Summary reads ₱0 because all test bookings ended
+   cancelled (the summary counts currently-confirmed bookings only) —
+   correct behavior, not a defect. Verified on the web target; the same
+   component renders natively.
 5. **`expo start` exits silently when stdin hits EOF** (non-interactive
    launch). Metro "disappearing" mid-session traced to this; fixed by
    keeping stdin open in the launch config. Worth knowing for CI or any
