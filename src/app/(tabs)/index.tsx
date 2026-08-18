@@ -1,31 +1,115 @@
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Skeleton } from '@/components/ui/skeleton';
+import { VenueCard } from '@/components/venue-card';
 import { Wordmark } from '@/components/wordmark';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import type { VenueMarketplaceRow } from '@/lib/database.types';
+import { listMarketplaceVenues } from '@/lib/venues';
 
-/** Phase 0 placeholder — venue browsing lands in Phase 1. */
 export default function ExploreScreen() {
   const theme = useTheme();
+  const [venues, setVenues] = useState<VenueMarketplaceRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
+  const requestSeq = useRef(0);
+
+  const load = useCallback(async (q: string) => {
+    const seq = ++requestSeq.current;
+    try {
+      const rows = await listMarketplaceVenues(q);
+      // A stale response (older search) must never overwrite a newer one.
+      if (seq === requestSeq.current) {
+        setVenues(rows);
+        setError(null);
+      }
+    } catch {
+      if (seq === requestSeq.current) {
+        setError("Couldn't load venues. Pull to retry.");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    load('');
+  }, [load]);
+
+  // Debounced search — fires 300ms after the last keystroke.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      load(search);
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [search, load]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load(search);
+    setRefreshing(false);
+  }, [load, search]);
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <Wordmark size={22} />
-          <ThemedText type="title">Explore</ThemedText>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <ThemedText type="subtitle">Court browsing is on its way</ThemedText>
-          <ThemedText type="small" themeColor="subtle">
-            Soon you&apos;ll browse venues, check live availability, and book a court right from
-            here — same marketplace as air-rally.com.
-          </ThemedText>
-        </View>
+        <FlatList
+          data={venues ?? []}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <VenueCard venue={item} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            <View style={styles.header}>
+              <Wordmark size={22} />
+              <ThemedText type="title">Find a court</ThemedText>
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Venue, city, or barangay"
+                placeholderTextColor={theme.placeholder}
+                autoCapitalize="none"
+                returnKeyType="search"
+                style={[
+                  styles.search,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.input,
+                    color: theme.cardForeground,
+                  },
+                ]}
+              />
+              {error ? (
+                <ThemedText type="small" themeColor="destructive">
+                  {error}
+                </ThemedText>
+              ) : null}
+            </View>
+          }
+          ListEmptyComponent={
+            venues === null ? (
+              <View style={styles.skeletons}>
+                <Skeleton height={230} radius={Radius.xl} />
+                <Skeleton height={230} radius={Radius.xl} />
+              </View>
+            ) : (
+              <View
+                style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <ThemedText type="subtitle">No venues found</ThemedText>
+                <ThemedText type="small" themeColor="subtle">
+                  {search
+                    ? 'Try a different name or area.'
+                    : 'Venues appear here as owners come aboard.'}
+                </ThemedText>
+              </View>
+            )
+          }
+        />
       </SafeAreaView>
     </ThemedView>
   );
@@ -37,17 +121,31 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    padding: Spacing.four,
-    paddingBottom: BottomTabInset + Spacing.three,
-    gap: Spacing.four,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
   },
+  list: {
+    padding: Spacing.four,
+    paddingBottom: BottomTabInset + Spacing.three,
+    gap: Spacing.three,
+  },
   header: {
     gap: Spacing.two,
+    marginBottom: Spacing.one,
   },
-  card: {
+  search: {
+    minHeight: 48,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    fontSize: 16,
+    marginTop: Spacing.two,
+  },
+  skeletons: {
+    gap: Spacing.three,
+  },
+  empty: {
     borderRadius: Radius.xl,
     borderWidth: 1,
     padding: Spacing.four,

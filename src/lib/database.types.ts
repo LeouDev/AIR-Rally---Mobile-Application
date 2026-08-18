@@ -45,6 +45,82 @@ export type DevicePushToken = {
   updated_at: string;
 };
 
+export type IndoorOutdoor = 'indoor' | 'outdoor' | 'both';
+
+/** Row shape of the public `venue_marketplace` view — active venues only,
+ * owner/PayMongo fields deliberately excluded (see the web repo's
+ * 20260809000008_marketplace_view.sql). Prices are whole pesos. */
+export type VenueMarketplaceRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  address: string | null;
+  city: string | null;
+  state_province: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  indoor_outdoor: IndoorOutdoor;
+  number_of_courts: number;
+  average_rating: number;
+  review_count: number;
+  created_at: string;
+  timezone: string;
+  starting_price: number | null;
+  active_court_count: number;
+  cover_image_path: string | null;
+};
+
+export type Court = {
+  id: string;
+  venue_id: string;
+  name: string;
+  description: string | null;
+  surface_type: string | null;
+  indoor_outdoor: 'indoor' | 'outdoor';
+  capacity: number | null;
+  hourly_price: number;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+};
+
+export type Amenity = {
+  id: string;
+  name: string;
+  icon: string | null;
+  created_at: string;
+};
+
+export type VenueAmenity = {
+  venue_id: string;
+  amenity_id: string;
+  created_at: string;
+};
+
+export type CourtImage = {
+  id: string;
+  venue_id: string;
+  court_id: string | null;
+  storage_path: string;
+  alt_text: string | null;
+  sort_order: number | null;
+  created_at: string;
+};
+
+export type VenueOperatingHours = {
+  id: string;
+  venue_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row;
   Insert: Insert;
@@ -58,6 +134,13 @@ export type Database = {
       profiles: TableDef<Profile, never, Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at'>>>;
       notifications: TableDef<Notification, never, Partial<Pick<Notification, 'read_at'>>>;
       device_push_tokens: TableDef<DevicePushToken, never, never>;
+      // Read-only from mobile: writes are owner/web flows.
+      venue_marketplace: TableDef<VenueMarketplaceRow, never, never>;
+      courts: TableDef<Court, never, never>;
+      amenities: TableDef<Amenity, never, never>;
+      venue_amenities: TableDef<VenueAmenity, never, never>;
+      court_images: TableDef<CourtImage, never, never>;
+      venue_operating_hours: TableDef<VenueOperatingHours, never, never>;
     };
     Views: Record<string, never>;
     Functions: {

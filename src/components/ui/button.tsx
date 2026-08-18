@@ -34,11 +34,11 @@ export function Button({ title, variant = 'primary', loading, disabled, style, .
     <Pressable
       accessibilityRole="button"
       disabled={isDisabled}
-      style={({ pressed }) => [
+      style={(state) => [
         styles.base,
-        { backgroundColor: pressed ? pressedBackground : background },
+        { backgroundColor: state.pressed ? pressedBackground : background },
         isDisabled && styles.disabled,
-        typeof style === 'function' ? style({ pressed }) : style,
+        typeof style === 'function' ? style(state) : style,
       ]}
       {...rest}>
       {loading ? (
