@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useNotificationObserver } from '@/lib/notifications-runtime';
 import { SessionProvider, useSession } from '@/providers/session';
 
 SplashScreen.preventAutoHideAsync();
@@ -21,6 +22,8 @@ function RootNavigator() {
   const isDark = scheme === 'dark';
   const palette = Colors[isDark ? 'dark' : 'light'];
   const { session, isLoaded } = useSession();
+
+  useNotificationObserver();
 
   useEffect(() => {
     if (isLoaded) SplashScreen.hideAsync();

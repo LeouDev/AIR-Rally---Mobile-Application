@@ -1,6 +1,7 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -77,6 +78,28 @@ export default function BookingStatusScreen() {
         booking.credit_amount_applied === 0 &&
         new Date(booking.start_time).getTime() > Date.now()));
 
+  // A pending PayMongo booking's checkout page stays reachable: the
+  // session's public URL is its id sans the "cs_" prefix (observed to
+  // hold for every session this project has created; revisit if PayMongo
+  // ever changes their URL scheme). Lets someone who closed the sheet
+  // finish paying instead of stranding the reservation.
+  const resumePaymentUrl =
+    booking?.status === 'pending' &&
+    booking.payment_provider === 'paymongo' &&
+    booking.paymongo_checkout_session_id
+      ? `https://checkout.paymongo.com/${booking.paymongo_checkout_session_id.replace(/^cs_/, '')}`
+      : null;
+
+  const resumePayment = async () => {
+    if (!resumePaymentUrl) return;
+    if (Platform.OS === 'web') {
+      window.location.assign(resumePaymentUrl);
+      return;
+    }
+    await WebBrowser.openAuthSessionAsync(resumePaymentUrl, 'airrally://payment-return');
+    // Whatever way the sheet closed, the poll above resolves the truth.
+  };
+
   const performCancel = async () => {
     if (!booking || cancelling) return;
     setCancelling(true);
@@ -130,6 +153,9 @@ export default function BookingStatusScreen() {
                   seconds. If you didn&apos;t finish paying, the slot releases automatically and
                   nothing is charged.
                 </ThemedText>
+                {resumePaymentUrl ? (
+                  <Button title="Complete payment" onPress={resumePayment} />
+                ) : null}
               </View>
             ) : booking.status === 'confirmed' ? (
               <View

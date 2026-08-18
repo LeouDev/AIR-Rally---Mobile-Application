@@ -10,16 +10,28 @@ export function publicImageUrl(storagePath: string): string {
 /**
  * The Explore list. venue_marketplace is already RLS-scoped to active
  * venues; "recommended" is the web's deterministic ranking — rating
- * first, ties broken by review count. Optional `q` mirrors the web's
- * name/city/address match (court-name matching is a web-only extra for
- * now).
+ * first, ties broken by review count. `q` mirrors the web's full search
+ * semantics: the venue's own name/city/address, OR any of its courts'
+ * names (courts' public RLS already scopes that lookup to active courts
+ * of active venues).
  */
 export async function listMarketplaceVenues(q?: string): Promise<VenueMarketplaceRow[]> {
   let query = supabase.from('venue_marketplace').select('*');
 
   const term = q?.trim().replace(/[%_,()]/g, ' ').trim();
   if (term) {
-    query = query.or(`name.ilike.%${term}%,city.ilike.%${term}%,address.ilike.%${term}%`);
+    const { data: courtMatches, error: courtError } = await supabase
+      .from('courts')
+      .select('venue_id')
+      .ilike('name', `%${term}%`);
+    if (courtError) throw courtError;
+
+    const orParts = [`name.ilike.%${term}%`, `city.ilike.%${term}%`, `address.ilike.%${term}%`];
+    const matchingVenueIds = [...new Set((courtMatches ?? []).map((row) => row.venue_id))];
+    if (matchingVenueIds.length > 0) {
+      orParts.push(`id.in.(${matchingVenueIds.join(',')})`);
+    }
+    query = query.or(orParts.join(','));
   }
 
   const { data, error } = await query

@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Notification } from '@/lib/database.types';
+import { resolveNotificationTarget } from '@/lib/notification-links';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -63,11 +64,12 @@ export default function NotificationsScreen() {
         });
     }
 
-    const bookingMatch = notification.link_url?.match(/\/bookings\/([0-9a-f-]{36})/i);
-    if (bookingMatch) {
-      router.push({ pathname: '/booking/[id]', params: { id: bookingMatch[1] } });
-    } else if (notification.link_url?.startsWith('/bookings')) {
-      router.push('/(tabs)/bookings');
+    // Same mapper the push-tap path uses — but from the Alerts list a
+    // web-only destination should stay put rather than "navigate" to the
+    // tab the user is already on.
+    const target = resolveNotificationTarget(notification.link_url);
+    if (target !== '/(tabs)/notifications') {
+      router.push(target);
     }
   }, []);
 

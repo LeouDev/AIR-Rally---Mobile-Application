@@ -20,8 +20,10 @@ import { supabase } from '@/lib/supabase';
  */
 export async function registerDevicePushToken(): Promise<string | null> {
   try {
-    if (!Device.isDevice) return null;
+    // Platform first: on web, expo-device reports isDevice=true, so the
+    // old ordering fell through to notification APIs that warn on web.
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') return null;
+    if (!Device.isDevice) return null;
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {

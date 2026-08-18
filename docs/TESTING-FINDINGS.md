@@ -154,6 +154,29 @@ target. No real money moved at any point.
     Expo Go's `exp://` path plus the splash gate. Device-typing quirk
     logged: long `text` injections truncate (~16–27 chars) —
     split into chunks when driving the simulator keyboard.
+17. **Phase 5 (2026-08-19): the finishable gaps are closed.**
+    - *In-app push handling*: a foreground presentation handler (banner,
+      no sound) plus tap-routing that maps the push payload's `data.url`
+      (accepting both the Expo-delivered shape and raw-APNS nesting)
+      through the same `resolveNotificationTarget` mapper the Alerts tab
+      uses; web-only destinations land on Alerts. A permission ask was
+      added to the observer (only while status is undetermined) because
+      the register path exits before asking on simulators — without it
+      dev builds could never show a banner. VERIFIED in the simulator
+      via `xcrun simctl push`: foreground banners render over the
+      running app (seen repeatedly). The tap-to-navigate leg could not
+      be verified by automation — the injected taps lose a latency race
+      with the 5-second banner and the pull-down cover sheet ignores
+      synthetic taps entirely — one human tap on the banner settles it.
+    - *Resume payment*: pending PayMongo bookings show "Complete
+      payment", reconstructing the checkout URL from the stored session
+      id (`cs_<slug>` ↔ URL slug). VERIFIED: the button landed on the
+      exact URL the API had originally returned for that session.
+    - *Search parity*: Explore's search now also matches COURT names via
+      the same two-step lookup the web uses. VERIFIED: "rooftop" returns
+      only BGC (whose venue name doesn't contain the word).
+    - The `expo-notifications` web warning fix rides along (platform
+      check now precedes the device check).
 16. **Push on a real device requires a PAID Apple Developer account.**
     Free personal teams cannot use the push entitlement at all, so
     device installs on a free Apple ID (local Xcode builds only, 7-day

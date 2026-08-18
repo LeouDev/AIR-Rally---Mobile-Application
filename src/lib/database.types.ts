@@ -143,6 +143,9 @@ export type Booking = {
   processing_fee_amount: number;
   paid_at: string | null;
   payment_provider: 'stripe' | 'paymongo' | 'air_rally_credit';
+  /** Set while attaching a freshly created PayMongo Checkout Session;
+   * the session's public URL is this id without the "cs_" prefix. */
+  paymongo_checkout_session_id: string | null;
   cancelled_at: string | null;
   created_at: string;
   updated_at: string;
