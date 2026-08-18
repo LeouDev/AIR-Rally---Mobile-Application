@@ -121,6 +121,40 @@ export type VenueOperatingHours = {
   updated_at: string;
 };
 
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+
+/** Mobile-relevant slice of the web repo's Booking row. price_amount,
+ * credit_amount_applied, and processing_fee_amount are integer CENTAVOS
+ * (divide by 100 to display) — unlike courts.hourly_price and
+ * venue_marketplace.starting_price, which are whole pesos. Mobile only
+ * ever READS bookings: creation goes through the web API's checkout
+ * route, and cancellation stays web-only for now. */
+export type Booking = {
+  id: string;
+  court_id: string;
+  user_id: string;
+  start_time: string;
+  end_time: string;
+  status: BookingStatus;
+  price_amount: number;
+  currency: string;
+  confirmation_code: string;
+  credit_amount_applied: number;
+  processing_fee_amount: number;
+  paid_at: string | null;
+  payment_provider: 'stripe' | 'paymongo' | 'air_rally_credit';
+  cancelled_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** A bookable interval returned by the get_available_slots() RPC —
+ * timestamptz strings, rendered in the venue's own timezone. */
+export type AvailableSlot = {
+  slot_start: string;
+  slot_end: string;
+};
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row;
   Insert: Insert;
@@ -141,6 +175,7 @@ export type Database = {
       venue_amenities: TableDef<VenueAmenity, never, never>;
       court_images: TableDef<CourtImage, never, never>;
       venue_operating_hours: TableDef<VenueOperatingHours, never, never>;
+      bookings: TableDef<Booking, never, never>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -155,6 +190,16 @@ export type Database = {
       record_agreement_acceptance: {
         Args: { p_user_id: string; p_agreement_version: string };
         Returns: undefined;
+      };
+      get_available_slots: {
+        Args: {
+          p_court_id: string;
+          p_local_date: string;
+          p_duration_minutes: number;
+          p_increment_minutes: number;
+          p_min_lead_minutes: number;
+        };
+        Returns: AvailableSlot[];
       };
     };
     Enums: Record<string, never>;

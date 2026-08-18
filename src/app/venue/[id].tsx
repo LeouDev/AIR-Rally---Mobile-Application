@@ -3,6 +3,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { BookingPanel } from '@/components/booking-panel';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -189,14 +190,7 @@ export default function VenueDetailScreen() {
                 </View>
               ) : null}
 
-              <View style={[styles.card, { backgroundColor: theme.accent, borderColor: theme.accent }]}>
-                <ThemedText type="smallBold" style={{ color: theme.accentForeground }}>
-                  Booking from the app is coming soon
-                </ThemedText>
-                <ThemedText type="caption" style={{ color: theme.accentForeground }}>
-                  For now, book this venue at air-rally.com — same account, same credits.
-                </ThemedText>
-              </View>
+              <BookingPanel venue={venue} />
             </View>
           </>
         )}
