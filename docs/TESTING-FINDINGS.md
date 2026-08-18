@@ -1,9 +1,18 @@
 # End-to-end testing findings — 2026-08-18
 
-Scope: full mobile app (Phases 0–4) against the production Supabase
-project with the dedicated test accounts, local web API on test-mode
-PayMongo keys. Native iOS Simulator (iPhone 17 Pro, iOS 26.5) plus the
-Expo web target. No real money moved at any point.
+**Environment correction (important).** Everything below ran against the
+**STAGING** Supabase project (`vdxdmtsnptzodabaojlc`), not production.
+The web repo's `.env.local` carries the same project ref as
+`.env.staging`; production is `hrpbjudsrqcgyrkkodop` and appears only in
+`.env.production`. The mobile app points at staging too. Earlier notes in
+this session described this work as "verified against production" — that
+was wrong, and no production data was touched at any point. The demo
+venues, test accounts, and every test booking live on staging.
+
+Scope: full mobile app (Phases 0–4) against the staging Supabase project
+with the dedicated test accounts, local web API on test-mode PayMongo
+keys. Native iOS Simulator (iPhone 17 Pro, iOS 26.5) plus the Expo web
+target. No real money moved at any point.
 
 ## What was proven working
 
@@ -53,12 +62,30 @@ Expo web target. No real money moved at any point.
    (created, cancelled) alongside the player's own copy. At any real
    volume this drowns the Alerts tab. Consider severity filtering or a
    separate admin digest. (Web/platform; product decision.)
-3. **Push notifications remain unexercised.** Expo Go cannot receive
-   remote push (SDK 53+); `device_push_tokens` registration no-ops there
-   by design. The trigger → webhook → Expo Push send path is deployed
-   nowhere yet (migration unapplied). Needs an `expo-dev-client` build
-   plus applying the migration, then a device test. (Both repos; next
-   phase.)
+3. **Push backend now validated on staging; device delivery still
+   blocked.** The `device_push_tokens` migration is applied to STAGING
+   (table, 3 functions, enabled trigger, 2 RLS policies all verified by
+   querying the catalog, not trusting the runner's "OK"). Confirmed the
+   trigger is a no-op for existing traffic — a notification INSERT still
+   succeeds, because the trigger early-returns when the user has no
+   registered device and the table starts empty. Then exercised the
+   webhook route directly with a synthetic payload and a seeded fake
+   Expo token: auth accepted, token looked up, Expo's push service
+   called, the `DeviceNotRegistered` ticket handled, and the dead token
+   pruned (`pushed:0, pruned:1`, verified as 0 rows remaining). A wrong
+   secret is rejected with 401. So everything except final delivery to a
+   real handset is proven.
+   **Still blocked on two things only the operator can unblock:**
+   (a) `registerDevicePushToken()` bails on `!Device.isDevice`, and
+   `getExpoPushTokenAsync` needs an EAS `projectId` — so push needs a
+   real device plus an Expo/EAS account (`eas init`); and (b) a local
+   dev-client build needs CocoaPods, which needs Ruby ≥3.1 while macOS
+   ships 2.6.10 — with no Homebrew installed, `gem install --user-install
+   cocoapods` pulls in the plugin gems but not the core one. The
+   realistic path for both is EAS Build (`eas build --profile
+   development`), which sidesteps local CocoaPods entirely and provides
+   the projectId push needs — one Expo account unblocks the whole thing.
+   Production migration NOT applied (see item 14).
 4. **Owner dashboard with real data — RESOLVED.** With the user's
    in-chat approval, a Supabase magic link was generated for the test
    owner account (owner-test@air-rally.invalid, derived from the [DEMO]
@@ -104,6 +131,13 @@ Expo web target. No real money moved at any point.
     `expo-dev-client` build (leave signed in overnight, cold start) —
     if a session genuinely doesn't survive, that is a serious UX defect
     and would point at refresh-token rotation rather than storage.
+14. **Production still has none of this.** The `device_push_tokens`
+    migration is applied to staging only. Production
+    (`hrpbjudsrqcgyrkkodop`) has never been touched in this work, and
+    the web repo's mobile-support changes (checkout + cancel routes,
+    payment-return page, checkoutSession extraction, push webhook) are
+    still uncommitted. Ordering when it does go out: additive migration
+    first, then the code deploy.
 13. **iOS offers to save the app password** to the keychain on sign-in
     (standard for a native text-field login). Declined during testing.
     Harmless; worth a deliberate product decision on whether to support
