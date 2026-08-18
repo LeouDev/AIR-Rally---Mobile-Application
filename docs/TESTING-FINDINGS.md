@@ -34,11 +34,20 @@ Expo web target. No real money moved at any point.
 
 ## Issues and observations
 
-1. **Deep link to a guarded route bounces to Explore.** Opening
-   `/venue/<id>` cold (or any protected URL) redirects through the
-   sign-in guard while the session is still hydrating from storage, and
-   the original target is lost. Needs a loading gate before
-   `Stack.Protected` decides. (Mobile; medium.)
+1. **Deep link to a guarded route bounced to Explore — FIXED.** The root
+   layout hid the splash once the session loaded but still *mounted* the
+   `Stack` beforehand, so expo-router evaluated the `Stack.Protected`
+   guards while `session` was null-only-because-storage-hadn't-been-read,
+   redirected the deep-linked URL to sign-in, and lost the target — the
+   app then settled on Explore. Fix: return `null` from the root
+   navigator until `isLoaded`, so the initial URL stays pending (splash
+   still up) and the guards are evaluated exactly once, correctly.
+   Verified three ways on the web target — `/owner` and `/venue/<id>`
+   both resolve to their own screens when signed in, and `/owner` still
+   redirects to `/sign-in` when signed out (guard integrity intact) —
+   and natively: a cold `exp://…/--/venue/<id>` launch now opens the
+   venue detail directly. This matters for push notifications, which
+   open the app cold into a deep link.
 2. **Admin notification fan-out is noisy.** The admin test account
    received a notification for *every* booking event on the platform
    (created, cancelled) alongside the player's own copy. At any real
@@ -86,6 +95,19 @@ Expo web target. No real money moved at any point.
 11. **CORS on `/api/mobile/*` is wildcard by design** — bearer-only
     auth, no cookies, so no credentialed-CORS surface; exists for the
     Expo web target during development.
+12. **Native session did not survive ~3.5h of idle plus repeated Expo Go
+    restarts** — the simulator cold-started to sign-in rather than
+    restoring the persisted session. Not conclusively a product bug:
+    Expo Go's AsyncStorage is scoped to the dev project and was churned
+    by many Metro restarts and reinstalls during testing, which a real
+    build never does. Worth re-checking deliberately on an
+    `expo-dev-client` build (leave signed in overnight, cold start) —
+    if a session genuinely doesn't survive, that is a serious UX defect
+    and would point at refresh-token rotation rather than storage.
+13. **iOS offers to save the app password** to the keychain on sign-in
+    (standard for a native text-field login). Declined during testing.
+    Harmless; worth a deliberate product decision on whether to support
+    password autofill properly (`textContentType`) later.
 
 ## Test-data footprint (all on test accounts, all resolved)
 

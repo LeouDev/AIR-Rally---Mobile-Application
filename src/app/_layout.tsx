@@ -1,5 +1,6 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
@@ -21,11 +22,20 @@ function RootNavigator() {
   const palette = Colors[isDark ? 'dark' : 'light'];
   const { session, isLoaded } = useSession();
 
-  // Splash stays up until the persisted session is restored, so a cold
-  // start never flashes the sign-in screen at an already-signed-in user.
-  if (isLoaded) {
-    SplashScreen.hideAsync();
-  }
+  useEffect(() => {
+    if (isLoaded) SplashScreen.hideAsync();
+  }, [isLoaded]);
+
+  // Hold the navigator itself — not just the splash — until the persisted
+  // session is restored. If the Stack mounts while `session` is still null
+  // only because storage hasn't been read yet, expo-router evaluates the
+  // Protected guards as signed-out, redirects a cold deep link into a
+  // guarded route (venue/booking/owner) over to sign-in, and loses the
+  // original target — so once the session loads it lands on Explore, not
+  // where the link pointed. Returning null keeps the initial URL pending
+  // (the splash is still up) until the guards can be evaluated correctly
+  // once, letting the deep link resolve where it asked.
+  if (!isLoaded) return null;
 
   const navigationTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
