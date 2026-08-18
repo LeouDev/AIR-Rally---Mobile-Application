@@ -1,56 +1,36 @@
-# Welcome to your Expo app 👋
+# AIR/Rally Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The iOS/Android companion to [air-rally.com](https://air-rally.com) — Expo (SDK 57) + expo-router + React Native, talking to the **same Supabase project** as the web app via `@supabase/supabase-js` and reusing its RLS policies unchanged. A deliberately separate sibling repo: the web repo's path contains a colon, which breaks parts of the RN/Metro toolchain.
+
+## Architecture in one paragraph
+
+Auth, data reads, and RPCs go straight to Supabase (no API middleman) — RLS is the security boundary, exactly as it is for the web client. The one exception is payments: PayMongo checkout sessions are created by the web app's Next.js API (bearer-token auth), because provider secrets live server-side only. Push notifications ride the web repo's existing notification fan-out: a DB trigger (`supabase/migrations/20260810000065_device_push_tokens.sql` in the web repo) posts every `notifications` INSERT to `/api/webhooks/notification-push`, which sends via Expo Push to every token this app registered through the `register_push_token` RPC.
+
+## Scope
+
+Player-side first: browse & book courts, pay (PayMongo WebView + `airrally://` deep-link return), manage bookings, notifications + push, profile/credits — plus a read-mostly owner bookings/earnings view. The owner application wizard stays web-only.
 
 ## Get started
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env.local   # fill in the Supabase URL + publishable key
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+- `i` / `a` — iOS Simulator / Android emulator (requires Xcode / Android Studio)
+- `w` — web preview (handy for quick checks; native is the real target)
 
-### Other setup steps
+## Phase 0 status
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+- [x] Scaffold, AIR/Rally theme tokens (light + dark, ported from the web `globals.css`)
+- [x] expo-router nav: `(auth)` stack + `(tabs)` Explore / Bookings / Alerts / Profile, guarded by session
+- [x] Supabase auth (sign-up matches the web contract: profile metadata + `record_agreement_acceptance`)
+- [x] Push-token registration (`register_push_token` RPC; graceful no-op in Expo Go/simulators)
+- [ ] Remote push end-to-end needs a dev build with an EAS `projectId` (`npx eas init`, then a development build — Expo Go can't receive remote push)
 
-## Learn more
+## Conventions
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Design tokens live in `src/constants/theme.ts` — mirror any web `globals.css` change there.
+- `src/lib/database.types.ts` is a hand-copied *slice* of the web repo's `src/lib/supabase/types.ts`; extend it per phase, keeping shapes identical to the source of truth.
+- Screens read Supabase directly and rely on RLS — never add client-side `user_id` filters as a substitute for policy.
