@@ -21,13 +21,20 @@ function RootNavigator() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const palette = Colors[isDark ? 'dark' : 'light'];
-  const { session, isLoaded } = useSession();
+  const { session, isLoaded, needsAgreement } = useSession();
 
   useNotificationObserver();
 
+  // A session exists but its agreement status isn't known yet — same
+  // "hold the navigator" reasoning as !isLoaded below, one level deeper:
+  // evaluating the guards with a stale/default needsAgreement would
+  // flash a signed-in user through (tabs) before possibly yanking them
+  // back to complete-signup a moment later.
+  const settled = isLoaded && (session === null || needsAgreement !== null);
+
   useEffect(() => {
-    if (isLoaded) SplashScreen.hideAsync();
-  }, [isLoaded]);
+    if (settled) SplashScreen.hideAsync();
+  }, [settled]);
 
   // Hold the navigator itself — not just the splash — until the persisted
   // session is restored. If the Stack mounts while `session` is still null
@@ -38,7 +45,7 @@ function RootNavigator() {
   // where the link pointed. Returning null keeps the initial URL pending
   // (the splash is still up) until the guards can be evaluated correctly
   // once, letting the deep link resolve where it asked.
-  if (!isLoaded) return null;
+  if (!settled) return null;
 
   const navigationTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
@@ -57,7 +64,7 @@ function RootNavigator() {
   return (
     <ThemeProvider value={navigationTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={session !== null}>
+        <Stack.Protected guard={session !== null && needsAgreement === false}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="venue/[id]" />
           <Stack.Screen name="booking/[id]/index" />
@@ -72,6 +79,9 @@ function RootNavigator() {
           <Stack.Screen name="clubs/index" />
           <Stack.Screen name="clubs/[id]" />
           <Stack.Screen name="clubs/new" />
+        </Stack.Protected>
+        <Stack.Protected guard={session !== null && needsAgreement === true}>
+          <Stack.Screen name="complete-signup" />
         </Stack.Protected>
         <Stack.Protected guard={session === null}>
           <Stack.Screen name="(auth)" />

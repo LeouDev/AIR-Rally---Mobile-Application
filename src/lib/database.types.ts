@@ -25,6 +25,14 @@ export type Profile = {
   updated_at: string;
 };
 
+export type AgreementAcceptance = {
+  id: string;
+  user_id: string;
+  agreement_version: string;
+  accepted_at: string;
+  created_at: string;
+};
+
 export type Notification = {
   id: string;
   user_id: string;
@@ -146,7 +154,32 @@ export type Booking = {
   /** Set while attaching a freshly created PayMongo Checkout Session;
    * the session's public URL is this id without the "cs_" prefix. */
   paymongo_checkout_session_id: string | null;
+  /** PayMongo marketplace split only — the platform's requested leg.
+   * Null unless actually snapshotted at checkout time. */
+  platform_fee_amount: number | null;
+  /** PayMongo marketplace split only — the venue's requested leg. Purely
+   * informational: never a claim that PayMongo has settled/paid out this
+   * amount. */
+  venue_amount: number | null;
   cancelled_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RescheduleStatus = 'pending_payment' | 'pending_refund' | 'completed' | 'failed' | 'provider_unavailable';
+
+/** Connects exactly two bookings — the original (cancelled on completion)
+ * and the replacement (confirmed on completion). */
+export type BookingReschedule = {
+  id: string;
+  original_booking_id: string;
+  new_booking_id: string;
+  price_difference: number;
+  status: RescheduleStatus;
+  refund_id: string | null;
+  initiated_by: string;
+  reason: string | null;
+  failure_reason: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -360,6 +393,7 @@ export type Database = {
   public: {
     Tables: {
       profiles: TableDef<Profile, never, Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at'>>>;
+      agreement_acceptances: TableDef<AgreementAcceptance, never, never>;
       notifications: TableDef<Notification, never, Partial<Pick<Notification, 'read_at'>>>;
       device_push_tokens: TableDef<DevicePushToken, never, never>;
       // Read-only from mobile: writes are owner/web flows.
@@ -370,6 +404,7 @@ export type Database = {
       court_images: TableDef<CourtImage, never, never>;
       venue_operating_hours: TableDef<VenueOperatingHours, never, never>;
       bookings: TableDef<Booking, never, never>;
+      booking_reschedules: TableDef<BookingReschedule, never, never>;
       user_credit_wallets: TableDef<UserCreditWallet, never, never>;
       venues: TableDef<OwnedVenue, never, never>;
       booking_refunds: TableDef<BookingRefund, never, never>;

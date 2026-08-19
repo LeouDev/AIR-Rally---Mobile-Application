@@ -24,7 +24,14 @@ const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
  * (localStorage behind an SSR-safe guard) is used instead — AsyncStorage's
  * web shim touches `window` unguarded and crashes expo-router's Node-side
  * static rendering. detectSessionInUrl is off because no flow here ever
- * puts a session in a URL.
+ * puts a session in a URL — Google/Facebook sign-in (see lib/oauth.ts)
+ * completes through an in-app browser session and an explicit
+ * exchangeCodeForSession() call, not a URL the router ever sees.
+ * flowType is explicit PKCE (the library default is 'implicit') — same
+ * flow the web app uses via its /auth/callback route, and the only one
+ * that gives OAuth a `code` to exchange rather than tokens embedded in a
+ * URL fragment, which is far less reliable to retrieve from a custom
+ * `airrally://` redirect.
  */
 export const supabase = createClient<Database>(url, key, {
   auth: {
@@ -32,6 +39,7 @@ export const supabase = createClient<Database>(url, key, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    flowType: 'pkce',
   },
 });
 

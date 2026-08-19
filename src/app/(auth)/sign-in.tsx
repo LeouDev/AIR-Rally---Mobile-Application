@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OAuthButtons } from '@/components/oauth-buttons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -65,8 +66,9 @@ export default function SignInScreen() {
                 accessibilityLabel="AIR/Rally"
               />
               <Wordmark />
-              <ThemedText themeColor="subtle">Book courts. Rally your crew.</ThemedText>
             </View>
+
+            <OAuthButtons />
 
             <View style={styles.form}>
               <TextField

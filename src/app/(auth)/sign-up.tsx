@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OAuthButtons } from '@/components/oauth-buttons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -126,6 +127,8 @@ export default function SignUpScreen() {
               <Wordmark size={26} />
               <ThemedText type="heading">Create your account</ThemedText>
             </View>
+
+            <OAuthButtons />
 
             <View style={styles.form}>
               <View style={styles.nameRow}>
