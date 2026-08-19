@@ -28,6 +28,19 @@ export async function isFollowing(followerId: string, followingId: string): Prom
   return data !== null;
 }
 
+/** Which of the given user ids the caller already follows — one query
+ * for a whole feed page, instead of one per author card. */
+export async function listFollowingIds(followerId: string, targetIds: string[]): Promise<string[]> {
+  if (targetIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('follows')
+    .select('following_id')
+    .eq('follower_id', followerId)
+    .in('following_id', targetIds);
+  if (error) throw error;
+  return (data ?? []).map((row) => row.following_id);
+}
+
 export type FollowCounts = { followers: number; following: number };
 
 export async function getFollowCounts(userId: string): Promise<FollowCounts> {

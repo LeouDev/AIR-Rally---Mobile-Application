@@ -10,6 +10,8 @@ import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/th
 import { useTheme } from '@/hooks/use-theme';
 import { formatCentavos } from '@/lib/bookings';
 import type { Profile } from '@/lib/database.types';
+import { getFollowCounts, type FollowCounts } from '@/lib/follows';
+import { getProfileStats, type ProfileStats } from '@/lib/profile-stats';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/providers/session';
 
@@ -18,15 +20,18 @@ export default function ProfileScreen() {
   const { session, signOut } = useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [followCounts, setFollowCounts] = useState<FollowCounts | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      const userId = session?.user.id ?? '';
       supabase
         .from('profiles')
         .select('*')
-        .eq('id', session?.user.id ?? '')
+        .eq('id', userId)
         .maybeSingle()
         .then(({ data }) => {
           if (!cancelled && data) setProfile(data);
@@ -35,11 +40,15 @@ export default function ProfileScreen() {
       supabase
         .from('user_credit_wallets')
         .select('balance')
-        .eq('user_id', session?.user.id ?? '')
+        .eq('user_id', userId)
         .maybeSingle()
         .then(({ data, error }) => {
           if (!cancelled && !error) setCreditBalance(data?.balance ?? 0);
         });
+      if (userId) {
+        getProfileStats(userId).then((s) => !cancelled && setStats(s));
+        getFollowCounts(userId).then((c) => !cancelled && setFollowCounts(c));
+      }
       return () => {
         cancelled = true;
       };
@@ -81,6 +90,22 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <StatItem label="Trips" value={stats?.tripCount} />
+          <StatItem label="Reviews" value={stats?.reviewCount} />
+          <StatItem label="Followers" value={followCounts?.followers} />
+          <StatItem label="Following" value={followCounts?.following} />
+        </View>
+
+        <View style={styles.shortcutGroup}>
+          <ShortcutRow
+            title="COURT/Side"
+            subtitle="Share your games and follow other players."
+            onPress={() => router.push('/court-side')}
+          />
+          <ShortcutRow title="Clubs" subtitle="Find or run a local playing group." onPress={() => router.push('/clubs')} />
+        </View>
+
         {profile?.role === 'venue_owner' || profile?.role === 'admin' ? (
           <Pressable
             accessibilityRole="button"
@@ -105,7 +130,13 @@ export default function ProfileScreen() {
           </Pressable>
         ) : null}
 
-        <View style={[styles.card, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/credits')}
+          style={({ pressed }) => [
+            styles.card,
+            { backgroundColor: theme.navy, borderColor: theme.navy, opacity: pressed ? 0.9 : 1 },
+          ]}>
           <View style={styles.identity}>
             <ThemedText type="small" style={{ color: theme.navyForeground }}>
               AIR/Rally Credits
@@ -117,7 +148,10 @@ export default function ProfileScreen() {
               Credits apply automatically at checkout. Bookings paid with credits are final.
             </ThemedText>
           </View>
-        </View>
+          <ThemedText type="heading" style={{ color: theme.navyForeground }}>
+            ›
+          </ThemedText>
+        </Pressable>
 
         <View style={styles.spacer} />
         <Button
@@ -128,6 +162,40 @@ export default function ProfileScreen() {
         />
       </SafeAreaView>
     </ThemedView>
+  );
+}
+
+function StatItem({ label, value }: { label: string; value: number | undefined }) {
+  return (
+    <View style={styles.statItem}>
+      <ThemedText type="smallBold">{value === undefined ? '—' : value}</ThemedText>
+      <ThemedText type="caption" themeColor="mutedForeground">
+        {label}
+      </ThemedText>
+    </View>
+  );
+}
+
+function ShortcutRow({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.9 : 1 },
+      ]}>
+      <View style={styles.identity}>
+        <ThemedText type="subtitle">{title}</ThemedText>
+        <ThemedText type="small" themeColor="subtle">
+          {subtitle}
+        </ThemedText>
+      </View>
+      <ThemedText type="heading" themeColor="mutedForeground">
+        ›
+      </ThemedText>
+    </Pressable>
   );
 }
 
@@ -172,5 +240,13 @@ const styles = StyleSheet.create({
   },
   spacer: {
     flex: 1,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  shortcutGroup: {
+    gap: Spacing.two,
   },
 });

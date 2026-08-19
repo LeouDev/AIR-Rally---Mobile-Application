@@ -65,6 +65,13 @@ function RootNavigator() {
           <Stack.Screen name="owner/index" />
           <Stack.Screen name="events/[id]" />
           <Stack.Screen name="events/new" />
+          <Stack.Screen name="court-side/index" />
+          <Stack.Screen name="court-side/[postId]" />
+          <Stack.Screen name="player/[userId]" />
+          <Stack.Screen name="credits/index" />
+          <Stack.Screen name="clubs/index" />
+          <Stack.Screen name="clubs/[id]" />
+          <Stack.Screen name="clubs/new" />
         </Stack.Protected>
         <Stack.Protected guard={session === null}>
           <Stack.Screen name="(auth)" />
