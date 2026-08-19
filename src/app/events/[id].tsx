@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     paddingLeft: Spacing.one,
     paddingRight: Spacing.two,
-    paddingVertical: 4,
+    paddingVertical: Spacing.half,
     borderRadius: Radius.pill,
     borderWidth: 1,
   },

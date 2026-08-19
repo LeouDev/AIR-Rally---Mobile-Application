@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -86,13 +87,7 @@ export default function PlayScreen() {
                   <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>
                     {item.title}
                   </ThemedText>
-                  {joined ? (
-                    <View style={[styles.pill, { backgroundColor: theme.successSoft }]}>
-                      <ThemedText type="caption" style={{ color: theme.successSoftForeground }}>
-                        You&apos;re in
-                      </ThemedText>
-                    </View>
-                  ) : null}
+                  {joined ? <Badge label="You're in" tone="success" /> : null}
                 </View>
 
                 <ThemedText type="small" themeColor="subtle">
@@ -195,11 +190,6 @@ const styles = StyleSheet.create({
   },
   title: {
     flexShrink: 1,
-  },
-  pill: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
   },
   skeletons: {
     gap: Spacing.three,

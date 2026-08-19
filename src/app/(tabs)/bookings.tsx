@@ -5,9 +5,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { useTheme, type Theme } from '@/hooks/use-theme';
+import { useTheme } from '@/hooks/use-theme';
 import type { BookingStatus } from '@/lib/database.types';
 import {
   formatBookingWindow,
@@ -40,16 +41,16 @@ function toSections(bookings: BookingWithCourt[]): BookingSection[] {
   ].filter((section) => section.data.length > 0);
 }
 
-function statusStyle(status: BookingStatus, theme: Theme): { bg: string; fg: string; label: string } {
+function statusBadge(status: BookingStatus): { tone: 'success' | 'warning' | 'neutral'; label: string } {
   switch (status) {
     case 'confirmed':
-      return { bg: theme.successSoft, fg: theme.successSoftForeground, label: 'Confirmed' };
+      return { tone: 'success', label: 'Confirmed' };
     case 'pending':
-      return { bg: theme.warningSoft, fg: theme.warningSoftForeground, label: 'Pending payment' };
+      return { tone: 'warning', label: 'Pending payment' };
     case 'completed':
-      return { bg: theme.neutralSoft, fg: theme.neutralSoftForeground, label: 'Completed' };
+      return { tone: 'neutral', label: 'Completed' };
     case 'cancelled':
-      return { bg: theme.neutralSoft, fg: theme.neutralSoftForeground, label: 'Cancelled' };
+      return { tone: 'neutral', label: 'Cancelled' };
   }
 }
 
@@ -124,7 +125,7 @@ export default function BookingsScreen() {
             )
           }
           renderItem={({ item }) => {
-            const badge = statusStyle(item.status, theme);
+            const badge = statusBadge(item.status);
             const timezone = item.courts?.venues?.timezone ?? 'Asia/Manila';
             return (
               <Pressable
@@ -142,11 +143,7 @@ export default function BookingsScreen() {
                   <ThemedText type="smallBold" numberOfLines={1} style={styles.cardTitle}>
                     {item.courts?.venues?.name ?? 'Venue'} · {item.courts?.name ?? 'Court'}
                   </ThemedText>
-                  <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                    <ThemedText type="caption" style={{ color: badge.fg }}>
-                      {badge.label}
-                    </ThemedText>
-                  </View>
+                  <Badge label={badge.label} tone={badge.tone} />
                 </View>
                 <ThemedText type="small" themeColor="subtle">
                   {formatBookingWindow(item.start_time, item.end_time, timezone)}
@@ -210,11 +207,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flexShrink: 1,
-  },
-  badge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.half,
-    borderRadius: Radius.pill,
   },
   cardBottom: {
     flexDirection: 'row',
