@@ -349,7 +349,7 @@ export type ClubMember = {
 
 export type EventType = 'open_play' | 'club_meetup' | 'training' | 'tournament';
 export type EventStatus = 'draft' | 'published' | 'cancelled' | 'completed';
-export type EventAttendeeStatus = 'joined' | 'waitlisted' | 'cancelled';
+export type EventAttendeeStatus = 'pending_approval' | 'joined' | 'waitlisted' | 'cancelled';
 
 /** Phase 7.8a: price_amount is DISPLAY ONLY — collected by the organizer
  * at the venue, never charged online (that's Phase 7.9 on web too). */

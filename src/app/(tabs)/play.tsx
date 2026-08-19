@@ -11,7 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { calculateSplit, formatShare } from '@/lib/event-split';
-import { listAttendingEventIds, listUpcomingEvents, type EventWithDetails } from '@/lib/events';
+import { listMyEventStatuses, listUpcomingEvents, type EventWithDetails } from '@/lib/events';
+import type { EventAttendeeStatus } from '@/lib/database.types';
 import { useSession } from '@/providers/session';
 
 function formatWhen(iso: string): string {
@@ -30,7 +31,7 @@ export default function PlayScreen() {
   const userId = session?.user.id ?? null;
 
   const [events, setEvents] = useState<EventWithDetails[] | null>(null);
-  const [attendingIds, setAttendingIds] = useState<Set<string>>(new Set());
+  const [myStatuses, setMyStatuses] = useState<Map<string, EventAttendeeStatus>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
 
@@ -40,11 +41,7 @@ export default function PlayScreen() {
       setEvents(rows);
       setError(false);
       if (userId) {
-        const ids = await listAttendingEventIds(
-          userId,
-          rows.map((e) => e.id)
-        );
-        setAttendingIds(new Set(ids));
+        setMyStatuses(await listMyEventStatuses(userId, rows.map((e) => e.id)));
       }
     } catch {
       setEvents([]);
@@ -74,7 +71,7 @@ export default function PlayScreen() {
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
             const split = calculateSplit(item.price_amount, Math.max(item.attendeeCount, 1));
-            const joined = attendingIds.has(item.id);
+            const status = myStatuses.get(item.id) ?? null;
             return (
               <Pressable
                 accessibilityRole="button"
@@ -87,7 +84,9 @@ export default function PlayScreen() {
                   <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>
                     {item.title}
                   </ThemedText>
-                  {joined ? <Badge label="You're in" tone="success" /> : null}
+                  {status === 'joined' ? <Badge label="You're in" tone="success" /> : null}
+                  {status === 'waitlisted' ? <Badge label="Waitlisted" tone="warning" /> : null}
+                  {status === 'pending_approval' ? <Badge label="Requested" tone="neutral" /> : null}
                 </View>
 
                 <ThemedText type="small" themeColor="subtle">

@@ -4,14 +4,24 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
+import { EventJoinRequests } from '@/components/events/event-join-requests';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import type { EventAttendeeStatus } from '@/lib/database.types';
 import { useTheme } from '@/hooks/use-theme';
 import { calculateSplit, formatShare } from '@/lib/event-split';
-import { getEventDetail, joinEvent, leaveEvent, type EventDetail } from '@/lib/events';
+import {
+  getEventDetail,
+  joinEvent,
+  leaveEvent,
+  listMyEventStatuses,
+  listPendingJoinRequests,
+  type EventDetail,
+  type PendingJoinRequest,
+} from '@/lib/events';
 import { useSession } from '@/providers/session';
 
 function formatWhen(iso: string): string {
@@ -31,35 +41,47 @@ export default function EventDetailScreen() {
   const userId = session?.user.id ?? null;
 
   const [event, setEvent] = useState<EventDetail | null | undefined>(undefined);
+  const [myStatus, setMyStatus] = useState<EventAttendeeStatus | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<PendingJoinRequest[]>([]);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const isOrganiser = userId != null && event?.creator_id === userId;
 
   const load = useCallback(() => {
     if (!id) return;
     getEventDetail(id)
-      .then(setEvent)
+      .then((detail) => {
+        setEvent(detail);
+        if (detail && userId) {
+          listMyEventStatuses(userId, [id]).then((statuses) => setMyStatus(statuses.get(id) ?? null));
+          if (detail.creator_id === userId) {
+            listPendingJoinRequests(id).then(setPendingRequests);
+          }
+        }
+      })
       .catch(() => setEvent(null));
-  }, [id]);
+  }, [id, userId]);
 
   useFocusEffect(load);
-
-  const joined = userId ? (event?.attendees.some((a) => a.id === userId) ?? false) : false;
-  const isOrganiser = userId != null && event?.creator_id === userId;
 
   const toggleJoin = async () => {
     if (!id || !userId || working) return;
     setWorking(true);
     setMessage(null);
     try {
-      if (joined) {
+      const active = myStatus === 'joined' || myStatus === 'waitlisted' || myStatus === 'pending_approval';
+      if (active) {
         await leaveEvent(userId, id);
-        setMessage("You've left this game.");
+        setMessage(myStatus === 'pending_approval' ? 'Request withdrawn.' : "You've left this game.");
       } else {
         const status = await joinEvent(userId, id);
         setMessage(
           status === 'waitlisted'
             ? "You're on the waitlist — we'll move you up if a spot opens."
-            : "You're in. Sort out your share with the organiser."
+            : status === 'pending_approval'
+              ? 'Request sent — the organiser will review it.'
+              : "You're in. Sort out your share with the organiser."
         );
       }
       load();
@@ -165,15 +187,30 @@ export default function EventDetailScreen() {
               ) : null}
 
               {isOrganiser ? (
-                <View style={[styles.card, { backgroundColor: theme.muted, borderColor: theme.border }]}>
-                  <ThemedText type="small" themeColor="subtle" style={styles.center}>
-                    You&apos;re organising this game.
-                  </ThemedText>
-                </View>
+                <>
+                  <EventJoinRequests eventId={id} requests={pendingRequests} onResolved={load} />
+                  <View style={[styles.card, { backgroundColor: theme.muted, borderColor: theme.border }]}>
+                    <ThemedText type="small" themeColor="subtle" style={styles.center}>
+                      You&apos;re organising this game.
+                    </ThemedText>
+                  </View>
+                </>
               ) : userId ? (
                 <Button
-                  title={working ? 'Working…' : joined ? 'Leave this game' : event.isFull ? 'Join the waitlist' : 'Join this game'}
-                  variant={joined ? 'secondary' : 'primary'}
+                  title={
+                    working
+                      ? 'Working…'
+                      : myStatus === 'pending_approval'
+                        ? 'Cancel request'
+                        : myStatus === 'waitlisted'
+                          ? 'Leave the waitlist'
+                          : myStatus === 'joined'
+                            ? 'Leave this game'
+                            : event.isFull
+                              ? 'Ask to join the waitlist'
+                              : 'Ask to join'
+                  }
+                  variant={myStatus ? 'secondary' : 'primary'}
                   onPress={toggleJoin}
                   disabled={working}
                   loading={working}
