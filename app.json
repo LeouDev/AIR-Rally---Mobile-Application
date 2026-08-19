@@ -4,11 +4,11 @@
     "slug": "air-rally",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "airrally",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/app-icon.png",
       "bundleIdentifier": "com.airrally.app",
       "supportsTablet": false,
       "infoPlist": {
