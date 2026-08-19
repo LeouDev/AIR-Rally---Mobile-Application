@@ -8,6 +8,36 @@ export const MIN_LEAD_TIME_MINUTES = 30;
 export const DURATION_OPTIONS_MINUTES = [60, 120, 180, 240];
 export const MAX_BOOKING_WINDOW_DAYS = 30;
 
+/** PayMongo's QR Ph rate — the only method this app enables. Mirrors the
+ * web's booking-config.ts exactly; the two must agree, since this number
+ * only predicts what the server (and PayMongo) will actually charge. */
+export const PROCESSING_FEE_PERCENT = 0.015;
+
+export type BookingCharge = {
+  courtAmount: number;
+  processingFeeAmount: number;
+  totalChargedAmount: number;
+};
+
+/**
+ * Port of the web's calculateBookingCharge() (lib/services/bookingFee.ts)
+ * — what to show a customer BEFORE checkout as the real total, since
+ * price_amount alone under-reports it once the fee is passed on. The fee
+ * is GROSSED UP, not added: PayMongo's rate applies to the total charged,
+ * not the court price, so a flat percentage of the court price
+ * under-collects every time. Integer centavos throughout; the fee is
+ * derived as the remainder so courtAmount + processingFeeAmount ===
+ * totalChargedAmount exactly, never independently rounded.
+ */
+export function calculateBookingCharge(courtAmountCentavos: number): BookingCharge {
+  if (courtAmountCentavos <= 0) {
+    return { courtAmount: 0, processingFeeAmount: 0, totalChargedAmount: 0 };
+  }
+  const totalChargedAmount = Math.round(courtAmountCentavos / (1 - PROCESSING_FEE_PERCENT));
+  const processingFeeAmount = totalChargedAmount - courtAmountCentavos;
+  return { courtAmount: courtAmountCentavos, processingFeeAmount, totalChargedAmount };
+}
+
 /** Same RPC the web books through — computed inside Postgres with the
  * exact overlap semantics of the double-booking constraint, so a slot
  * returned here is provably insertable. `localDate` is "YYYY-MM-DD" in

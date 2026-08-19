@@ -19,7 +19,9 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme, type Theme } from '@/hooks/use-theme';
 import type { AvailableSlot, PublicProfile } from '@/lib/database.types';
 import {
+  calculateBookingCharge,
   DURATION_OPTIONS_MINUTES,
+  formatCentavos,
   formatSlotTime,
   getAvailableSlots,
   upcomingDates,
@@ -159,6 +161,12 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
 
   const hours = duration / 60;
   const estimate = court.hourly_price * hours;
+  // What card/QR Ph will actually charge, fee included — never the raw
+  // court price. See lib/bookings.ts#calculateBookingCharge: PayMongo's
+  // rate applies to the total charged, not the court price, so showing
+  // the pre-fee number here would under-report what "Reserve & pay"
+  // actually commits to.
+  const charge = calculateBookingCharge(Math.round(estimate * 100));
 
   const pickSlot = (slot: AvailableSlot, selected: boolean) => {
     animateNext();
@@ -357,10 +365,10 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
               {formatSlotTime(selectedSlot.slot_end, venue.timezone)}
             </ThemedText>
             <ThemedText type="caption">
-              Credits apply automatically · QR Ph payment
+              Includes {formatCentavos(charge.processingFeeAmount)} QR Ph fee · waived if paid with credits
             </ThemedText>
           </View>
-          <ThemedText type="heading">₱{estimate.toLocaleString('en-PH')}</ThemedText>
+          <ThemedText type="heading">{formatCentavos(charge.totalChargedAmount)}</ThemedText>
         </View>
       ) : null}
 
@@ -368,7 +376,7 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
         <PlayerPicker
           selected={players}
           onChange={setPlayers}
-          totalAmount={Math.round(estimate * 100)}
+          totalAmount={charge.totalChargedAmount}
           excludeUserId={session?.user.id}
         />
       ) : null}

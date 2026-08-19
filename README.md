@@ -21,6 +21,14 @@ npx expo start
 - `i` / `a` — iOS Simulator / Android emulator (requires Xcode / Android Studio)
 - `w` — web preview (handy for quick checks; native is the real target)
 
+## Environments
+
+`.env.local` (day-to-day `npx expo start`) and `eas.json`'s `development` build profile both pair **staging** Supabase (`vdxdmtsnptzodabaojlc`) with `http://localhost:3000` — the iOS Simulator shares the host Mac's network, so it can reach a locally-run `npm run dev` in the web repo. That pairing is load-bearing: a Supabase bearer token is only valid against the project that issued it, so `EXPO_PUBLIC_SUPABASE_URL` and whatever `EXPO_PUBLIC_API_URL` points at must always target the *same* project's data, or every `/api/mobile/*` call 401s.
+
+There is no hosted staging deployment of the web app (checked — no staging domain in `vercel.json` or `.env.staging`), so `eas.json`'s `development-device` profile (a build installed onto a real phone, which can't reach `localhost`) has no safe staging option and is pointed at **production** instead: production Supabase + `https://air-rally.com`. A device built with that profile talks to real production data and can trigger a real PayMongo charge — that's a real, live consequence, not a hypothetical, so be deliberate before handing someone a `development-device` build.
+
+If a hosted staging deployment of the web app ever exists, retarget `development-device` at it instead — that removes the production-data tradeoff entirely.
+
 ## Phase 0 status
 
 - [x] Scaffold, AIR/Rally theme tokens (light + dark, ported from the web `globals.css`)
