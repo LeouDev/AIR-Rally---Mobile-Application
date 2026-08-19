@@ -9,6 +9,7 @@ import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/th
 import { useTheme } from '@/hooks/use-theme';
 import type { Notification } from '@/lib/database.types';
 import { resolveNotificationTarget } from '@/lib/notification-links';
+import { formatRelativeTime } from '@/lib/relative-time';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -111,11 +112,15 @@ export default function NotificationsScreen() {
                 {item.read_at === null ? (
                   <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />
                 ) : null}
-                <ThemedText type="smallBold" style={styles.cardTitle}>
+                <ThemedText type="smallBold" style={styles.cardTitle} numberOfLines={1}>
                   {item.title}
                 </ThemedText>
+                {/* Terse by design — it must never push the title out. */}
+                <ThemedText type="caption" themeColor="mutedForeground">
+                  {formatRelativeTime(item.created_at)}
+                </ThemedText>
               </View>
-              <ThemedText type="small" themeColor="subtle">
+              <ThemedText type="small" themeColor="subtle" style={styles.cardMessage}>
                 {item.message}
               </ThemedText>
             </Pressable>
@@ -158,6 +163,9 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flex: 1,
+  },
+  cardMessage: {
+    marginTop: Spacing.half,
   },
   unreadDot: {
     width: 8,

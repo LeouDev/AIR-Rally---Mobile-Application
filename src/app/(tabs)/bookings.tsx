@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -15,6 +15,30 @@ import {
   listMyBookings,
   type BookingWithCourt,
 } from '@/lib/bookings';
+
+type BookingSection = { title: string; data: BookingWithCourt[] };
+
+/** Upcoming = not cancelled and hasn't started. Everything else — past,
+ * completed, cancelled — falls below, newest first. */
+function toSections(bookings: BookingWithCourt[]): BookingSection[] {
+  const now = Date.now();
+  const upcoming: BookingWithCourt[] = [];
+  const past: BookingWithCourt[] = [];
+
+  for (const booking of bookings) {
+    const isUpcoming =
+      booking.status !== 'cancelled' && new Date(booking.start_time).getTime() > now;
+    (isUpcoming ? upcoming : past).push(booking);
+  }
+
+  // Upcoming reads soonest-first; history reads most-recent-first.
+  upcoming.sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+  return [
+    { title: 'Upcoming', data: upcoming },
+    { title: 'Past', data: past },
+  ].filter((section) => section.data.length > 0);
+}
 
 function statusStyle(status: BookingStatus, theme: Theme): { bg: string; fg: string; label: string } {
   switch (status) {
@@ -62,9 +86,15 @@ export default function BookingsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <FlatList
-          data={bookings ?? []}
+        <SectionList
+          sections={toSections(bookings ?? [])}
           keyExtractor={(item) => item.id}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => (
+            <ThemedText type="caption" themeColor="mutedForeground" style={styles.sectionLabel}>
+              {section.title.toUpperCase()}
+            </ThemedText>
+          )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={styles.list}
           ListHeaderComponent={
@@ -152,6 +182,10 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.two,
     marginBottom: Spacing.one,
+  },
+  sectionLabel: {
+    letterSpacing: 1.2,
+    marginTop: Spacing.one,
   },
   stack: {
     gap: Spacing.three,
