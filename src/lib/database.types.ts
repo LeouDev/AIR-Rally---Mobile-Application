@@ -382,6 +382,165 @@ export type EventAttendee = {
   created_at: string;
 };
 
+/**
+ * AIR/Rally Ranked — ported from the web repo's src/lib/supabase/types.ts
+ * (main, supabase/migrations/20260810000067_air_rally_ranked.sql and
+ * .../20260810000068_dupr_rating_engine.sql). Every Ranked table is
+ * read-only to every client role — the only write path is the RPCs in
+ * lib/ranked.ts, each a SECURITY DEFINER function. Kept byte-identical to
+ * the web's shapes, same convention as AvailableSlot/BookingReschedule.
+ */
+
+/** 1–7, low to high. Names/material/geometry live in lib/ranked.ts's RANK_THRESHOLDS, not the database. */
+export type RankedTier = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** 1–5, the star within a tier — 1-indexed, never 0. */
+export type RankedPips = 1 | 2 | 3 | 4 | 5;
+export type RankedMatchType = 'singles' | 'doubles';
+/** player_ranks.mode reuses this — a player's rating is tracked once per mode, independently. */
+export type RankedMode = RankedMatchType;
+export type RankedMatchWeightType = 'self_reported_rec' | 'club' | 'league' | 'tournament' | 'air_rally_ranked';
+export type RankedTeam = 'a' | 'b';
+export type RankedMatchStatus =
+  | 'lobby'
+  | 'officiating'
+  | 'live'
+  | 'awaiting_confirmation'
+  | 'confirmed'
+  | 'disputed'
+  | 'cancelled';
+/** A non-playing fifth person, or one of the players keeping score. */
+export type RankedOfficiatingMode = 'referee' | 'player_scorekeeper';
+export type RankedResultResponse = 'pending' | 'accepted' | 'disputed';
+
+export type RankedSeason = {
+  id: number;
+  name: string;
+  started_at: string;
+  ended_at: string | null;
+  created_at: string;
+};
+
+export type PlayerRank = {
+  season_id: number;
+  user_id: string;
+  /** Which of a player's two independent ratings this row is — singles and doubles never cross-pollinate. */
+  mode: RankedMode;
+  /** DUPR-inspired AAR. Meaningful from day one, but hidden from the player until is_calibrated. Starts at 1000. */
+  rating: number;
+  /** Stateless — derived from `rating` every time it changes, never independently incremented. */
+  tier: RankedTier;
+  pips: RankedPips;
+  /** 0-100 confidence in `rating`, NOT a measure of skill. */
+  reliability: number;
+  /** 0-100, admin-review signal only — never an automatic penalty. */
+  sandbag_risk_score: number;
+  last_match_at: string | null;
+  /** Retired rating mechanic — always false/0 on any row the current engine writes. */
+  in_promotion_series: boolean;
+  star_protection: number;
+  calibration_matches: number;
+  is_calibrated: boolean;
+  wins: number;
+  losses: number;
+  /** Positive on a win streak, negative on a losing one. */
+  current_streak: number;
+  best_streak: number;
+  best_tier: RankedTier | null;
+  best_pips: RankedPips | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RankedMatch = {
+  id: string;
+  season_id: number;
+  /** The Open Play session this was struck inside, when there was one. */
+  event_id: string | null;
+  court_id: string | null;
+  venue_id: string | null;
+  match_type: RankedMatchType;
+  /** Every match created through create_ranked_match() today is air_rally_ranked. */
+  match_weight_type: RankedMatchWeightType;
+  status: RankedMatchStatus;
+  officiating_mode: RankedOfficiatingMode | null;
+  /** Whoever holds the scoreboard, under either mode. */
+  scorekeeper_id: string | null;
+  target_score: number;
+  win_by: number;
+  score_a: number;
+  score_b: number;
+  serving_team: RankedTeam;
+  winning_team: RankedTeam | null;
+  /** True once ratings have moved. The database's own double-apply guard. */
+  rank_applied: boolean;
+  dispute_reason: string | null;
+  created_by: string;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  confirmed_at: string | null;
+  updated_at: string;
+};
+
+export type RankedMatchPlayer = {
+  match_id: string;
+  user_id: string;
+  team: RankedTeam;
+  is_host: boolean;
+  /** Denormalized from the match at creation time — which of the player's two ratings this row moves. */
+  mode: RankedMode | null;
+  ready: boolean;
+  ready_at: string | null;
+  /** Null means "hasn't answered", not the same as voting no. */
+  officiating_vote: boolean | null;
+  result_response: RankedResultResponse;
+  dispute_reason: string | null;
+  /** All null until the match is confirmed; frozen at that moment thereafter. */
+  rating_before: number | null;
+  rating_after: number | null;
+  rating_delta: number | null;
+  /** Null for a match played during calibration — there was no visible ladder position before it. */
+  tier_before: RankedTier | null;
+  pips_before: RankedPips | null;
+  tier_after: RankedTier | null;
+  pips_after: RankedPips | null;
+  pip_delta: number | null;
+  /** Retired — never true on a row this engine writes. */
+  star_protected: boolean;
+  expected_score: number | null;
+  /** The point SHARE this player's team actually won (e.g. 9/20 = 0.45), not the raw score. */
+  actual_score: number | null;
+  performance_gap: number | null;
+  match_weight: number | null;
+  recency_multiplier: number | null;
+  reliability_modifier: number | null;
+  created_at: string;
+};
+
+export type RankedMatchPoint = {
+  match_id: string;
+  seq: number;
+  team: RankedTeam;
+  recorded_by: string;
+  recorded_at: string;
+};
+
+/** Calibrated players only. One leaderboard per mode; position is ranked within (season_id, mode). */
+export type RankedLeaderboardRow = {
+  season_id: number;
+  mode: RankedMode;
+  user_id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  rating: number;
+  tier: RankedTier;
+  pips: RankedPips;
+  wins: number;
+  losses: number;
+  reliability: number;
+  position: number;
+};
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row;
   Insert: Insert;
@@ -487,6 +646,18 @@ export type Database = {
       // is what already compiles cleanly against this supabase-js version
       // (a distinct Views block broke type inference project-wide).
       public_profiles: TableDef<PublicProfile, never, never>;
+
+      // Ranked: read-only to every client role. There is no client
+      // insert/update policy on any of these — the RPCs below are the
+      // only write path. ranked_leaderboard is a view, declared as a
+      // TableDef entry for the same reason public_profiles/
+      // venue_marketplace are above.
+      ranked_seasons: TableDef<RankedSeason, never, never>;
+      player_ranks: TableDef<PlayerRank, never, never>;
+      ranked_matches: TableDef<RankedMatch, never, never>;
+      ranked_match_players: TableDef<RankedMatchPlayer, never, never>;
+      ranked_match_points: TableDef<RankedMatchPoint, never, never>;
+      ranked_leaderboard: TableDef<RankedLeaderboardRow, never, never>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -520,6 +691,78 @@ export type Database = {
         Args: { p_event_id: string; p_user_ids: string[] };
         Returns: number;
       };
+
+      /* --- Ranked -----------------------------------------------------
+       * Called directly over PostgREST with the player's own JWT — same
+       * posture the web repo's comment describes: no other write path,
+       * the tables themselves have no client insert/update policy.
+       * ------------------------------------------------------------- */
+
+      /** The open season's id, or null between seasons. */
+      current_ranked_season: {
+        Args: Record<string, never>;
+        Returns: number | null;
+      };
+      /** Idempotent. Creates the caller's standing for the open season, in the given mode, if they have none yet. */
+      ensure_my_player_rank: {
+        Args: { p_mode: RankedMode };
+        Returns: undefined;
+      };
+      /** Widest AAR gap among the calibrated players in a proposed party, for the given mode. Ranked parties must stay within 250 AAR of each other. */
+      ranked_party_spread: {
+        Args: { p_user_ids: string[]; p_mode: RankedMode };
+        Returns: number;
+      };
+      /** Returns the new match's id. The caller must be one of the players. */
+      create_ranked_match: {
+        Args: {
+          p_match_type: RankedMatchType;
+          p_team_a: string[];
+          p_team_b: string[];
+          p_event_id?: string | null;
+          p_court_id?: string | null;
+        };
+        Returns: string;
+      };
+      set_ranked_ready: {
+        Args: { p_match_id: string; p_ready: boolean };
+        Returns: undefined;
+      };
+      /** Proposing resets every vote, including the proposer's. */
+      propose_ranked_officiating: {
+        Args: { p_match_id: string; p_mode: RankedOfficiatingMode; p_scorekeeper_id: string };
+        Returns: undefined;
+      };
+      /** Unanimity starts the match; one abstention or objection holds it. */
+      vote_ranked_officiating: {
+        Args: { p_match_id: string; p_approve: boolean };
+        Returns: undefined;
+      };
+      /** Scorekeeper only. */
+      record_ranked_point: {
+        Args: { p_match_id: string; p_team: RankedTeam };
+        Returns: undefined;
+      };
+      /** Scorekeeper only. A no-op at 0-0 rather than an error. */
+      undo_ranked_point: {
+        Args: { p_match_id: string };
+        Returns: undefined;
+      };
+      /** Scorekeeper only. Rejects a score that isn't a finished game. */
+      submit_ranked_result: {
+        Args: { p_match_id: string };
+        Returns: undefined;
+      };
+      /** A dispute is absorbing: nothing is applied, and no later acceptance reverses it. */
+      respond_ranked_result: {
+        Args: { p_match_id: string; p_accept: boolean; p_reason?: string | null };
+        Returns: undefined;
+      };
+      cancel_ranked_match: {
+        Args: { p_match_id: string };
+        Returns: undefined;
+      };
+      // resolve_ranked_dispute is admin-only — not called from mobile.
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

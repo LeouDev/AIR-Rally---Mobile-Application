@@ -6,6 +6,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 
 import { OwnerApplicationCTA } from '@/components/owner-application-cta';
+import { RankCard } from '@/components/ranked/rank-card';
 import { ReferralCard } from '@/components/referral-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -190,6 +191,8 @@ export default function ProfileScreen() {
               </View>
             </View>
           )}
+
+          <RankCard />
 
           {profile?.role === 'player' ? <OwnerApplicationCTA ownerStatus={profile.owner_status} /> : null}
 

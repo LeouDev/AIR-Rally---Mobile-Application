@@ -84,6 +84,8 @@ function RootNavigator() {
           <Stack.Screen name="clubs/new" />
           <Stack.Screen name="favorites/index" />
           <Stack.Screen name="account-settings" />
+          <Stack.Screen name="ranked/[matchId]" />
+          <Stack.Screen name="ranked/history" />
         </Stack.Protected>
         <Stack.Protected guard={session !== null && needsAgreement === true}>
           <Stack.Screen name="complete-signup" />
@@ -99,6 +101,10 @@ function RootNavigator() {
             signed out, signed in, or (via the recovery code exchange)
             somewhere in between; no single guard covers all of that. */}
         <Stack.Screen name="reset-password" />
+        {/* Unconditional — the Ranked leaderboard is public (ranked_leaderboard's
+            own RLS allows anon), same posture as the web's /ranked/leaderboard
+            staying outside the account-gated /profile prefix. */}
+        <Stack.Screen name="ranked/leaderboard" />
       </Stack>
     </ThemeProvider>
   );

@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlayerPicker } from '@/components/player-picker';
+import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -11,10 +12,53 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TextField } from '@/components/ui/text-field';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { PublicProfile } from '@/lib/database.types';
+import type { PublicProfile, RankedMatchType } from '@/lib/database.types';
 import { formatShare } from '@/lib/event-split';
 import { createOpenPlayForBooking, listHostableBookings, type HostableBooking } from '@/lib/events';
+import { getPublicProfile } from '@/lib/follows';
 import { useSession } from '@/providers/session';
+
+type GameMode = 'casual' | 'ranked';
+
+/**
+ * The two-state "which kind of game" and "singles or doubles" pickers,
+ * same visual language as booking-picker.tsx's DurationSegmented — a
+ * bordered, muted-fill row with a navy pill for the active option.
+ */
+function SegmentedControl<T extends string>({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: readonly { value: T; label: string }[];
+  selected: T;
+  onSelect: (value: T) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.segmented, { backgroundColor: theme.muted, borderColor: theme.input }]}>
+      {options.map((option) => {
+        const isSelected = option.value === selected;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected }}
+            onPress={() => onSelect(option.value)}
+            style={({ pressed }) => [
+              styles.segment,
+              isSelected && { backgroundColor: theme.navy },
+              pressed && { opacity: 0.85 },
+            ]}>
+            <ThemedText type="smallBold" style={{ color: isSelected ? theme.navyForeground : theme.mutedForeground }}>
+              {option.label}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-PH', {
@@ -38,6 +82,15 @@ export default function NewOpenPlayScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Ranked mode. Casual's `players`/`submitting`/`error` above stay
+  // untouched by any of this — the two modes only ever share the
+  // booking list and the optional title.
+  const [mode, setMode] = useState<GameMode>('casual');
+  const [matchType, setMatchType] = useState<RankedMatchType>('singles');
+  const [hostProfile, setHostProfile] = useState<PublicProfile | null>(null);
+  const [rankedEventId, setRankedEventId] = useState<string | null>(null);
+  const [startingRankedMatch, setStartingRankedMatch] = useState(false);
+
   useEffect(() => {
     if (!userId) return;
     listHostableBookings(userId)
@@ -49,8 +102,22 @@ export default function NewOpenPlayScreen() {
       .catch(() => setBookings([]));
   }, [userId]);
 
+  useEffect(() => {
+    if (!userId) return;
+    getPublicProfile(userId)
+      .then(setHostProfile)
+      .catch(() => setHostProfile(null));
+  }, [userId]);
+
   const available = (bookings ?? []).filter((b) => !b.existingEventId);
   const selected = (bookings ?? []).find((b) => b.bookingId === bookingId) ?? null;
+
+  const selectBooking = (id: string) => {
+    setBookingId(id);
+    // A ranked event already started belongs to the booking it was
+    // created under — picking a different one starts fresh.
+    setRankedEventId(null);
+  };
 
   const submit = async () => {
     if (!userId || !bookingId || submitting) return;
@@ -68,6 +135,34 @@ export default function NewOpenPlayScreen() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /**
+   * Ranked's first step: the underlying Open Play session has to exist
+   * — with a real id — before RankedPartyBuilder can hand that id to
+   * create_ranked_match(). Once it does, the party builder replaces this
+   * button and owns the rest of the flow (including its own submit).
+   */
+  const startRankedMatch = async () => {
+    if (!userId || !bookingId || startingRankedMatch) return;
+    setStartingRankedMatch(true);
+    setError(null);
+    try {
+      const result = await createOpenPlayForBooking(userId, {
+        bookingId,
+        playerIds: [],
+        title: title.trim() || undefined,
+      });
+      setRankedEventId(result.eventId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "We couldn't set up that game.");
+    } finally {
+      setStartingRankedMatch(false);
+    }
+  };
+
+  const handleRankedMatchCreated = (matchId: string) => {
+    router.replace({ pathname: '/ranked/[matchId]', params: { matchId } });
   };
 
   return (
@@ -114,6 +209,26 @@ export default function NewOpenPlayScreen() {
           ) : (
             <>
               <View style={styles.block}>
+                <ThemedText type="smallBold">Game type</ThemedText>
+                <SegmentedControl
+                  options={[
+                    { value: 'casual', label: 'Casual' },
+                    { value: 'ranked', label: 'Ranked' },
+                  ]}
+                  selected={mode}
+                  onSelect={(value) => {
+                    setMode(value);
+                    setRankedEventId(null);
+                  }}
+                />
+                <ThemedText type="caption" themeColor="mutedForeground">
+                  {mode === 'ranked'
+                    ? 'A ranked match counts toward your AIR/Rally Ranked rating.'
+                    : 'Just for fun — nothing here affects your rating.'}
+                </ThemedText>
+              </View>
+
+              <View style={styles.block}>
                 <ThemedText type="smallBold">Which booking?</ThemedText>
                 <ThemedText type="caption" themeColor="mutedForeground">
                   Open Play runs on a court you&apos;ve already booked and paid for.
@@ -126,7 +241,7 @@ export default function NewOpenPlayScreen() {
                         key={booking.bookingId}
                         accessibilityRole="radio"
                         accessibilityState={{ checked: active }}
-                        onPress={() => setBookingId(booking.bookingId)}
+                        onPress={() => selectBooking(booking.bookingId)}
                         style={[
                           styles.bookingRow,
                           {
@@ -155,35 +270,83 @@ export default function NewOpenPlayScreen() {
                 placeholder={selected ? `Open Play at ${selected.venueName}` : 'Open Play'}
               />
 
-              {selected ? (
-                <PlayerPicker
-                  selected={players}
-                  onChange={setPlayers}
-                  totalAmount={selected.priceAmount}
-                  currency={selected.currency}
-                  excludeUserId={userId}
-                />
-              ) : null}
+              {mode === 'casual' ? (
+                <>
+                  {selected ? (
+                    <PlayerPicker
+                      selected={players}
+                      onChange={setPlayers}
+                      totalAmount={selected.priceAmount}
+                      currency={selected.currency}
+                      excludeUserId={userId}
+                    />
+                  ) : null}
 
-              {selected && players.length > 0 && selected.priceAmount > 0 ? (
-                <ThemedText type="caption" themeColor="mutedForeground">
-                  You&apos;ve already paid {formatShare(selected.priceAmount, selected.currency)} for this court.
-                  Collect each player&apos;s share from your group directly, however you like.
-                </ThemedText>
-              ) : null}
+                  {selected && players.length > 0 && selected.priceAmount > 0 ? (
+                    <ThemedText type="caption" themeColor="mutedForeground">
+                      You&apos;ve already paid {formatShare(selected.priceAmount, selected.currency)} for this
+                      court. Collect each player&apos;s share from your group directly, however you like.
+                    </ThemedText>
+                  ) : null}
 
-              {error ? (
-                <ThemedText type="small" themeColor="destructive">
-                  {error}
-                </ThemedText>
-              ) : null}
+                  {error ? (
+                    <ThemedText type="small" themeColor="destructive">
+                      {error}
+                    </ThemedText>
+                  ) : null}
 
-              <Button
-                title={submitting ? 'Creating…' : players.length > 0 ? `Create game and invite ${players.length}` : 'Create game'}
-                onPress={submit}
-                disabled={submitting || !bookingId}
-                loading={submitting}
-              />
+                  <Button
+                    title={
+                      submitting ? 'Creating…' : players.length > 0 ? `Create game and invite ${players.length}` : 'Create game'
+                    }
+                    onPress={submit}
+                    disabled={submitting || !bookingId}
+                    loading={submitting}
+                  />
+                </>
+              ) : selected ? (
+                <>
+                  <View style={styles.block}>
+                    <ThemedText type="smallBold">Singles or doubles?</ThemedText>
+                    <SegmentedControl
+                      options={[
+                        { value: 'singles', label: 'Singles' },
+                        { value: 'doubles', label: 'Doubles' },
+                      ]}
+                      selected={matchType}
+                      onSelect={setMatchType}
+                    />
+                  </View>
+
+                  {error ? (
+                    <ThemedText type="small" themeColor="destructive">
+                      {error}
+                    </ThemedText>
+                  ) : null}
+
+                  {rankedEventId ? (
+                    hostProfile ? (
+                      <RankedPartyBuilder
+                        key={matchType}
+                        host={hostProfile}
+                        matchType={matchType}
+                        eventId={rankedEventId}
+                        courtId={selected.courtId}
+                        onCreated={handleRankedMatchCreated}
+                      />
+                    ) : (
+                      <Skeleton height={220} radius={Radius.xl} />
+                    )
+                  ) : (
+                    <Button
+                      title={startingRankedMatch ? 'Starting…' : 'Start ranked match'}
+                      onPress={startRankedMatch}
+                      disabled={startingRankedMatch || !bookingId}
+                      loading={startingRankedMatch}
+                    />
+                  )}
+                </>
+              ) : null}
             </>
           )}
         </ScrollView>
@@ -227,5 +390,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.three,
     gap: 2,
+  },
+  segmented: {
+    flexDirection: 'row',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: 3,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: Radius.lg - 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
