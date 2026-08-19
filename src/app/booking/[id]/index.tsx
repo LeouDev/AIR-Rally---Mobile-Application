@@ -71,6 +71,14 @@ export default function BookingStatusScreen() {
   // Mirrors the server's own rules so the button only shows when the
   // cancel can succeed: pending always; confirmed only when it used no
   // credits (credit bookings are final) and hasn't started.
+  // The server owns the real rules (24h cutoff, once per booking, same
+  // venue). This only decides whether to OFFER the button; the
+  // reschedule screen asks the API and explains any refusal in full.
+  const maybeReschedulable =
+    booking != null &&
+    booking.status === 'confirmed' &&
+    new Date(booking.start_time).getTime() > Date.now();
+
   const cancellable =
     booking != null &&
     (booking.status === 'pending' ||
@@ -281,6 +289,16 @@ export default function BookingStatusScreen() {
                   onPress={() => setConfirmingCancel(true)}
                 />
               )
+            ) : null}
+
+            {maybeReschedulable ? (
+              <Button
+                title="Reschedule"
+                variant="secondary"
+                onPress={() =>
+                  router.push({ pathname: '/booking/[id]/reschedule', params: { id: booking.id } })
+                }
+              />
             ) : null}
 
             <Button title="See my bookings" onPress={() => router.replace('/(tabs)/bookings')} />

@@ -25,7 +25,11 @@ export type CheckoutResult =
 
 type ApiResult<T> = { success: true; data: T } | { success: false; error: string };
 
-async function postToApi<T>(path: string, payload: unknown, fallbackError: string): Promise<ApiResult<T>> {
+async function callApi<T>(
+  path: string,
+  fallbackError: string,
+  payload?: unknown
+): Promise<ApiResult<T>> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -35,12 +39,12 @@ async function postToApi<T>(path: string, payload: unknown, fallbackError: strin
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
-      method: 'POST',
+      method: payload === undefined ? 'GET' : 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify(payload),
+      ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
     });
     const body = (await response.json().catch(() => null)) as ApiResult<T> | null;
     if (body && typeof body === 'object' && 'success' in body) {
@@ -60,7 +64,7 @@ export async function createCheckoutSession(input: {
   startTime: string;
   endTime: string;
 }): Promise<CheckoutResult> {
-  return postToApi('/api/mobile/checkout', input, "We couldn't start checkout. Please try again.");
+  return callApi('/api/mobile/checkout', "We couldn't start checkout. Please try again.", input);
 }
 
 export type CancelOutcome = {
@@ -71,5 +75,51 @@ export type CancelOutcome = {
 };
 
 export async function cancelBookingViaApi(bookingId: string): Promise<ApiResult<CancelOutcome>> {
-  return postToApi('/api/mobile/cancel', { bookingId }, "We couldn't cancel that booking.");
+  return callApi('/api/mobile/cancel', "We couldn't cancel that booking.", { bookingId });
+}
+
+/** What the venue offers for a reschedule, or the plain reason one
+ * isn't allowed. The rules live server-side (24h cutoff, same venue,
+ * fixed duration, once per booking) so they can't drift from the web. */
+export type RescheduleOptions = {
+  venueId: string;
+  venueName: string;
+  venueTimezone: string;
+  originalDurationMinutes: number;
+  originalPriceAmount: number;
+  currency: string;
+  courts: { id: string; name: string; hourly_price: number; surface_type: string | null }[];
+};
+
+export type RescheduleAvailability = {
+  eligible: boolean;
+  message: string | null;
+  options: RescheduleOptions | null;
+};
+
+export async function getRescheduleAvailability(
+  bookingId: string
+): Promise<ApiResult<RescheduleAvailability>> {
+  return callApi(
+    `/api/mobile/reschedule?bookingId=${encodeURIComponent(bookingId)}`,
+    "We couldn't load reschedule options."
+  );
+}
+
+export type RescheduleOutcome = {
+  /** completed = nothing more owed; checkout_required = the new slot
+   * costs more and `checkoutUrl` collects the difference;
+   * provider_unavailable = payment provider is down, nothing changed. */
+  kind: 'completed' | 'checkout_required' | 'provider_unavailable';
+  newBookingId: string;
+  checkoutUrl: string | null;
+};
+
+export async function createReschedule(input: {
+  bookingId: string;
+  newCourtId: string;
+  newStartTime: string;
+  newEndTime: string;
+}): Promise<ApiResult<RescheduleOutcome>> {
+  return callApi('/api/mobile/reschedule', "We couldn't reschedule that booking.", input);
 }
