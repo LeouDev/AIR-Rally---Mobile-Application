@@ -7,6 +7,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
+import { Image } from 'expo-image';
+
 import { Wordmark } from '@/components/wordmark';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
@@ -51,6 +53,17 @@ export default function SignInScreen() {
             keyboardShouldPersistTaps="handled"
             bounces={false}>
             <View style={styles.header}>
+              {/* The real brand mark, transparent so it sits on cream or
+                  navy without a baked-in panel behind it. The wordmark
+                  stays live text rather than part of the image so it
+                  scales with the type system and stays legible in both
+                  themes. */}
+              <Image
+                source={require('@/assets/images/mark.png')}
+                style={styles.mark}
+                contentFit="contain"
+                accessibilityLabel="AIR/Rally"
+              />
               <Wordmark />
               <ThemedText themeColor="subtle">Book courts. Rally your crew.</ThemedText>
             </View>
@@ -119,6 +132,10 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
+  },
+  mark: {
+    width: 96,
+    height: 96,
   },
   header: {
     gap: Spacing.two,
