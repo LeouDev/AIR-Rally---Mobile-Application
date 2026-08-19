@@ -17,12 +17,9 @@ import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
 import { Wordmark } from '@/components/wordmark';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/hooks/use-theme';
-
-/** Mirrors the web's CURRENT_AGREEMENT_VERSION (src/lib/legal.ts) — bump
- * both together when the User Agreement changes. */
-const CURRENT_AGREEMENT_VERSION = '2026-08-17';
+import { CURRENT_AGREEMENT_VERSION } from '@/lib/legal';
+import { supabase } from '@/lib/supabase';
 
 export default function SignUpScreen() {
   const theme = useTheme();
@@ -197,8 +194,14 @@ export default function SignUpScreen() {
                   ) : null}
                 </View>
                 <ThemedText type="small" themeColor="subtle" style={styles.agreementText}>
-                  I agree to the AIR/Rally User Agreement (v{CURRENT_AGREEMENT_VERSION}) — the same
-                  terms as air-rally.com/legal.
+                  I agree to the{' '}
+                  <ThemedText
+                    type="small"
+                    themeColor="primary"
+                    onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}>
+                    AIR/Rally User Agreement (v{CURRENT_AGREEMENT_VERSION})
+                  </ThemedText>
+                  .
                 </ThemedText>
               </Pressable>
 

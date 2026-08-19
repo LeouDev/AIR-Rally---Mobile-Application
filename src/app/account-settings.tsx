@@ -1,4 +1,4 @@
-import { Stack, useFocusEffect } from 'expo-router';
+import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -194,6 +194,28 @@ function PasswordFields() {
   );
 }
 
+function LegalLinks() {
+  return (
+    <View style={styles.block}>
+      <ThemedText type="subtitle">Legal</ThemedText>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}>
+        <ThemedText type="small" themeColor="primary">
+          User Agreement
+        </ThemedText>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'privacy' } })}>
+        <ThemedText type="small" themeColor="primary">
+          Privacy Policy
+        </ThemedText>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function AccountSettingsScreen() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
@@ -224,6 +246,7 @@ export default function AccountSettingsScreen() {
               <ProfileFields profile={profile} userId={userId} onSaved={setProfile} />
               <NotificationsToggle userId={userId} initialEnabled={profile.email_notifications_enabled} />
               <PasswordFields />
+              <LegalLinks />
             </>
           ) : null}
         </ScrollView>

@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,13 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Wordmark } from '@/components/wordmark';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { CURRENT_AGREEMENT_VERSION } from '@/lib/legal';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/providers/session';
-
-/** Mirrors sign-up.tsx's CURRENT_AGREEMENT_VERSION and the web's
- * lib/legal.ts — bump all three together when the User Agreement
- * changes. */
-const CURRENT_AGREEMENT_VERSION = '2026-08-17';
 
 /**
  * The one step Google/Facebook sign-in can't do for you: Supabase
@@ -79,7 +76,14 @@ export default function CompleteSignupScreen() {
               ) : null}
             </View>
             <ThemedText type="small" themeColor="subtle" style={styles.agreementText}>
-              I agree to the AIR/Rally User Agreement (v{CURRENT_AGREEMENT_VERSION}).
+              I agree to the{' '}
+              <ThemedText
+                type="small"
+                themeColor="primary"
+                onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}>
+                AIR/Rally User Agreement (v{CURRENT_AGREEMENT_VERSION})
+              </ThemedText>
+              .
             </ThemedText>
           </Pressable>
 

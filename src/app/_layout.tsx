@@ -88,6 +88,10 @@ function RootNavigator() {
         <Stack.Protected guard={session === null}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
+        {/* Unconditional — reachable from sign-up (signed out) AND
+            complete-signup (signed in, agreement pending), the two places
+            that link to it. Neither guard above covers both states. */}
+        <Stack.Screen name="legal/[doc]" />
       </Stack>
     </ThemeProvider>
   );
