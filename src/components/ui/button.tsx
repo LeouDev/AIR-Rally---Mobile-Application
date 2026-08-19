@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, type PressableProps } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -6,23 +7,38 @@ import { useTheme } from '@/hooks/use-theme';
 
 type ButtonProps = Omit<PressableProps, 'children'> & {
   title: string;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'outline';
   loading?: boolean;
+  icon?: ReactNode;
 };
 
 /**
  * Pill-shaped like the web's CTAs. `primary` is Rally Orange — per the
  * design language at most one primary button should compete in a
- * viewport.
+ * viewport. `outline` is for the bordered secondary CTAs (referral,
+ * public-profile, OAuth-style) that several screens were previously
+ * hand-rolling as one-off Pressables.
  */
-export function Button({ title, variant = 'primary', loading, disabled, style, ...rest }: ButtonProps) {
+export function Button({ title, variant = 'primary', loading, icon, disabled, style, ...rest }: ButtonProps) {
   const theme = useTheme();
   const isDisabled = disabled || loading;
 
   const background =
-    variant === 'primary' ? theme.primary : variant === 'secondary' ? theme.secondary : 'transparent';
+    variant === 'primary'
+      ? theme.primary
+      : variant === 'secondary'
+        ? theme.secondary
+        : variant === 'outline'
+          ? theme.card
+          : 'transparent';
   const pressedBackground =
-    variant === 'primary' ? theme.primaryPressed : variant === 'secondary' ? theme.navyRaised : theme.accent;
+    variant === 'primary'
+      ? theme.primaryPressed
+      : variant === 'secondary'
+        ? theme.navyRaised
+        : variant === 'outline'
+          ? theme.muted
+          : theme.accent;
   const textColor =
     variant === 'primary'
       ? theme.primaryForeground
@@ -33,10 +49,13 @@ export function Button({ title, variant = 'primary', loading, disabled, style, .
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       style={(state) => [
         styles.base,
         { backgroundColor: state.pressed ? pressedBackground : background },
+        variant === 'outline' && { borderWidth: 1, borderColor: theme.input },
         isDisabled && styles.disabled,
         typeof style === 'function' ? style(state) : style,
       ]}
@@ -44,9 +63,12 @@ export function Button({ title, variant = 'primary', loading, disabled, style, .
       {loading ? (
         <ActivityIndicator color={textColor} />
       ) : (
-        <ThemedText type="smallBold" style={{ color: textColor }}>
-          {title}
-        </ThemedText>
+        <>
+          {icon}
+          <ThemedText type="smallBold" style={{ color: textColor }}>
+            {title}
+          </ThemedText>
+        </>
       )}
     </Pressable>
   );

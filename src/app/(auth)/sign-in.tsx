@@ -96,6 +96,12 @@ export default function SignInScreen() {
                 </ThemedText>
               ) : null}
 
+              <Link href="/forgot-password" style={styles.forgotLink}>
+                <ThemedText type="small" themeColor="primary">
+                  Forgot password?
+                </ThemedText>
+              </Link>
+
               <Button title="Sign in" onPress={handleSignIn} loading={submitting} />
             </View>
 
@@ -144,6 +150,9 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: Spacing.three,
+  },
+  forgotLink: {
+    alignSelf: 'flex-end',
   },
   footer: {
     flexDirection: 'row',

@@ -31,9 +31,11 @@ const light = {
   secondaryForeground: '#f6f1e8',
 
   muted: '#f0e9dc',
-  mutedForeground: '#8a8172',
+  // Darkened from #8a8172 so normal-size text clears WCAG AA (4.5:1)
+  // against both background (#f6f1e8) and card (#ffffff).
+  mutedForeground: '#6f6455',
   subtle: '#6f6757',
-  placeholder: '#a3998a',
+  placeholder: '#8a8172',
 
   accent: '#fdf0e1',
   accentForeground: '#b45309',
@@ -116,7 +118,13 @@ const dark: Record<ThemeColor, string> = {
   ring: '#f3700f',
   skeleton: '#1e3b5f',
 
-  navy: '#132a49',
+  // Was the same value as `card` (#132a49), which made every "selected
+  // fill" pattern that compares navy against card (e.g. the booking
+  // panel's court/date/time pickers) render as no visible change at all
+  // in dark mode — the exact contrast this token pair provides in light
+  // mode (navy #0f2747 vs. card #ffffff). Reusing navyRaised's value
+  // keeps it a genuinely distinct, already-defined "elevated" surface.
+  navy: '#1e3b5f',
   navyForeground: '#f6f1e8',
   navyRaised: '#1e3b5f',
   rally: '#f3700f',

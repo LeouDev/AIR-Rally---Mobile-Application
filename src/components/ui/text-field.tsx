@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -12,12 +13,17 @@ type TextFieldProps = TextInputProps & {
 /** Input on the 12px radius step, card-white fill, Court Clay border. */
 export function TextField({ label, error, style, ...rest }: TextFieldProps) {
   const theme = useTheme();
+  const labelId = useId();
 
   return (
     <View style={styles.wrapper}>
-      <ThemedText type="smallBold">{label}</ThemedText>
+      <ThemedText type="smallBold" nativeID={labelId}>
+        {label}
+      </ThemedText>
       <TextInput
         placeholderTextColor={theme.placeholder}
+        accessibilityLabel={label}
+        accessibilityLabelledBy={labelId}
         style={[
           styles.input,
           {

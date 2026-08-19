@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { ToastProvider } from '@/components/ui/toast';
 import { Colors } from '@/constants/theme';
 import { useNotificationObserver } from '@/lib/notifications-runtime';
 import { SessionProvider, useSession } from '@/providers/session';
@@ -12,7 +13,9 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   return (
     <SessionProvider>
-      <RootNavigator />
+      <ToastProvider>
+        <RootNavigator />
+      </ToastProvider>
     </SessionProvider>
   );
 }
@@ -92,6 +95,10 @@ function RootNavigator() {
             complete-signup (signed in, agreement pending), the two places
             that link to it. Neither guard above covers both states. */}
         <Stack.Screen name="legal/[doc]" />
+        {/* Unconditional — a password-recovery deep link can land while
+            signed out, signed in, or (via the recovery code exchange)
+            somewhere in between; no single guard covers all of that. */}
+        <Stack.Screen name="reset-password" />
       </Stack>
     </ThemeProvider>
   );
