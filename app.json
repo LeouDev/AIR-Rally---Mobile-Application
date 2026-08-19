@@ -18,9 +18,8 @@
     "android": {
       "package": "com.airrally.app",
       "adaptiveIcon": {
-        "backgroundColor": "#0f2747",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/android-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
