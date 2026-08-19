@@ -191,6 +191,164 @@ export type BookingRefund = {
   created_at: string;
 };
 
+// --- Audit-findings additions: reviews, favorites, credits history,
+// follows, COURT/Side posts, Clubs, Open Play events. Mirrors the web
+// repo's src/lib/supabase/types.ts field-for-field for each of these. ---
+
+/** The three columns safe to show about any user, not just yourself —
+ * `profiles` itself is own-row-only RLS, so every cross-user join in this
+ * app (review authors, post authors, follow lists) goes through this view
+ * instead, exactly like the web app. */
+export type PublicProfile = Pick<Profile, 'id' | 'display_name' | 'avatar_url'>;
+
+export type Favorite = {
+  user_id: string;
+  venue_id: string;
+  created_at: string;
+};
+
+export type Review = {
+  id: string;
+  venue_id: string;
+  user_id: string;
+  booking_id: string | null;
+  rating: number;
+  title: string | null;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreditTransactionType =
+  | 'cancellation_compensation'
+  | 'admin_adjustment'
+  | 'promotion_bonus'
+  | 'booking_payment';
+
+/** AIR/Rally Credits ledger row — immutable, service-role-written only. */
+export type CreditTransaction = {
+  id: string;
+  user_id: string;
+  amount: number;
+  transaction_type: CreditTransactionType;
+  reference_id: string | null;
+  actor_id: string | null;
+  description: string | null;
+  created_at: string;
+};
+
+export type Follow = {
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+};
+
+export type Post = {
+  id: string;
+  user_id: string;
+  content: string;
+  image_url: string | null;
+  image_paths: string[];
+  like_count: number;
+  comment_count: number;
+  reshare_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PostLike = {
+  post_id: string;
+  user_id: string;
+  created_at: string;
+};
+
+export type PostReshare = {
+  post_id: string;
+  user_id: string;
+  created_at: string;
+};
+
+export type PostComment = {
+  id: string;
+  post_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+};
+
+export type PostMention = {
+  post_id: string;
+  user_id: string;
+  created_at: string;
+};
+
+export type ClubSkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'mixed';
+export type ClubType = 'social' | 'competitive' | 'training' | 'casual';
+export type ClubVisibility = 'public' | 'approval_required' | 'private';
+export type ClubStatus = 'pending_review' | 'active' | 'suspended';
+export type ClubMemberRole = 'owner' | 'admin' | 'member';
+export type ClubMemberStatus = 'pending' | 'active';
+
+export type Club = {
+  id: string;
+  owner_id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  location: string | null;
+  skill_level: ClubSkillLevel;
+  club_type: ClubType;
+  visibility: ClubVisibility;
+  status: ClubStatus;
+  member_count: number;
+  mention_handle: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ClubMember = {
+  club_id: string;
+  user_id: string;
+  role: ClubMemberRole;
+  status: ClubMemberStatus;
+  created_at: string;
+};
+
+export type EventType = 'open_play' | 'club_meetup' | 'training' | 'tournament';
+export type EventStatus = 'draft' | 'published' | 'cancelled' | 'completed';
+export type EventAttendeeStatus = 'joined' | 'waitlisted' | 'cancelled';
+
+/** Phase 7.8a: price_amount is DISPLAY ONLY — collected by the organizer
+ * at the venue, never charged online (that's Phase 7.9 on web too). */
+export type CommunityEvent = {
+  id: string;
+  creator_id: string;
+  venue_id: string | null;
+  club_id: string | null;
+  court_id: string | null;
+  booking_id: string | null;
+  title: string;
+  description: string | null;
+  event_type: EventType;
+  skill_level: ClubSkillLevel | null;
+  start_time: string;
+  end_time: string | null;
+  max_players: number | null;
+  price_amount: number;
+  currency: string;
+  status: EventStatus;
+  participant_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventAttendee = {
+  event_id: string;
+  user_id: string;
+  status: EventAttendeeStatus;
+  created_at: string;
+};
+
 type TableDef<Row, Insert, Update = Partial<Insert>> = {
   Row: Row;
   Insert: Insert;
@@ -215,6 +373,85 @@ export type Database = {
       user_credit_wallets: TableDef<UserCreditWallet, never, never>;
       venues: TableDef<OwnedVenue, never, never>;
       booking_refunds: TableDef<BookingRefund, never, never>;
+
+      favorites: TableDef<Favorite, Pick<Favorite, 'user_id' | 'venue_id'>, never>;
+      reviews: TableDef<
+        Review,
+        { venue_id: string; user_id: string; booking_id: string; rating: number; title: string | null; comment: string | null },
+        never
+      >;
+      // service-role-written only — mobile only ever reads its own rows.
+      credit_transactions: TableDef<CreditTransaction, never, never>;
+
+      follows: TableDef<Follow, Pick<Follow, 'follower_id' | 'following_id'>, never>;
+      posts: TableDef<
+        Post,
+        { user_id: string; content: string; image_url: string | null; image_paths: string[] },
+        never
+      >;
+      post_likes: TableDef<PostLike, Pick<PostLike, 'post_id' | 'user_id'>, never>;
+      post_reshares: TableDef<PostReshare, Pick<PostReshare, 'post_id' | 'user_id'>, never>;
+      post_comments: TableDef<PostComment, { post_id: string; user_id: string; content: string }, never>;
+      post_mentions: TableDef<PostMention, Pick<PostMention, 'post_id' | 'user_id'>, never>;
+
+      clubs: TableDef<
+        Club,
+        {
+          owner_id: string;
+          name: string;
+          description: string | null;
+          location: string | null;
+          image_url: string | null;
+          skill_level: ClubSkillLevel;
+          club_type: ClubType;
+          visibility: ClubVisibility;
+        },
+        Partial<{
+          name: string;
+          description: string | null;
+          location: string | null;
+          image_url: string | null;
+          skill_level: ClubSkillLevel;
+          club_type: ClubType;
+          visibility: ClubVisibility;
+        }>
+      >;
+      club_members: TableDef<
+        ClubMember,
+        Pick<ClubMember, 'club_id' | 'user_id'>,
+        Partial<Pick<ClubMember, 'role' | 'status'>>
+      >;
+
+      events: TableDef<
+        CommunityEvent,
+        {
+          creator_id: string;
+          venue_id: string | null;
+          club_id: string | null;
+          court_id: string | null;
+          booking_id: string | null;
+          title: string;
+          description: string | null;
+          event_type: EventType;
+          skill_level: ClubSkillLevel | null;
+          start_time: string;
+          end_time: string | null;
+          max_players: number | null;
+          price_amount: number;
+        },
+        Partial<Pick<CommunityEvent, 'status'>>
+      >;
+      event_attendees: TableDef<
+        EventAttendee,
+        Pick<EventAttendee, 'event_id' | 'user_id' | 'status'>,
+        Partial<Pick<EventAttendee, 'status'>>
+      >;
+
+      // A view, not a table — same precedent as venue_marketplace above:
+      // declared as a read-only TableDef entry under Tables, because that
+      // is what already compiles cleanly against this supabase-js version
+      // (a distinct Views block broke type inference project-wide).
+      public_profiles: TableDef<PublicProfile, never, never>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -239,6 +476,10 @@ export type Database = {
           p_min_lead_minutes: number;
         };
         Returns: AvailableSlot[];
+      };
+      court_side_feed: {
+        Args: { p_limit?: number; p_cursor?: string };
+        Returns: (Post & { effective_at: string; resharer_id: string | null })[];
       };
     };
     Enums: Record<string, never>;
