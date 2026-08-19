@@ -178,9 +178,24 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
               </ThemedText>
               <ThemedText
                 type="caption"
-                style={{ color: selected ? theme.navyForeground : theme.mutedForeground }}>
+                style={{ color: selected ? theme.navyForeground : theme.cardForeground }}>
                 ₱{c.hourly_price}/hr
-                {c.surface_type ? ` · ${c.surface_type}` : ''}
+              </ThemedText>
+              {/* Surface, cover and capacity used to live in a separate
+                  Courts section that only repeated this strip. Kept here
+                  instead: it's what a group actually checks before
+                  picking, and a horizontal strip pays for it once. */}
+              <ThemedText
+                type="caption"
+                numberOfLines={1}
+                style={{ color: selected ? theme.navyForeground : theme.mutedForeground }}>
+                {[
+                  c.surface_type,
+                  c.indoor_outdoor,
+                  c.capacity ? `up to ${c.capacity}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </ThemedText>
             </Pressable>
           );
@@ -394,8 +409,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    minWidth: 132,
-    minHeight: 56,
+    minWidth: 150,
+    maxWidth: 230,
+    minHeight: 74,
     justifyContent: 'center',
     gap: 2,
   },
