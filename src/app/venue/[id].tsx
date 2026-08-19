@@ -198,12 +198,15 @@ export default function VenueDetailScreen() {
                 </ThemedText>
                 <View style={styles.badgeRow}>
                   {venue.review_count > 0 ? (
-                    <ThemedText type="smallBold">
-                      ★ {venue.average_rating.toFixed(1)}{' '}
-                      <ThemedText type="small" themeColor="mutedForeground">
-                        ({venue.review_count} {venue.review_count === 1 ? 'review' : 'reviews'})
+                    <View style={styles.ratingRow}>
+                      <Ionicons name="star" size={14} color={theme.foreground} />
+                      <ThemedText type="smallBold">
+                        {venue.average_rating.toFixed(1)}{' '}
+                        <ThemedText type="small" themeColor="mutedForeground">
+                          ({venue.review_count} {venue.review_count === 1 ? 'review' : 'reviews'})
+                        </ThemedText>
                       </ThemedText>
-                    </ThemedText>
+                    </View>
                   ) : (
                     <View style={[styles.pill, { backgroundColor: theme.neutralSoft }]}>
                       <ThemedText type="caption" style={{ color: theme.neutralSoftForeground }}>
@@ -388,6 +391,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     marginTop: Spacing.one,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
   },
   directionsLink: {
     marginTop: Spacing.one,

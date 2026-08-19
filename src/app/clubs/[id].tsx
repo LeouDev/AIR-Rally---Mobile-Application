@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -118,9 +119,12 @@ export default function ClubDetailScreen() {
             <View style={styles.titleBlock}>
               <ThemedText type="heading">{club.name}</ThemedText>
               {club.visibility !== 'public' ? (
-                <ThemedText type="small" themeColor="mutedForeground">
-                  {club.visibility === 'private' ? '🔒 Invite only' : '🔒 Approval required'}
-                </ThemedText>
+                <View style={styles.visibilityRow}>
+                  <Ionicons name="lock-closed-outline" size={13} color={theme.mutedForeground} />
+                  <ThemedText type="small" themeColor="mutedForeground">
+                    {club.visibility === 'private' ? 'Invite only' : 'Approval required'}
+                  </ThemedText>
+                </View>
               ) : null}
             </View>
 
@@ -213,6 +217,11 @@ export default function ClubDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  visibilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+  },
   container: {
     flex: 1,
   },

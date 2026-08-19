@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -43,9 +44,12 @@ function ClubCard({ club }: { club: Club }) {
           {club.name}
         </ThemedText>
         {club.visibility !== 'public' ? (
-          <ThemedText type="caption" themeColor="mutedForeground">
-            {club.visibility === 'private' ? '🔒 Invite only' : '🔒 Approval required'}
-          </ThemedText>
+          <View style={styles.visibilityRow}>
+            <Ionicons name="lock-closed-outline" size={12} color={theme.mutedForeground} />
+            <ThemedText type="caption" themeColor="mutedForeground">
+              {club.visibility === 'private' ? 'Invite only' : 'Approval required'}
+            </ThemedText>
+          </View>
         ) : null}
       </View>
       {club.description ? (
@@ -155,6 +159,11 @@ export default function ClubsScreen() {
 }
 
 const styles = StyleSheet.create({
+  visibilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+  },
   container: {
     flex: 1,
   },

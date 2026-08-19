@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -32,7 +33,7 @@ function StarRow({ value, onChange, size = 22 }: { value: number; onChange?: (v:
           accessibilityState={{ selected: n <= value }}
           hitSlop={6}
           onPress={() => onChange?.(n)}>
-          <ThemedText style={{ fontSize: size, color: n <= value ? theme.primary : theme.border }}>★</ThemedText>
+          <Ionicons name={n <= value ? 'star' : 'star-outline'} size={size} color={n <= value ? theme.primary : theme.border} />
         </Pressable>
       ))}
     </View>

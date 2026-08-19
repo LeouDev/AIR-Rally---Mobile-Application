@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Pressable, Share, StyleSheet, View } from 'react-native';
 
@@ -35,7 +36,7 @@ export function ReferralCard({ referralCode }: { referralCode: string }) {
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.row}>
         <View style={[styles.icon, { backgroundColor: theme.secondary }]}>
-          <ThemedText style={{ fontSize: 20 }}>🤝</ThemedText>
+          <Ionicons name="people-outline" size={20} color={theme.secondaryForeground} />
         </View>
         <View style={styles.text}>
           <ThemedText type="smallBold">Know someone who owns a court?</ThemedText>

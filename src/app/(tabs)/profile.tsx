@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -146,9 +147,11 @@ export default function ProfileScreen() {
                       disabled={uploadingAvatar}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={[styles.avatarEdit, { backgroundColor: theme.foreground, borderColor: theme.card }]}>
-                      <ThemedText style={{ fontSize: 14, color: theme.background }}>
-                        {uploadingAvatar ? '…' : '📷'}
-                      </ThemedText>
+                      {uploadingAvatar ? (
+                        <ThemedText style={{ fontSize: 14, color: theme.background }}>…</ThemedText>
+                      ) : (
+                        <Ionicons name="camera" size={14} color={theme.background} />
+                      )}
                     </Pressable>
                   ) : null}
                 </View>
@@ -239,49 +242,49 @@ export default function ProfileScreen() {
             <ThemedText type="smallBold">Shortcuts</ThemedText>
             <View style={styles.shortcutGrid}>
               <ShortcutCard
-                icon="🧩"
+                icon="chatbubbles-outline"
                 title="COURT/Side"
                 subtitle="Posts, players you follow, and the community feed."
                 onPress={() => router.push('/court-side')}
               />
               <ShortcutCard
-                icon="👥"
+                icon="people-outline"
                 title="Clubs"
                 subtitle="Find a club or manage the ones you're in."
                 onPress={() => router.push('/clubs')}
               />
               <ShortcutCard
-                icon="📅"
+                icon="calendar-outline"
                 title="Open Play"
                 subtitle="Join a game, or start one on a court you've booked."
                 onPress={() => router.push('/(tabs)/play')}
               />
               <ShortcutCard
-                icon="🗓"
+                icon="list-outline"
                 title="My bookings"
                 subtitle="Upcoming games and your booking history."
                 onPress={() => router.push('/(tabs)/bookings')}
               />
               <ShortcutCard
-                icon="💳"
+                icon="card-outline"
                 title="AIR/Rally Credits"
                 subtitle="Your balance and where it came from."
                 onPress={() => router.push('/credits')}
               />
               <ShortcutCard
-                icon="♡"
+                icon="heart-outline"
                 title="Saved courts"
                 subtitle="Venues you've favourited."
                 onPress={() => router.push('/favorites')}
               />
               <ShortcutCard
-                icon="🔍"
+                icon="search-outline"
                 title="Find a court"
                 subtitle="Browse venues and book your next rally."
                 onPress={() => router.push('/(tabs)')}
               />
               <ShortcutCard
-                icon="⚙️"
+                icon="settings-outline"
                 title="Account settings"
                 subtitle="Name, photo, and contact details."
                 onPress={() => router.push('/account-settings')}
@@ -313,7 +316,7 @@ function ShortcutCard({
   subtitle,
   onPress,
 }: {
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
   onPress: () => void;
@@ -328,7 +331,7 @@ function ShortcutCard({
         { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.9 : 1 },
       ]}>
       <View style={[styles.shortcutIcon, { backgroundColor: theme.accent }]}>
-        <ThemedText style={{ fontSize: 16 }}>{icon}</ThemedText>
+        <Ionicons name={icon} size={18} color={theme.accentForeground} />
       </View>
       <ThemedText type="smallBold">{title}</ThemedText>
       <ThemedText type="caption" themeColor="mutedForeground">

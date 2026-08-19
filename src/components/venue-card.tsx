@@ -75,7 +75,10 @@ export function VenueCard({ venue, isFavorited, onToggleFavorite }: VenueCardPro
               {venue.name}
             </ThemedText>
             {venue.review_count > 0 ? (
-              <ThemedText type="smallBold">★ {venue.average_rating.toFixed(1)}</ThemedText>
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={14} color={theme.foreground} />
+                <ThemedText type="smallBold">{venue.average_rating.toFixed(1)}</ThemedText>
+              </View>
             ) : (
               <ThemedText type="small" themeColor="mutedForeground">
                 New
@@ -122,6 +125,11 @@ export function VenueCard({ venue, isFavorited, onToggleFavorite }: VenueCardPro
 }
 
 const styles = StyleSheet.create({
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+  },
   card: {
     gap: Spacing.two,
   },

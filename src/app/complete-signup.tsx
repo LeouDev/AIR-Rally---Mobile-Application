@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -76,11 +77,7 @@ export default function CompleteSignupScreen() {
                   backgroundColor: agreed ? theme.primary : theme.card,
                 },
               ]}>
-              {agreed ? (
-                <ThemedText type="smallBold" style={{ color: theme.primaryForeground }}>
-                  ✓
-                </ThemedText>
-              ) : null}
+              {agreed ? <Ionicons name="checkmark" size={16} color={theme.primaryForeground} /> : null}
             </Pressable>
             <ThemedText type="small" themeColor="subtle" style={styles.agreementText}>
               I agree to the{' '}

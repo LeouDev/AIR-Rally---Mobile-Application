@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -29,7 +30,7 @@ export function OwnerApplicationCTA({ ownerStatus }: { ownerStatus: OwnerStatus 
           { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
         ]}>
         <View style={[styles.icon, { backgroundColor: theme.warningSoft }]}>
-          <ThemedText style={{ fontSize: 20 }}>🏟</ThemedText>
+          <Ionicons name="business-outline" size={20} color={theme.warningSoftForeground} />
         </View>
         <View style={styles.text}>
           <ThemedText type="smallBold">Your owner application is under review</ThemedText>
@@ -51,7 +52,7 @@ export function OwnerApplicationCTA({ ownerStatus }: { ownerStatus: OwnerStatus 
       ]}>
       <View style={styles.row}>
         <View style={[styles.icon, { backgroundColor: theme.accent }]}>
-          <ThemedText style={{ fontSize: 20 }}>🏟</ThemedText>
+          <Ionicons name="business-outline" size={20} color={theme.accentForeground} />
         </View>
         <View style={styles.text}>
           <ThemedText type="smallBold">Become a Venue Owner</ThemedText>

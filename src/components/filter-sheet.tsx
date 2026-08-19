@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,8 +27,19 @@ const SORT_OPTIONS: { value: VenueSortOption; label: string }[] = [
   { value: 'price_desc', label: 'Price: high to low' },
 ];
 
-function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+function Chip({
+  label,
+  icon,
+  selected,
+  onPress,
+}: {
+  label: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  selected: boolean;
+  onPress: () => void;
+}) {
   const theme = useTheme();
+  const color = selected ? theme.secondaryForeground : theme.foreground;
   return (
     <Pressable
       accessibilityRole="button"
@@ -42,7 +54,8 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
           opacity: pressed ? 0.7 : 1,
         },
       ]}>
-      <ThemedText type="small" style={{ color: selected ? theme.secondaryForeground : theme.foreground }}>
+      {icon ? <Ionicons name={icon} size={13} color={color} /> : null}
+      <ThemedText type="small" style={{ color }}>
         {label}
       </ThemedText>
     </Pressable>
@@ -197,7 +210,8 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
                   {RATINGS.map((rating) => (
                     <Chip
                       key={rating}
-                      label={rating === 0 ? 'Any' : `★ ${rating}+`}
+                      label={rating === 0 ? 'Any' : `${rating}+`}
+                      icon={rating === 0 ? undefined : 'star'}
                       selected={(draft.minRating ?? 0) === rating}
                       onPress={() => setDraft({ ...draft, minRating: rating || undefined })}
                     />
@@ -310,6 +324,9 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
     borderRadius: Radius.pill,

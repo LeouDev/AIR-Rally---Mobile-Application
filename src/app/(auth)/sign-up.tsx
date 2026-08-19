@@ -281,11 +281,7 @@ export default function SignUpScreen() {
                       backgroundColor: agreed ? theme.primary : theme.card,
                     },
                   ]}>
-                  {agreed ? (
-                    <ThemedText type="smallBold" style={{ color: theme.primaryForeground }}>
-                      ✓
-                    </ThemedText>
-                  ) : null}
+                  {agreed ? <Ionicons name="checkmark" size={16} color={theme.primaryForeground} /> : null}
                 </View>
                 <ThemedText type="small" themeColor="subtle" style={styles.agreementText}>
                   I agree to the{' '}
