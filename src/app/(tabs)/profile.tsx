@@ -1,19 +1,28 @@
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
+import { Image } from 'expo-image';
 
+import { OwnerApplicationCTA } from '@/components/owner-application-cta';
+import { ReferralCard } from '@/components/referral-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
 import { formatCentavos } from '@/lib/bookings';
 import type { Profile } from '@/lib/database.types';
 import { getFollowCounts, type FollowCounts } from '@/lib/follows';
+import { updateProfile } from '@/lib/profile';
 import { getProfileStats, type ProfileStats } from '@/lib/profile-stats';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/providers/session';
+
+function formatMemberSince(iso: string): string {
+  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date(iso));
+}
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -23,37 +32,32 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [followCounts, setFollowCounts] = useState<FollowCounts | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      const userId = session?.user.id ?? '';
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (!cancelled && data) setProfile(data);
-        });
-      // No wallet row means no credit has ever moved — a zero balance.
-      supabase
-        .from('user_credit_wallets')
-        .select('balance')
-        .eq('user_id', userId)
-        .maybeSingle()
-        .then(({ data, error }) => {
-          if (!cancelled && !error) setCreditBalance(data?.balance ?? 0);
-        });
-      if (userId) {
-        getProfileStats(userId).then((s) => !cancelled && setStats(s));
-        getFollowCounts(userId).then((c) => !cancelled && setFollowCounts(c));
-      }
-      return () => {
-        cancelled = true;
-      };
-    }, [session?.user.id])
-  );
+  const userId = session?.user.id ?? null;
+
+  const load = useCallback(() => {
+    if (!userId) return;
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle()
+      .then(({ data }) => data && setProfile(data));
+    // No wallet row means no credit has ever moved — a zero balance.
+    supabase
+      .from('user_credit_wallets')
+      .select('balance')
+      .eq('user_id', userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!error) setCreditBalance(data?.balance ?? 0);
+      });
+    getProfileStats(userId).then(setStats);
+    getFollowCounts(userId).then(setFollowCounts);
+  }, [userId]);
+
+  useFocusEffect(load);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -61,105 +65,205 @@ export default function ProfileScreen() {
     // No navigation here either — the root guard swaps stacks.
   };
 
+  const handleChangePhoto = async () => {
+    if (!userId || uploadingAvatar) return;
+    const picked = await pickAvatarImage();
+    if (!picked) return;
+    setUploadingAvatar(true);
+    try {
+      const url = await uploadAvatar(userId, picked);
+      const updated = await updateProfile(userId, {
+        firstName: profile?.first_name ?? '',
+        lastName: profile?.last_name ?? '',
+        displayName: profile?.display_name ?? '',
+        phone: profile?.phone ?? '',
+        avatarUrl: url,
+      });
+      setProfile(updated);
+    } catch {
+      // Best-effort — the avatar just stays as it was; nothing to roll back.
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const roleLabel =
-    profile?.role === 'venue_owner' ? 'Venue owner' : profile?.role === 'admin' ? 'Admin' : 'Player';
+    profile?.role === 'venue_owner' ? 'Venue Owner' : profile?.role === 'admin' ? 'Admin' : 'Player';
+  const displayName = profile?.display_name || session?.user.email || 'Your name';
+  const initials = displayName.slice(0, 1).toUpperCase();
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="title">Profile</ThemedText>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <ThemedText type="title">Profile</ThemedText>
+          <ThemedText type="small" themeColor="subtle">
+            Manage your account and preferences.
+          </ThemedText>
 
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.navy }]}>
-            <ThemedText type="heading" style={{ color: theme.navyForeground }}>
-              {(profile?.display_name ?? session?.user.email ?? '?').slice(0, 1).toUpperCase()}
-            </ThemedText>
-          </View>
-          <View style={styles.identity}>
-            <ThemedText type="subtitle">
-              {profile?.display_name ?? 'Your name'}
-            </ThemedText>
-            <ThemedText type="small" themeColor="subtle">
-              {session?.user.email}
-            </ThemedText>
-            <View style={[styles.rolePill, { backgroundColor: theme.neutralSoft }]}>
-              <ThemedText type="caption" style={{ color: theme.neutralSoftForeground }}>
-                {roleLabel}
-              </ThemedText>
+          <View style={[styles.headerCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.headerTop}>
+              <View style={styles.avatarWrap}>
+                <View style={[styles.avatar, { backgroundColor: theme.navy }]}>
+                  {profile?.avatar_url ? (
+                    <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} contentFit="cover" />
+                  ) : (
+                    <ThemedText type="heading" style={{ color: theme.navyForeground }}>
+                      {initials}
+                    </ThemedText>
+                  )}
+                </View>
+                {userId ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Change profile photo"
+                    onPress={handleChangePhoto}
+                    disabled={uploadingAvatar}
+                    style={[styles.avatarEdit, { backgroundColor: theme.foreground, borderColor: theme.card }]}>
+                    <ThemedText style={{ fontSize: 14, color: theme.background }}>
+                      {uploadingAvatar ? '…' : '📷'}
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              <View style={styles.identity}>
+                <View style={styles.nameRow}>
+                  <ThemedText type="subtitle">{displayName}</ThemedText>
+                  <View style={[styles.rolePill, { backgroundColor: theme.neutralSoft }]}>
+                    <ThemedText type="caption" style={{ color: theme.neutralSoftForeground }}>
+                      {roleLabel}
+                    </ThemedText>
+                  </View>
+                </View>
+                {profile ? (
+                  <ThemedText type="small" themeColor="subtle">
+                    Playing since {formatMemberSince(profile.created_at)}
+                  </ThemedText>
+                ) : null}
+              </View>
+            </View>
+
+            {userId ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/player/[userId]', params: { userId } })}
+                style={[styles.publicProfileButton, { borderColor: theme.border }]}>
+                <ThemedText type="smallBold">View public profile</ThemedText>
+              </Pressable>
+            ) : null}
+
+            <View style={[styles.statsRow, { borderTopColor: theme.border }]}>
+              <StatItem label="Plays" value={stats?.tripCount} />
+              <StatItem label="Reviews" value={stats?.reviewCount} />
+              <StatItem label="Followers" value={followCounts?.followers} />
+              <StatItem label="Following" value={followCounts?.following} />
             </View>
           </View>
-        </View>
 
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <StatItem label="Trips" value={stats?.tripCount} />
-          <StatItem label="Reviews" value={stats?.reviewCount} />
-          <StatItem label="Followers" value={followCounts?.followers} />
-          <StatItem label="Following" value={followCounts?.following} />
-        </View>
+          {profile?.role === 'player' ? <OwnerApplicationCTA ownerStatus={profile.owner_status} /> : null}
 
-        <View style={styles.shortcutGroup}>
-          <ShortcutRow
-            title="COURT/Side"
-            subtitle="Share your games and follow other players."
-            onPress={() => router.push('/court-side')}
-          />
-          <ShortcutRow title="Clubs" subtitle="Find or run a local playing group." onPress={() => router.push('/clubs')} />
-        </View>
+          {profile ? <ReferralCard referralCode={profile.referral_code} /> : null}
 
-        {profile?.role === 'venue_owner' || profile?.role === 'admin' ? (
+          {profile?.role === 'venue_owner' || profile?.role === 'admin' ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/owner')}
+              style={({ pressed }) => [
+                styles.card,
+                { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.9 : 1 },
+              ]}>
+              <View style={styles.identity}>
+                <ThemedText type="subtitle">Your venues</ThemedText>
+                <ThemedText type="small" themeColor="subtle">
+                  Bookings and customer payments, read-only. Manage venues at air-rally.com.
+                </ThemedText>
+              </View>
+              <ThemedText type="heading" themeColor="mutedForeground">
+                ›
+              </ThemedText>
+            </Pressable>
+          ) : null}
+
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/owner')}
+            onPress={() => router.push('/credits')}
             style={({ pressed }) => [
               styles.card,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.border,
-                opacity: pressed ? 0.9 : 1,
-              },
+              { backgroundColor: theme.navy, borderColor: theme.navy, opacity: pressed ? 0.9 : 1 },
             ]}>
             <View style={styles.identity}>
-              <ThemedText type="subtitle">Your venues</ThemedText>
-              <ThemedText type="small" themeColor="subtle">
-                Bookings and customer payments, read-only. Manage venues at air-rally.com.
+              <ThemedText type="small" style={{ color: theme.navyForeground }}>
+                AIR/Rally Credits
+              </ThemedText>
+              <ThemedText type="heading" style={{ color: theme.navyForeground }}>
+                {creditBalance === null ? '—' : formatCentavos(creditBalance)}
+              </ThemedText>
+              <ThemedText type="caption" style={{ color: theme.navyForeground }}>
+                Credits apply automatically at checkout. Bookings paid with credits are final.
               </ThemedText>
             </View>
-            <ThemedText type="heading" themeColor="mutedForeground">
+            <ThemedText type="heading" style={{ color: theme.navyForeground }}>
               ›
             </ThemedText>
           </Pressable>
-        ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/credits')}
-          style={({ pressed }) => [
-            styles.card,
-            { backgroundColor: theme.navy, borderColor: theme.navy, opacity: pressed ? 0.9 : 1 },
-          ]}>
-          <View style={styles.identity}>
-            <ThemedText type="small" style={{ color: theme.navyForeground }}>
-              AIR/Rally Credits
-            </ThemedText>
-            <ThemedText type="heading" style={{ color: theme.navyForeground }}>
-              {creditBalance === null ? '—' : formatCentavos(creditBalance)}
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: theme.navyForeground }}>
-              Credits apply automatically at checkout. Bookings paid with credits are final.
-            </ThemedText>
+          <View style={styles.shortcutsSection}>
+            <ThemedText type="smallBold">Shortcuts</ThemedText>
+            <View style={styles.shortcutGrid}>
+              <ShortcutCard
+                icon="🧩"
+                title="COURT/Side"
+                subtitle="Posts, players you follow, and the community feed."
+                onPress={() => router.push('/court-side')}
+              />
+              <ShortcutCard
+                icon="👥"
+                title="Clubs"
+                subtitle="Find a club or manage the ones you're in."
+                onPress={() => router.push('/clubs')}
+              />
+              <ShortcutCard
+                icon="📅"
+                title="Open Play"
+                subtitle="Join a game, or start one on a court you've booked."
+                onPress={() => router.push('/(tabs)/play')}
+              />
+              <ShortcutCard
+                icon="🗓"
+                title="My bookings"
+                subtitle="Upcoming games and your booking history."
+                onPress={() => router.push('/(tabs)/bookings')}
+              />
+              <ShortcutCard
+                icon="💳"
+                title="AIR/Rally Credits"
+                subtitle="Your balance and where it came from."
+                onPress={() => router.push('/credits')}
+              />
+              <ShortcutCard
+                icon="♡"
+                title="Saved courts"
+                subtitle="Venues you've favourited."
+                onPress={() => router.push('/favorites')}
+              />
+              <ShortcutCard
+                icon="🔍"
+                title="Find a court"
+                subtitle="Browse venues and book your next rally."
+                onPress={() => router.push('/(tabs)')}
+              />
+              <ShortcutCard
+                icon="⚙️"
+                title="Account settings"
+                subtitle="Name, photo, and contact details."
+                onPress={() => router.push('/account-settings')}
+              />
+            </View>
           </View>
-          <ThemedText type="heading" style={{ color: theme.navyForeground }}>
-            ›
-          </ThemedText>
-        </Pressable>
 
-        <View style={styles.spacer} />
-        <Button
-          title="Sign out"
-          variant="secondary"
-          onPress={handleSignOut}
-          loading={signingOut}
-        />
+          <Button title="Sign out" variant="secondary" onPress={handleSignOut} loading={signingOut} />
+        </ScrollView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -176,24 +280,32 @@ function StatItem({ label, value }: { label: string; value: number | undefined }
   );
 }
 
-function ShortcutRow({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+function ShortcutCard({
+  icon,
+  title,
+  subtitle,
+  onPress,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+}) {
   const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
-        styles.card,
+        styles.shortcutCard,
         { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.9 : 1 },
       ]}>
-      <View style={styles.identity}>
-        <ThemedText type="subtitle">{title}</ThemedText>
-        <ThemedText type="small" themeColor="subtle">
-          {subtitle}
-        </ThemedText>
+      <View style={[styles.shortcutIcon, { backgroundColor: theme.accent }]}>
+        <ThemedText style={{ fontSize: 16 }}>{icon}</ThemedText>
       </View>
-      <ThemedText type="heading" themeColor="mutedForeground">
-        ›
+      <ThemedText type="smallBold">{title}</ThemedText>
+      <ThemedText type="caption" themeColor="mutedForeground">
+        {subtitle}
       </ThemedText>
     </Pressable>
   );
@@ -205,12 +317,84 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  scroll: {
     padding: Spacing.four,
     paddingBottom: BottomTabInset + Spacing.three,
     gap: Spacing.four,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
+  },
+  headerCard: {
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    padding: Spacing.four,
+    gap: Spacing.three,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  avatarWrap: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarEdit: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: Radius.pill,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  identity: {
+    flex: 1,
+    gap: Spacing.one,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flexWrap: 'wrap',
+  },
+  rolePill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
+    borderRadius: Radius.pill,
+  },
+  publicProfileButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    paddingTop: Spacing.three,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
   },
   card: {
     borderRadius: Radius.xl,
@@ -220,33 +404,28 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     alignItems: 'center',
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.pill,
+  shortcutsSection: {
+    gap: Spacing.two,
+  },
+  shortcutGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  shortcutCard: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: Spacing.half,
+  },
+  shortcutIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  identity: {
-    flex: 1,
-    gap: Spacing.one,
-  },
-  rolePill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.half,
-    borderRadius: Radius.pill,
-    marginTop: Spacing.half,
-  },
-  spacer: {
-    flex: 1,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  shortcutGroup: {
-    gap: Spacing.two,
+    marginBottom: Spacing.half,
   },
 });

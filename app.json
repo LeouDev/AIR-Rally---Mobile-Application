@@ -43,7 +43,13 @@
           }
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AIR/Rally uses your photo library to set a profile picture."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

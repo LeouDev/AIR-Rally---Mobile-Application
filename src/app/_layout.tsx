@@ -79,6 +79,8 @@ function RootNavigator() {
           <Stack.Screen name="clubs/index" />
           <Stack.Screen name="clubs/[id]" />
           <Stack.Screen name="clubs/new" />
+          <Stack.Screen name="favorites/index" />
+          <Stack.Screen name="account-settings" />
         </Stack.Protected>
         <Stack.Protected guard={session !== null && needsAgreement === true}>
           <Stack.Screen name="complete-signup" />
