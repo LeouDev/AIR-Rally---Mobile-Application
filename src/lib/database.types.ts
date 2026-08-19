@@ -481,6 +481,10 @@ export type Database = {
         Args: { p_limit?: number; p_cursor?: string };
         Returns: (Post & { effective_at: string; resharer_id: string | null })[];
       };
+      invite_event_players: {
+        Args: { p_event_id: string; p_user_ids: string[] };
+        Returns: number;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

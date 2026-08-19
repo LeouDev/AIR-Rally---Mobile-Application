@@ -47,6 +47,48 @@ export async function listUpcomingEvents(limit = 20): Promise<EventWithDetails[]
   }));
 }
 
+export type EventDetail = CommunityEvent & {
+  creator: PublicProfile | null;
+  venue: EventVenue | null;
+  attendees: PublicProfile[];
+  isFull: boolean;
+};
+
+/** The Game page: the event row, its organiser, venue, and the roster of
+ * everyone actually seated ('joined' only — a waitlisted row isn't
+ * "playing" yet). Mirrors the web's event detail page query shape. */
+export async function getEventDetail(eventId: string): Promise<EventDetail | null> {
+  const { data: event, error } = await supabase.from('events').select('*').eq('id', eventId).maybeSingle();
+  if (error) throw error;
+  if (!event) return null;
+
+  const [creatorResult, venueResult, attendeeRowsResult] = await Promise.all([
+    supabase.from('public_profiles').select('*').eq('id', event.creator_id).maybeSingle(),
+    event.venue_id
+      ? supabase.from('venues').select('id, name, city').eq('id', event.venue_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    supabase.from('event_attendees').select('user_id').eq('event_id', event.id).eq('status', 'joined'),
+  ]);
+  if (creatorResult.error) throw creatorResult.error;
+  if (venueResult.error) throw venueResult.error;
+  if (attendeeRowsResult.error) throw attendeeRowsResult.error;
+
+  const attendeeIds = (attendeeRowsResult.data ?? []).map((row) => row.user_id);
+  const { data: attendees, error: attendeesError } =
+    attendeeIds.length > 0
+      ? await supabase.from('public_profiles').select('*').in('id', attendeeIds)
+      : { data: [] as PublicProfile[], error: null };
+  if (attendeesError) throw attendeesError;
+
+  return {
+    ...event,
+    creator: creatorResult.data,
+    venue: venueResult.data as EventVenue | null,
+    attendees: attendees ?? [],
+    isFull: event.max_players !== null && attendeeIds.length >= event.max_players,
+  };
+}
+
 export type CreateEventInput = {
   title: string;
   description?: string | null;
@@ -56,6 +98,10 @@ export type CreateEventInput = {
   courtId?: string | null;
   bookingId?: string | null;
   maxPlayers?: number | null;
+  /** Integer minor units — display only, for the share calculator. Never
+   * charged through this path; the organiser has already paid the venue
+   * separately (or this is a court-less event, where it stays 0). */
+  priceAmount?: number;
 };
 
 export async function createEvent(creatorId: string, values: CreateEventInput): Promise<CommunityEvent> {
@@ -74,7 +120,7 @@ export async function createEvent(creatorId: string, values: CreateEventInput): 
       court_id: values.courtId ?? null,
       booking_id: values.bookingId ?? null,
       max_players: values.maxPlayers ?? null,
-      price_amount: 0,
+      price_amount: values.priceAmount ?? 0,
     })
     .select()
     .single();
@@ -143,6 +189,8 @@ export type HostableBooking = {
   venueName: string;
   startTime: string;
   endTime: string;
+  priceAmount: number;
+  currency: string;
   existingEventId: string | null;
 };
 
@@ -152,7 +200,7 @@ export type HostableBooking = {
 export async function listHostableBookings(userId: string): Promise<HostableBooking[]> {
   const { data: bookings, error } = await supabase
     .from('bookings')
-    .select('id, court_id, start_time, end_time, status, courts(name, venues(name))')
+    .select('id, court_id, start_time, end_time, status, price_amount, currency, courts(name, venues(name))')
     .eq('user_id', userId)
     .in('status', ['pending', 'confirmed'])
     .gte('start_time', new Date().toISOString())
@@ -166,6 +214,8 @@ export async function listHostableBookings(userId: string): Promise<HostableBook
     court_id: string;
     start_time: string;
     end_time: string;
+    price_amount: number;
+    currency: string;
     courts: { name: string; venues: { name: string } | null } | null;
   }[];
 
@@ -186,6 +236,70 @@ export async function listHostableBookings(userId: string): Promise<HostableBook
     venueName: booking.courts?.venues?.name ?? 'Venue',
     startTime: booking.start_time,
     endTime: booking.end_time,
+    priceAmount: booking.price_amount,
+    currency: booking.currency,
     existingEventId: eventByBooking.get(booking.id) ?? null,
   }));
+}
+
+/**
+ * Turns a booking the caller already holds into an Open Play game and
+ * invites their chosen playmates — the client-side mirror of the web's
+ * createOpenPlayForBookingAction. Money is deliberately absent past
+ * copying the booking's own price_amount onto the event for the share
+ * calculator: the organiser has already paid (or is paying) for the
+ * whole booking through the ordinary checkout, and invited players are
+ * NOT auto-enrolled — invite_event_players() only notifies them, each
+ * joins with their own tap.
+ */
+export async function createOpenPlayForBooking(
+  userId: string,
+  values: { bookingId: string; playerIds: string[]; title?: string }
+): Promise<{ eventId: string; invited: number }> {
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select('id, user_id, court_id, start_time, end_time, status, price_amount, courts(name, venues(name))')
+    .eq('id', values.bookingId)
+    .maybeSingle();
+  if (bookingError) throw bookingError;
+  if (!booking || booking.user_id !== userId) throw new Error("We couldn't find that booking.");
+  if (booking.status === 'cancelled') throw new Error('That booking was cancelled.');
+
+  const row = booking as unknown as {
+    id: string;
+    court_id: string;
+    start_time: string;
+    end_time: string;
+    price_amount: number;
+    courts: { name: string; venues: { name: string } | null } | null;
+  };
+  const venueName = row.courts?.venues?.name ?? 'the venue';
+
+  const event = await createEvent(userId, {
+    title: values.title ?? `Open Play at ${venueName}`,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    courtId: row.court_id,
+    bookingId: row.id,
+    // Party size = organiser + invited players. Others can still join up
+    // to this cap; the organiser can be more generous by inviting more.
+    maxPlayers: Math.max(values.playerIds.length + 1, 2),
+    priceAmount: row.price_amount,
+  });
+
+  // The organiser is on their own roster — they're playing too, and the
+  // share calculator divides by everyone including them.
+  await joinEvent(userId, event.id);
+
+  let invited = 0;
+  if (values.playerIds.length > 0) {
+    const { data, error } = await supabase.rpc('invite_event_players', {
+      p_event_id: event.id,
+      p_user_ids: values.playerIds,
+    });
+    if (error) throw error;
+    invited = data ?? 0;
+  }
+
+  return { eventId: event.id, invited };
 }

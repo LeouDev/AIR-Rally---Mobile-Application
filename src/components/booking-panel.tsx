@@ -11,12 +11,13 @@ import {
   View,
 } from 'react-native';
 
+import { PlayerPicker } from '@/components/player-picker';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme, type Theme } from '@/hooks/use-theme';
-import type { AvailableSlot } from '@/lib/database.types';
+import type { AvailableSlot, PublicProfile } from '@/lib/database.types';
 import {
   DURATION_OPTIONS_MINUTES,
   formatSlotTime,
@@ -24,8 +25,10 @@ import {
   upcomingDates,
 } from '@/lib/bookings';
 import { createCheckoutSession } from '@/lib/checkout';
+import { createOpenPlayForBooking } from '@/lib/events';
 import { groupSlots } from '@/lib/slot-groups';
 import type { VenueDetail } from '@/lib/venues';
+import { useSession } from '@/providers/session';
 
 const VISIBLE_DAYS = 14;
 
@@ -53,6 +56,7 @@ function animateNext(): void {
  */
 export function BookingPanel({ venue }: { venue: VenueDetail }) {
   const theme = useTheme();
+  const { session } = useSession();
   const dates = useRef(upcomingDates(venue.timezone, VISIBLE_DAYS)).current;
 
   const [courtId, setCourtId] = useState(venue.courts[0]?.id ?? null);
@@ -63,6 +67,7 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
   const [slotsError, setSlotsError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [players, setPlayers] = useState<PublicProfile[]>([]);
   const requestSeq = useRef(0);
 
   const court = venue.courts.find((c) => c.id === courtId) ?? null;
@@ -116,6 +121,20 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
     }
 
     const { bookingId, amountDue, url } = result.data;
+
+    // The roster is set up AFTER the booking exists and BEFORE the
+    // redirect. Deliberately non-fatal: a failure here must never block a
+    // payment the player has already committed to.
+    if (players.length > 0 && session?.user.id) {
+      try {
+        await createOpenPlayForBooking(session.user.id, {
+          bookingId,
+          playerIds: players.map((p) => p.id),
+        });
+      } catch {
+        setCheckoutError("Booked, but we couldn't invite your players. You can invite them from the game page.");
+      }
+    }
 
     if (amountDue > 0) {
       if (Platform.OS === 'web') {
@@ -343,6 +362,15 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
           </View>
           <ThemedText type="heading">₱{estimate.toLocaleString('en-PH')}</ThemedText>
         </View>
+      ) : null}
+
+      {selectedSlot ? (
+        <PlayerPicker
+          selected={players}
+          onChange={setPlayers}
+          totalAmount={Math.round(estimate * 100)}
+          excludeUserId={session?.user.id}
+        />
       ) : null}
 
       {checkoutError ? (

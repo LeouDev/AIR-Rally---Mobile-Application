@@ -63,6 +63,8 @@ function RootNavigator() {
           <Stack.Screen name="booking/[id]/index" />
           <Stack.Screen name="booking/[id]/reschedule" />
           <Stack.Screen name="owner/index" />
+          <Stack.Screen name="events/[id]" />
+          <Stack.Screen name="events/new" />
         </Stack.Protected>
         <Stack.Protected guard={session === null}>
           <Stack.Screen name="(auth)" />

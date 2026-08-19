@@ -27,6 +27,11 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: 'calendar', selected: 'calendar' }} />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="play">
+        <NativeTabs.Trigger.Label>Play</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'sportscourt', selected: 'sportscourt.fill' }} />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="notifications">
         <NativeTabs.Trigger.Label>Alerts</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'bell', selected: 'bell.fill' }} />
