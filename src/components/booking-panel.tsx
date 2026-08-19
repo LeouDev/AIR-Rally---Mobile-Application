@@ -24,6 +24,7 @@ import {
   upcomingDates,
 } from '@/lib/bookings';
 import { createCheckoutSession } from '@/lib/checkout';
+import { groupSlots } from '@/lib/slot-groups';
 import type { VenueDetail } from '@/lib/venues';
 
 const VISIBLE_DAYS = 14;
@@ -366,30 +367,6 @@ function SectionLabel({ text }: { text: string }) {
       {text.toUpperCase()}
     </ThemedText>
   );
-}
-
-type SlotGroup = { label: string; slots: AvailableSlot[] };
-
-/** Morning / Afternoon / Evening by the slot's hour IN THE VENUE'S
- * TIMEZONE — the RPC returns UTC timestamps, so the raw string's hour
- * field is meaningless for grouping (6 AM Manila arrives as T22 UTC). */
-function groupSlots(slots: AvailableSlot[], timeZone: string): SlotGroup[] {
-  const hourFormat = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour: 'numeric',
-    hour12: false,
-  });
-  const groups: SlotGroup[] = [
-    { label: 'Morning', slots: [] },
-    { label: 'Afternoon', slots: [] },
-    { label: 'Evening', slots: [] },
-  ];
-  for (const slot of slots) {
-    const hour = Number(hourFormat.format(new Date(slot.slot_start))) % 24;
-    const bucket = hour < 12 ? 0 : hour < 17 ? 1 : 2;
-    groups[bucket].slots.push(slot);
-  }
-  return groups.filter((g) => g.slots.length > 0);
 }
 
 const styles = StyleSheet.create({
