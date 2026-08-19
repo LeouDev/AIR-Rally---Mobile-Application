@@ -1,20 +1,28 @@
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BookingPanel } from '@/components/booking-panel';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VenueReviews } from '@/components/venue-reviews';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { condensedSchedule, getVenueDetail, publicImageUrl, type VenueDetail } from '@/lib/venues';
+import { addFavorite, listFavoriteVenueIds, removeFavorite } from '@/lib/favorites';
+import { condensedSchedule, directionsUrl, getVenueDetail, publicImageUrl, type VenueDetail } from '@/lib/venues';
+import { useSession } from '@/providers/session';
 
 export default function VenueDetailScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
   const [venue, setVenue] = useState<VenueDetail | null | undefined>(undefined);
+  const [isFavorite, setIsFavorite] = useState<boolean | undefined>(undefined);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -31,7 +39,43 @@ export default function VenueDetailScreen() {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!id || !userId) {
+      setIsFavorite(undefined);
+      return;
+    }
+    let cancelled = false;
+    listFavoriteVenueIds(userId)
+      .then((ids) => {
+        if (!cancelled) setIsFavorite(ids.includes(id));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [id, userId]);
+
+  const toggleFavorite = async () => {
+    if (!id || !userId || favoriteBusy) return;
+    const next = !isFavorite;
+    setIsFavorite(next);
+    setFavoriteBusy(true);
+    try {
+      if (next) {
+        await addFavorite(userId, id);
+      } else {
+        await removeFavorite(userId, id);
+      }
+    } catch {
+      setIsFavorite(!next);
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
+
   const coverPath = venue?.imagePaths[0] ?? venue?.cover_image_path ?? null;
+  const directions = venue ? directionsUrl(venue) : null;
+  const hasContact = Boolean(venue?.phone || venue?.email);
 
   return (
     <ThemedView style={styles.container}>
@@ -76,6 +120,18 @@ export default function VenueDetailScreen() {
                   </ThemedText>
                 </View>
               )}
+              {userId ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={isFavorite ? 'Remove from saved courts' : 'Save this court'}
+                  onPress={toggleFavorite}
+                  hitSlop={8}
+                  style={[styles.favoriteButton, { backgroundColor: theme.background }]}>
+                  <ThemedText style={{ fontSize: 20, color: isFavorite ? theme.primary : theme.mutedForeground }}>
+                    {isFavorite ? '♥' : '♡'}
+                  </ThemedText>
+                </Pressable>
+              ) : null}
             </View>
 
             <View style={styles.section}>
@@ -110,6 +166,16 @@ export default function VenueDetailScreen() {
                     </ThemedText>
                   </View>
                 </View>
+                {directions ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => Linking.openURL(directions)}
+                    style={styles.directionsLink}>
+                    <ThemedText type="smallBold" themeColor="primary">
+                      Get directions →
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
               </View>
 
               {venue.description ? (
@@ -135,11 +201,23 @@ export default function VenueDetailScreen() {
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.chipStrip}>
-                    {venue.amenities.map((amenity) => (
+                    {venue.amenities.map(({ amenity, available }) => (
                       <View
                         key={amenity.id}
-                        style={[styles.pill, { backgroundColor: theme.neutralSoft }]}>
-                        <ThemedText type="caption" style={{ color: theme.neutralSoftForeground }}>
+                        style={[
+                          styles.pill,
+                          {
+                            backgroundColor: available ? theme.neutralSoft : 'transparent',
+                            borderWidth: available ? 0 : 1,
+                            borderColor: theme.border,
+                          },
+                        ]}>
+                        <ThemedText
+                          type="caption"
+                          style={{
+                            color: available ? theme.neutralSoftForeground : theme.mutedForeground,
+                            textDecorationLine: available ? 'none' : 'line-through',
+                          }}>
                           {amenity.name}
                         </ThemedText>
                       </View>
@@ -163,6 +241,30 @@ export default function VenueDetailScreen() {
                   ))}
                 </View>
               ) : null}
+
+              {hasContact ? (
+                <View style={styles.block}>
+                  <ThemedText type="caption" themeColor="mutedForeground" style={styles.metaLabel}>
+                    CONTACT
+                  </ThemedText>
+                  {venue.phone ? (
+                    <Pressable accessibilityRole="button" onPress={() => Linking.openURL(`tel:${venue.phone}`)}>
+                      <ThemedText type="small" themeColor="primary">
+                        {venue.phone}
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
+                  {venue.email ? (
+                    <Pressable accessibilityRole="button" onPress={() => Linking.openURL(`mailto:${venue.email}`)}>
+                      <ThemedText type="small" themeColor="primary">
+                        {venue.email}
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+
+              <VenueReviews venueId={venue.id} />
             </View>
           </>
         )}
@@ -192,6 +294,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  favoriteButton: {
+    position: 'absolute',
+    top: Spacing.three,
+    right: Spacing.three,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   section: {
     padding: Spacing.four,
     gap: Spacing.four,
@@ -204,6 +316,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     marginTop: Spacing.one,
+  },
+  directionsLink: {
+    marginTop: Spacing.one,
+    alignSelf: 'flex-start',
   },
   pill: {
     paddingHorizontal: Spacing.two,

@@ -42,9 +42,14 @@ export async function listMarketplaceVenues(q?: string): Promise<VenueMarketplac
   return data ?? [];
 }
 
+export type AmenityAvailability = { amenity: Amenity; available: boolean };
+
 export type VenueDetail = VenueMarketplaceRow & {
   courts: Court[];
-  amenities: Amenity[];
+  /** The FULL amenity catalog, each flagged available/not — matching the
+   * web app's venue page, which shows what a venue is missing as well as
+   * what it has, not just a filtered list of what it has. */
+  amenities: AmenityAvailability[];
   hours: VenueOperatingHours[];
   /** First venue-level image, else first court image — same "cover" rule
    * as the web. */
@@ -52,7 +57,7 @@ export type VenueDetail = VenueMarketplaceRow & {
 };
 
 export async function getVenueDetail(venueId: string): Promise<VenueDetail | null> {
-  const [venueResult, courtsResult, amenityLinksResult, hoursResult, imagesResult] =
+  const [venueResult, courtsResult, allAmenitiesResult, amenityLinksResult, hoursResult, imagesResult] =
     await Promise.all([
       supabase.from('venue_marketplace').select('*').eq('id', venueId).maybeSingle(),
       supabase
@@ -61,6 +66,7 @@ export async function getVenueDetail(venueId: string): Promise<VenueDetail | nul
         .eq('venue_id', venueId)
         .eq('status', 'active')
         .order('hourly_price', { ascending: true }),
+      supabase.from('amenities').select('*').order('name', { ascending: true }),
       supabase.from('venue_amenities').select('*').eq('venue_id', venueId),
       supabase
         .from('venue_operating_hours')
@@ -77,17 +83,16 @@ export async function getVenueDetail(venueId: string): Promise<VenueDetail | nul
   if (venueResult.error) throw venueResult.error;
   if (!venueResult.data) return null;
   if (courtsResult.error) throw courtsResult.error;
+  if (allAmenitiesResult.error) throw allAmenitiesResult.error;
   if (amenityLinksResult.error) throw amenityLinksResult.error;
   if (hoursResult.error) throw hoursResult.error;
   if (imagesResult.error) throw imagesResult.error;
 
-  const amenityIds = (amenityLinksResult.data ?? []).map((row) => row.amenity_id);
-  let amenities: Amenity[] = [];
-  if (amenityIds.length > 0) {
-    const { data, error } = await supabase.from('amenities').select('*').in('id', amenityIds);
-    if (error) throw error;
-    amenities = (data ?? []).sort((a, b) => a.name.localeCompare(b.name));
-  }
+  const availableIds = new Set((amenityLinksResult.data ?? []).map((row) => row.amenity_id));
+  const amenities: AmenityAvailability[] = (allAmenitiesResult.data ?? []).map((amenity) => ({
+    amenity,
+    available: availableIds.has(amenity.id),
+  }));
 
   // Venue-level photos (court_id null) lead, then court photos — the
   // lowest-sort venue-level image is the cover, matching the marketplace
@@ -105,6 +110,18 @@ export async function getVenueDetail(venueId: string): Promise<VenueDetail | nul
     hours: hoursResult.data ?? [],
     imagePaths,
   };
+}
+
+/** A maps: URL that opens the platform's native Maps app to this venue —
+ * no react-native-maps dependency (and its native rebuild) required for
+ * "get directions" to work. `https://maps.apple.com` and
+ * `https://maps.google.com` both redirect correctly on the OTHER
+ * platform too, so a single universal link works everywhere, including
+ * the web target. */
+export function directionsUrl(venue: Pick<VenueMarketplaceRow, 'latitude' | 'longitude' | 'name'>): string | null {
+  if (venue.latitude === null || venue.longitude === null) return null;
+  const label = encodeURIComponent(venue.name);
+  return `https://maps.apple.com/?daddr=${venue.latitude},${venue.longitude}&q=${label}`;
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
