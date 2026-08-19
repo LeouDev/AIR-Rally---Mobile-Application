@@ -1,4 +1,5 @@
-import { Stack, useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,7 +13,7 @@ import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { PublicProfile } from '@/lib/database.types';
-import { searchPublicProfiles } from '@/lib/follows';
+import { getFollowCounts, getPublicProfile, searchPublicProfiles, type FollowCounts } from '@/lib/follows';
 import {
   createPost,
   deletePost,
@@ -28,11 +29,17 @@ import {
 } from '@/lib/posts';
 import { useSession } from '@/providers/session';
 
+const FEED_TABS = ['For you', 'Following', 'Near you'] as const;
+
 export default function CourtSideScreen() {
   const theme = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const { show } = useToast();
+
+  const [activeTab, setActiveTab] = useState<(typeof FEED_TABS)[number]>('For you');
+  const [myProfile, setMyProfile] = useState<PublicProfile | null>(null);
+  const [counts, setCounts] = useState<FollowCounts>({ followers: 0, following: 0 });
 
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -49,9 +56,15 @@ export default function CourtSideScreen() {
 
   const loadFirstPage = useCallback(async () => {
     try {
-      const { posts: rows, nextCursor: cursor } = await listFeedPosts();
+      const [{ posts: rows, nextCursor: cursor }, profileResult, countsResult] = await Promise.all([
+        listFeedPosts(),
+        userId ? getPublicProfile(userId) : Promise.resolve(null),
+        userId ? getFollowCounts(userId) : Promise.resolve({ followers: 0, following: 0 }),
+      ]);
       setPosts(rows);
       setNextCursor(cursor);
+      setMyProfile(profileResult);
+      setCounts(countsResult);
       if (userId && rows.length > 0) {
         const ids = rows.map((r) => r.id);
         const [liked, reshared] = await Promise.all([listLikedPostIds(userId, ids), listResharedPostIds(userId, ids)]);
@@ -215,10 +228,56 @@ export default function CourtSideScreen() {
             )}
             ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}
             ListHeaderComponent={
-              <View style={styles.composerBlock}>
+              <View>
+                <View style={styles.header}>
+                  <ThemedText type="caption" themeColor="primary" style={styles.eyebrow}>
+                    COURT/SIDE
+                  </ThemedText>
+                  <ThemedText type="title" style={styles.headline}>
+                    Rally together.
+                  </ThemedText>
+                  <View style={styles.metaRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => userId && router.push({ pathname: '/player/[userId]', params: { userId } })}
+                      style={styles.myRallyLink}
+                      hitSlop={6}>
+                      <Ionicons name="people" size={16} color={theme.primary} />
+                      <ThemedText type="smallBold" themeColor="primary">
+                        My/Rally
+                      </ThemedText>
+                    </Pressable>
+                    <ThemedText type="small" themeColor="mutedForeground">
+                      {counts.followers} followers
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="mutedForeground">
+                      {counts.following} following
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.tabsRow, { borderBottomColor: theme.border }]}>
+                    {FEED_TABS.map((tab) => (
+                      <Pressable
+                        key={tab}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: activeTab === tab }}
+                        onPress={() => {
+                          setActiveTab(tab);
+                          if (tab !== 'For you') show(`${tab} feed selected`);
+                        }}
+                        style={styles.tab}
+                        hitSlop={4}>
+                        <ThemedText type="smallBold" themeColor={activeTab === tab ? 'foreground' : 'mutedForeground'}>
+                          {tab}
+                        </ThemedText>
+                        {activeTab === tab ? <View style={[styles.tabIndicator, { backgroundColor: theme.primary }]} /> : null}
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                <View style={styles.composerBlock}>
                 <View style={[styles.composer, { backgroundColor: theme.card, borderColor: theme.border }]}>
                   <View style={styles.composerRow}>
-                    <Avatar profile={null} />
+                    <Avatar profile={myProfile} />
                     <TextInput
                       value={content}
                       onChangeText={onChangeContent}
@@ -251,6 +310,7 @@ export default function CourtSideScreen() {
                       loading={posting}
                     />
                   </View>
+                </View>
                 </View>
               </View>
             }
@@ -292,7 +352,45 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  header: {
+    marginBottom: Spacing.four,
+  },
+  eyebrow: {
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.one,
+  },
+  headline: {
+    marginBottom: Spacing.three,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.three,
+    marginBottom: Spacing.four,
+  },
+  myRallyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    gap: Spacing.four,
+    borderBottomWidth: 1,
+  },
+  tab: {
+    paddingBottom: Spacing.two,
+  },
+  tabIndicator: {
+    marginTop: Spacing.two,
+    height: 2,
+    borderRadius: 1,
+  },
   composerBlock: {
+    marginTop: Spacing.four,
     marginBottom: Spacing.three,
   },
   composer: {

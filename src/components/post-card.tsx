@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { Image } from 'expo-image';
+import { useState } from 'react';
 import { Pressable, Share, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -29,12 +31,25 @@ function renderContent(content: string) {
 
 export function Avatar({ profile, size = 36 }: { profile: PublicProfile | null; size?: number }) {
   const theme = useTheme();
+  const [imageFailed, setImageFailed] = useState(false);
   const initials = (profile?.display_name ?? '?')
     .trim()
     .split(/\s+/)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join('');
+
+  if (profile?.avatar_url && !imageFailed) {
+    return (
+      <Image
+        source={{ uri: profile.avatar_url }}
+        style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
+        contentFit="cover"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
   return (
     <View
       style={[
