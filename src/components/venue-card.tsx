@@ -27,94 +27,103 @@ export function VenueCard({ venue, isFavorited, onToggleFavorite }: VenueCardPro
   const coverUrl = venue.cover_image_path ? publicImageUrl(venue.cover_image_path) : null;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => router.push({ pathname: '/venue/[id]', params: { id: venue.id } })}
-      style={({ pressed }) => [styles.card, { opacity: pressed ? 0.92 : 1 }]}>
-      <View style={[styles.cover, { backgroundColor: theme.muted }]}>
-        {coverUrl ? (
-          <Image
-            source={{ uri: coverUrl }}
-            style={styles.coverImage}
-            contentFit="cover"
-            transition={200}
-          />
-        ) : (
-          <View style={styles.coverFallback}>
-            <ThemedText type="title" themeColor="mutedForeground">
-              {venue.name.slice(0, 1).toUpperCase()}
-            </ThemedText>
-          </View>
-        )}
-        {venue.openStatus ? (
-          <View style={[styles.statusPill, { backgroundColor: theme.background }]}>
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: venue.openStatus.isOpenNow ? theme.success : theme.mutedForeground },
-              ]}
+    <View style={styles.cardWrap}>
+      {/* A favorite-heart Pressable rendered as a sibling, not a child, of
+          the card's own Pressable — on web, Pressable with
+          accessibilityRole="button" becomes a real <button>, and nesting
+          one <button> inside another is invalid HTML that React (and some
+          browsers) silently un-nest, breaking hit-testing. Both share the
+          same absolute-positioning frame of reference via this wrapper. */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: '/venue/[id]', params: { id: venue.id } })}
+        style={({ pressed }) => [styles.card, { opacity: pressed ? 0.92 : 1 }]}>
+        <View style={[styles.cover, { backgroundColor: theme.muted }]}>
+          {coverUrl ? (
+            <Image
+              source={{ uri: coverUrl }}
+              style={styles.coverImage}
+              contentFit="cover"
+              transition={200}
             />
-            <ThemedText type="caption" themeColor={venue.openStatus.isOpenNow ? 'foreground' : 'mutedForeground'}>
-              {venue.openStatus.label}
-            </ThemedText>
-          </View>
-        ) : null}
-        {onToggleFavorite ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={isFavorited ? 'Remove from saved courts' : 'Save this court'}
-            onPress={(e) => {
-              e.stopPropagation();
-              onToggleFavorite();
-            }}
-            hitSlop={8}
-            style={[styles.favoriteButton, { backgroundColor: theme.background }]}>
-            <ThemedText style={{ fontSize: 18, color: isFavorited ? theme.primary : theme.mutedForeground }}>
-              {isFavorited ? '♥' : '♡'}
-            </ThemedText>
-          </Pressable>
-        ) : null}
-      </View>
-
-      <View style={styles.body}>
-        <View style={styles.titleRow}>
-          <ThemedText type="subtitle" numberOfLines={1} style={styles.name}>
-            {venue.name}
-          </ThemedText>
-          {venue.review_count > 0 ? (
-            <ThemedText type="smallBold">★ {venue.average_rating.toFixed(1)}</ThemedText>
           ) : (
-            <ThemedText type="small" themeColor="mutedForeground">
-              New
-            </ThemedText>
+            <View style={styles.coverFallback}>
+              <ThemedText type="title" themeColor="mutedForeground">
+                {venue.name.slice(0, 1).toUpperCase()}
+              </ThemedText>
+            </View>
           )}
+          {venue.openStatus ? (
+            <View style={[styles.statusPill, { backgroundColor: theme.background }]}>
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: venue.openStatus.isOpenNow ? theme.success : theme.mutedForeground },
+                ]}
+              />
+              <ThemedText type="caption" themeColor={venue.openStatus.isOpenNow ? 'foreground' : 'mutedForeground'}>
+                {venue.openStatus.label}
+              </ThemedText>
+            </View>
+          ) : null}
         </View>
 
-        <ThemedText type="small" themeColor="subtle" numberOfLines={1}>
-          {[venue.city, venue.address].filter(Boolean).join(' · ') || 'Location on request'}
-        </ThemedText>
-        <ThemedText type="small" themeColor="subtle">
-          {venue.active_court_count} {venue.active_court_count === 1 ? 'court' : 'courts'}
-          {venue.indoor_outdoor === 'both' ? ' · indoor & outdoor' : ` · ${venue.indoor_outdoor}`}
-        </ThemedText>
-
-        {venue.starting_price !== null ? (
-          <ThemedText type="smallBold" style={styles.price}>
-            ₱{venue.starting_price.toLocaleString('en-PH')}
-            <ThemedText type="small" themeColor="subtle">
-              {' '}
-              / hour
+        <View style={styles.body}>
+          <View style={styles.titleRow}>
+            <ThemedText type="subtitle" numberOfLines={1} style={styles.name}>
+              {venue.name}
             </ThemedText>
+            {venue.review_count > 0 ? (
+              <ThemedText type="smallBold">★ {venue.average_rating.toFixed(1)}</ThemedText>
+            ) : (
+              <ThemedText type="small" themeColor="mutedForeground">
+                New
+              </ThemedText>
+            )}
+          </View>
+
+          <ThemedText type="small" themeColor="subtle" numberOfLines={1}>
+            {[venue.city, venue.address].filter(Boolean).join(' · ') || 'Location on request'}
           </ThemedText>
-        ) : null}
-      </View>
-    </Pressable>
+          <ThemedText type="small" themeColor="subtle">
+            {venue.active_court_count} {venue.active_court_count === 1 ? 'court' : 'courts'}
+            {venue.indoor_outdoor === 'both' ? ' · indoor & outdoor' : ` · ${venue.indoor_outdoor}`}
+          </ThemedText>
+
+          {venue.starting_price !== null ? (
+            <ThemedText type="smallBold" style={styles.price}>
+              ₱{venue.starting_price.toLocaleString('en-PH')}
+              <ThemedText type="small" themeColor="subtle">
+                {' '}
+                / hour
+              </ThemedText>
+            </ThemedText>
+          ) : null}
+        </View>
+      </Pressable>
+
+      {onToggleFavorite ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={isFavorited ? 'Remove from saved courts' : 'Save this court'}
+          onPress={onToggleFavorite}
+          hitSlop={8}
+          style={[styles.favoriteButton, { backgroundColor: theme.background }]}>
+          <ThemedText style={{ fontSize: 18, color: isFavorited ? theme.primary : theme.mutedForeground }}>
+            {isFavorited ? '♥' : '♡'}
+          </ThemedText>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     gap: Spacing.two,
+  },
+  cardWrap: {
+    position: 'relative',
   },
   cover: {
     height: 240,
