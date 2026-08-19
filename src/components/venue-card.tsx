@@ -6,7 +6,14 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { VenueMarketplaceRow } from '@/lib/database.types';
+import type { OpenStatus } from '@/lib/open-status';
 import { publicImageUrl } from '@/lib/venues';
+
+type VenueCardProps = {
+  venue: VenueMarketplaceRow & { openStatus?: OpenStatus };
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
+};
 
 /**
  * Explore's venue card, image-led: the photo IS the card — a tall
@@ -15,7 +22,7 @@ import { publicImageUrl } from '@/lib/venues';
  * title row with the rating tucked right, two muted metadata lines, and
  * the price as the closing line.
  */
-export function VenueCard({ venue }: { venue: VenueMarketplaceRow }) {
+export function VenueCard({ venue, isFavorited, onToggleFavorite }: VenueCardProps) {
   const theme = useTheme();
   const coverUrl = venue.cover_image_path ? publicImageUrl(venue.cover_image_path) : null;
 
@@ -39,6 +46,34 @@ export function VenueCard({ venue }: { venue: VenueMarketplaceRow }) {
             </ThemedText>
           </View>
         )}
+        {venue.openStatus ? (
+          <View style={[styles.statusPill, { backgroundColor: theme.background }]}>
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: venue.openStatus.isOpenNow ? theme.success : theme.mutedForeground },
+              ]}
+            />
+            <ThemedText type="caption" themeColor={venue.openStatus.isOpenNow ? 'foreground' : 'mutedForeground'}>
+              {venue.openStatus.label}
+            </ThemedText>
+          </View>
+        ) : null}
+        {onToggleFavorite ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isFavorited ? 'Remove from saved courts' : 'Save this court'}
+            onPress={(e) => {
+              e.stopPropagation();
+              onToggleFavorite();
+            }}
+            hitSlop={8}
+            style={[styles.favoriteButton, { backgroundColor: theme.background }]}>
+            <ThemedText style={{ fontSize: 18, color: isFavorited ? theme.primary : theme.mutedForeground }}>
+              {isFavorited ? '♥' : '♡'}
+            </ThemedText>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.body}>
@@ -91,6 +126,32 @@ const styles = StyleSheet.create({
   },
   coverFallback: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusPill: {
+    position: 'absolute',
+    left: Spacing.two,
+    bottom: Spacing.two,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: Spacing.two,
+    right: Spacing.two,
+    width: 34,
+    height: 34,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,4 +1,5 @@
 import type { Amenity, Court, VenueMarketplaceRow, VenueOperatingHours } from '@/lib/database.types';
+import { computeOpenStatus, type OpenStatus } from '@/lib/open-status';
 import { supabase } from '@/lib/supabase';
 
 /** Same public bucket as the web's getPublicImageUrl() — pure URL
@@ -7,18 +8,41 @@ export function publicImageUrl(storagePath: string): string {
   return supabase.storage.from('venue-images').getPublicUrl(storagePath).data.publicUrl;
 }
 
+export type VenueSortOption = 'recommended' | 'price_asc' | 'price_desc' | 'rating';
+
+/** Same shape as the web's MarketplaceFilters, minus the geolocation
+ * radius filter — that needs expo-location, a native dependency this
+ * app doesn't carry (same "avoid a native rebuild" call as the maps
+ * deep link in directionsUrl below). */
+export type MarketplaceFilters = {
+  q?: string;
+  indoorOutdoor?: 'indoor' | 'outdoor';
+  minPrice?: number;
+  maxPrice?: number;
+  minRating?: number;
+  amenityIds?: string[];
+  surfaceType?: string;
+  availableOn?: string;
+  availableAt?: string;
+  sort?: VenueSortOption;
+};
+
+export type MarketplaceVenue = VenueMarketplaceRow & { openStatus: OpenStatus };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * The Explore list. venue_marketplace is already RLS-scoped to active
- * venues; "recommended" is the web's deterministic ranking — rating
- * first, ties broken by review count. `q` mirrors the web's full search
- * semantics: the venue's own name/city/address, OR any of its courts'
- * names (courts' public RLS already scopes that lookup to active courts
- * of active venues).
+ * venues. Filter semantics mirror the web's searchMarketplaceVenues()
+ * exactly: `q` matches the venue's own name/city/address OR any of its
+ * courts' names; amenities use AND semantics (a venue must have every
+ * selected amenity); availableOn/At is an operating-hours approximation,
+ * not a live per-court slot check.
  */
-export async function listMarketplaceVenues(q?: string): Promise<VenueMarketplaceRow[]> {
+export async function listMarketplaceVenues(filters: MarketplaceFilters = {}): Promise<MarketplaceVenue[]> {
   let query = supabase.from('venue_marketplace').select('*');
 
-  const term = q?.trim().replace(/[%_,()]/g, ' ').trim();
+  const term = filters.q?.trim().replace(/[%_,()]/g, ' ').trim();
   if (term) {
     const { data: courtMatches, error: courtError } = await supabase
       .from('courts')
@@ -34,12 +58,137 @@ export async function listMarketplaceVenues(q?: string): Promise<VenueMarketplac
     query = query.or(orParts.join(','));
   }
 
-  const { data, error } = await query
-    .order('average_rating', { ascending: false })
-    .order('review_count', { ascending: false })
-    .limit(50);
+  if (filters.indoorOutdoor) {
+    query = query.eq('indoor_outdoor', filters.indoorOutdoor);
+  }
+  if (filters.minPrice !== undefined) {
+    query = query.gte('starting_price', filters.minPrice);
+  }
+  if (filters.maxPrice !== undefined) {
+    query = query.lte('starting_price', filters.maxPrice);
+  }
+  if (filters.minRating !== undefined) {
+    query = query.gte('average_rating', filters.minRating);
+  }
+
+  if (filters.surfaceType) {
+    const { data: surfaceCourts, error: surfaceError } = await supabase
+      .from('courts')
+      .select('venue_id')
+      .ilike('surface_type', filters.surfaceType);
+    if (surfaceError) throw surfaceError;
+    const surfaceVenueIds = [...new Set((surfaceCourts ?? []).map((row) => row.venue_id))];
+    query = query.in('id', surfaceVenueIds.length > 0 ? surfaceVenueIds : ['00000000-0000-0000-0000-000000000000']);
+  }
+
+  if (filters.availableOn) {
+    const date = new Date(`${filters.availableOn}T00:00:00Z`);
+    if (!Number.isNaN(date.getTime())) {
+      const dayOfWeek = date.getUTCDay();
+      const { data: hoursRows, error: hoursError } = await supabase
+        .from('venue_operating_hours')
+        .select('venue_id, start_time, end_time')
+        .eq('day_of_week', dayOfWeek);
+      if (hoursError) throw hoursError;
+
+      let matching = hoursRows ?? [];
+      if (filters.availableAt && /^\d{2}:\d{2}$/.test(filters.availableAt)) {
+        const [h, m] = filters.availableAt.split(':').map(Number);
+        const minutes = h * 60 + m;
+        const toMinutes = (hms: string) => {
+          const [hh, mm] = hms.split(':').map(Number);
+          return hh * 60 + mm;
+        };
+        matching = matching.filter((row) => toMinutes(row.start_time) <= minutes && minutes < toMinutes(row.end_time));
+      }
+      const openVenueIds = [...new Set(matching.map((row) => row.venue_id))];
+      query = query.in('id', openVenueIds.length > 0 ? openVenueIds : ['00000000-0000-0000-0000-000000000000']);
+    }
+  }
+
+  const amenityIds = (filters.amenityIds ?? []).filter((id) => UUID_RE.test(id));
+  if (amenityIds.length > 0) {
+    const { data: amenityRows, error: amenityError } = await supabase
+      .from('venue_amenities')
+      .select('venue_id, amenity_id')
+      .in('amenity_id', amenityIds);
+    if (amenityError) throw amenityError;
+
+    // AND semantics: a venue must have every selected amenity, not just one.
+    const countByVenue = new Map<string, number>();
+    for (const row of amenityRows ?? []) {
+      countByVenue.set(row.venue_id, (countByVenue.get(row.venue_id) ?? 0) + 1);
+    }
+    const matchingIds = Array.from(countByVenue.entries())
+      .filter(([, count]) => count === amenityIds.length)
+      .map(([id]) => id);
+    query = query.in('id', matchingIds.length > 0 ? matchingIds : ['00000000-0000-0000-0000-000000000000']);
+  }
+
+  switch (filters.sort) {
+    case 'price_asc':
+      query = query.order('starting_price', { ascending: true, nullsFirst: false });
+      break;
+    case 'price_desc':
+      query = query.order('starting_price', { ascending: false, nullsFirst: false });
+      break;
+    case 'rating':
+      query = query.order('average_rating', { ascending: false });
+      break;
+    case 'recommended':
+    default:
+      query = query.order('average_rating', { ascending: false }).order('review_count', { ascending: false });
+  }
+
+  const { data, error } = await query.limit(50);
+  if (error) throw error;
+  const venues = data ?? [];
+  if (venues.length === 0) return [];
+
+  // Live open/closed badge — one batched hours query for the whole page
+  // of results, same "courts-first-then-children" shape as the web's
+  // toVenueCardData, not a per-card query.
+  const { data: hoursRows, error: hoursError } = await supabase
+    .from('venue_operating_hours')
+    .select('*')
+    .in(
+      'venue_id',
+      venues.map((v) => v.id)
+    );
+  if (hoursError) throw hoursError;
+  const hoursByVenue = new Map<string, VenueOperatingHours[]>();
+  for (const row of hoursRows ?? []) {
+    const list = hoursByVenue.get(row.venue_id) ?? [];
+    list.push(row);
+    hoursByVenue.set(row.venue_id, list);
+  }
+
+  return venues.map((venue) => ({
+    ...venue,
+    openStatus: computeOpenStatus(hoursByVenue.get(venue.id) ?? [], venue.timezone),
+  }));
+}
+
+export async function listAmenities(): Promise<Amenity[]> {
+  const { data, error } = await supabase.from('amenities').select('*').order('name', { ascending: true });
   if (error) throw error;
   return data ?? [];
+}
+
+/** The live set of surface_type values in use, case-folded to the first
+ * spelling seen — mirrors the web's listSurfaceTypes() dedup rule so the
+ * filter chips read the same on both platforms. */
+export async function listSurfaceTypes(): Promise<string[]> {
+  const { data, error } = await supabase.from('courts').select('surface_type').not('surface_type', 'is', null);
+  if (error) throw error;
+  const byLowercase = new Map<string, string>();
+  for (const row of data ?? []) {
+    const value = (row.surface_type ?? '').trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (!byLowercase.has(key)) byLowercase.set(key, value);
+  }
+  return Array.from(byLowercase.values()).sort((a, b) => a.localeCompare(b));
 }
 
 export type AmenityAvailability = { amenity: Amenity; available: boolean };
