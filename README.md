@@ -23,11 +23,13 @@ npx expo start
 
 ## Environments
 
-`.env.local` (day-to-day `npx expo start`) and `eas.json`'s `development` build profile both pair **staging** Supabase (`vdxdmtsnptzodabaojlc`) with `http://localhost:3000` — the iOS Simulator shares the host Mac's network, so it can reach a locally-run `npm run dev` in the web repo. That pairing is load-bearing: a Supabase bearer token is only valid against the project that issued it, so `EXPO_PUBLIC_SUPABASE_URL` and whatever `EXPO_PUBLIC_API_URL` points at must always target the *same* project's data, or every `/api/mobile/*` call 401s.
+**Every profile — `.env.local` (day-to-day `npx expo start`), and `eas.json`'s `development`, `development-device`, `preview`, and `production` build profiles — points at production Supabase (`hrpbjudsrqcgyrkkodop`) and `https://air-rally.com`.** There is no hosted staging deployment of the web app (checked — no staging domain in `vercel.json` or `.env.staging`) and no separate staging mobile config either; production is the only environment this app talks to, full stop. A Supabase bearer token is only valid against the project that issued it, so `EXPO_PUBLIC_SUPABASE_URL` and whatever `EXPO_PUBLIC_API_URL` points at must always target the *same* project's data, or every `/api/mobile/*` call 401s.
 
-There is no hosted staging deployment of the web app (checked — no staging domain in `vercel.json` or `.env.staging`), so `eas.json`'s `development-device` profile (a build installed onto a real phone, which can't reach `localhost`) has no safe staging option and is pointed at **production** instead: production Supabase + `https://air-rally.com`. A device built with that profile talks to real production data and can trigger a real PayMongo charge — that's a real, live consequence, not a hypothetical, so be deliberate before handing someone a `development-device` build.
+This is a real, live consequence, not a hypothetical: **every booking, venue, credit, and profile this app touches from any build — including a plain `npx expo start` on a laptop — is real production data.** PayMongo on production is currently in TEST mode (card charges are simulated), but nothing else about a booking is simulated. Do not create test data through this app without a clear plan to clean it up through the app's own flows (e.g. cancelling a booking/match you created), never by deleting rows directly.
 
-If a hosted staging deployment of the web app ever exists, retarget `development-device` at it instead — that removes the production-data tradeoff entirely.
+`production`'s values are not in this file — that profile is linked to EAS's server-side Environment Variables (`environment: "production"`; `eas env:list --environment production`) rather than an inline `env` block, so it can be rotated without a repo change. The other three profiles' values are inline here and in `eas.json` and must be kept in sync with `production`'s by hand.
+
+If a hosted staging deployment of the web app (and a separate staging Supabase project) is ever stood up again, retarget `development`/`development-device`/`preview` at it — that's what removes the production-data tradeoff for day-to-day development.
 
 ## Phase 0 status
 
