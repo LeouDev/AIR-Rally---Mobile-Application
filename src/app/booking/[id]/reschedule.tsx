@@ -1,8 +1,9 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 
+import { CourtStrip, DateStrip, SectionLabel, SlotGrid } from '@/components/booking-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -10,18 +11,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { AvailableSlot } from '@/lib/database.types';
-import {
-  formatCentavos,
-  formatSlotTime,
-  getAvailableSlots,
-  upcomingDates,
-} from '@/lib/bookings';
+import { formatCentavos, getAvailableSlots, upcomingDates } from '@/lib/bookings';
 import {
   createReschedule,
   getRescheduleAvailability,
   type RescheduleOptions,
 } from '@/lib/checkout';
-import { groupSlots } from '@/lib/slot-groups';
 
 const VISIBLE_DAYS = 14;
 
@@ -183,122 +178,19 @@ export default function RescheduleScreen() {
             </ThemedText>
 
             <SectionLabel text="Court" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
-              {options.courts.map((c) => {
-                const selected = c.id === courtId;
-                return (
-                  <Pressable
-                    key={c.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    onPress={() => setCourtId(c.id)}
-                    style={({ pressed }) => [
-                      styles.courtCard,
-                      {
-                        backgroundColor: selected ? theme.navy : theme.card,
-                        borderColor: selected ? theme.navy : theme.input,
-                        opacity: pressed ? 0.85 : 1,
-                      },
-                    ]}>
-                    <ThemedText
-                      type="smallBold"
-                      numberOfLines={1}
-                      style={{ color: selected ? theme.navyForeground : theme.cardForeground }}>
-                      {c.name}
-                    </ThemedText>
-                    <ThemedText
-                      type="caption"
-                      style={{ color: selected ? theme.navyForeground : theme.mutedForeground }}>
-                      ₱{c.hourly_price}/hr{c.surface_type ? ` · ${c.surface_type}` : ''}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <CourtStrip courts={options.courts} selectedId={courtId} onSelect={setCourtId} />
 
             <SectionLabel text="Date" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
-              {dates.map((d) => {
-                const selected = d.localDate === localDate;
-                return (
-                  <Pressable
-                    key={d.localDate}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`${d.label}, ${d.weekday}`}
-                    onPress={() => setLocalDate(d.localDate)}
-                    style={({ pressed }) => [
-                      styles.dayCell,
-                      {
-                        backgroundColor: selected ? theme.navy : theme.card,
-                        borderColor: selected ? theme.navy : theme.input,
-                        opacity: pressed ? 0.85 : 1,
-                      },
-                    ]}>
-                    <ThemedText
-                      type="caption"
-                      style={{ color: selected ? theme.navyForeground : theme.mutedForeground }}>
-                      {d.label === 'Today' ? 'Today' : d.weekday}
-                    </ThemedText>
-                    <ThemedText
-                      type="subtitle"
-                      style={{ color: selected ? theme.navyForeground : theme.cardForeground }}>
-                      {Number(d.localDate.slice(8, 10))}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <DateStrip dates={dates} selectedDate={localDate} onSelect={setLocalDate} />
 
             <SectionLabel text="New start time" />
-            {slots === null ? (
-              <View style={styles.slotGrid}>
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <View key={i} style={styles.slotCell}>
-                    <Skeleton height={44} radius={Radius.lg} />
-                  </View>
-                ))}
-              </View>
-            ) : slots.length === 0 ? (
-              <ThemedText type="small" themeColor="subtle">
-                Nothing open on this court that day — try another date or court.
-              </ThemedText>
-            ) : (
-              groupSlots(slots, options.venueTimezone).map((group) => (
-                <View key={group.label} style={styles.slotGroup}>
-                  <ThemedText type="caption" themeColor="mutedForeground">
-                    {group.label}
-                  </ThemedText>
-                  <View style={styles.slotGrid}>
-                    {group.slots.map((slot) => {
-                      const selected = selectedSlot?.slot_start === slot.slot_start;
-                      return (
-                        <Pressable
-                          key={slot.slot_start}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          onPress={() => setSelectedSlot(selected ? null : slot)}
-                          style={({ pressed }) => [
-                            styles.slotCell,
-                            styles.slot,
-                            {
-                              backgroundColor: selected ? theme.navy : theme.card,
-                              borderColor: selected ? theme.navy : theme.input,
-                              opacity: pressed ? 0.85 : 1,
-                            },
-                          ]}>
-                          <ThemedText
-                            type="smallBold"
-                            style={{ color: selected ? theme.navyForeground : theme.cardForeground }}>
-                            {formatSlotTime(slot.slot_start, options.venueTimezone)}
-                          </ThemedText>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))
-            )}
+            <SlotGrid
+              slots={slots}
+              selectedSlot={selectedSlot}
+              onSelect={(slot, selected) => setSelectedSlot(selected ? null : slot)}
+              timezone={options.venueTimezone}
+              emptyMessage="Nothing open on this court that day — try another date or court."
+            />
 
             {selectedSlot && difference !== null ? (
               <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -348,14 +240,6 @@ export default function RescheduleScreen() {
   );
 }
 
-function SectionLabel({ text }: { text: string }) {
-  return (
-    <ThemedText type="caption" themeColor="mutedForeground" style={styles.sectionLabel}>
-      {text.toUpperCase()}
-    </ThemedText>
-  );
-}
-
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <View style={styles.row}>
@@ -377,37 +261,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   stack: { gap: Spacing.two },
-  sectionLabel: { letterSpacing: 1.2, marginTop: Spacing.two },
-  strip: { gap: Spacing.two, paddingRight: Spacing.two },
-  courtCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    minWidth: 132,
-    minHeight: 58,
-    justifyContent: 'center',
-    gap: 2,
-  },
-  dayCell: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    width: 58,
-    height: 62,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  slotGroup: { gap: Spacing.one, marginTop: Spacing.one },
-  slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  slotCell: { flexGrow: 0, flexBasis: '31.4%' },
-  slot: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   card: {
     borderRadius: Radius.xl,
     borderWidth: 1,

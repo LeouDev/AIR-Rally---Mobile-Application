@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -43,7 +44,7 @@ function ClubCard({ club }: { club: Club }) {
         </ThemedText>
         {club.visibility !== 'public' ? (
           <ThemedText type="caption" themeColor="mutedForeground">
-            🔒
+            {club.visibility === 'private' ? '🔒 Invite only' : '🔒 Approval required'}
           </ThemedText>
         ) : null}
       </View>
@@ -53,14 +54,8 @@ function ClubCard({ club }: { club: Club }) {
         </ThemedText>
       ) : null}
       <View style={styles.badgeRow}>
-        <View style={[styles.badge, { backgroundColor: theme.accent }]}>
-          <ThemedText type="caption" style={{ color: theme.accentForeground }}>
-            {SKILL_LABELS[club.skill_level]}
-          </ThemedText>
-        </View>
-        <View style={[styles.badge, { borderWidth: 1, borderColor: theme.border }]}>
-          <ThemedText type="caption">{TYPE_LABELS[club.club_type]}</ThemedText>
-        </View>
+        <Badge label={SKILL_LABELS[club.skill_level]} tone="accent" />
+        <Badge label={TYPE_LABELS[club.club_type]} tone="neutral" />
       </View>
       <ThemedText type="caption" themeColor="mutedForeground">
         {club.member_count} {club.member_count === 1 ? 'member' : 'members'}
@@ -77,14 +72,20 @@ export default function ClubsScreen() {
 
   const [discoverable, setDiscoverable] = useState<Club[] | null>(null);
   const [myClubs, setMyClubs] = useState<Club[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [discoverableRows, myRows] = await Promise.all([
-      listDiscoverableClubs(),
-      userId ? listClubsForUser(userId) : Promise.resolve([]),
-    ]);
-    setDiscoverable(discoverableRows);
-    setMyClubs(myRows);
+    setError(null);
+    try {
+      const [discoverableRows, myRows] = await Promise.all([
+        listDiscoverableClubs(),
+        userId ? listClubsForUser(userId) : Promise.resolve([]),
+      ]);
+      setDiscoverable(discoverableRows);
+      setMyClubs(myRows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "We couldn't load clubs.");
+    }
   }, [userId]);
 
   useFocusEffect(
@@ -119,7 +120,15 @@ export default function ClubsScreen() {
 
           <View style={styles.section}>
             <ThemedText type="smallBold">{myClubs.length > 0 ? 'Discover more' : 'Discover clubs'}</ThemedText>
-            {discoverable === null ? (
+            {error ? (
+              <View style={[styles.emptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <ThemedText type="subtitle">Couldn&apos;t load clubs</ThemedText>
+                <ThemedText type="small" themeColor="subtle">
+                  {error}
+                </ThemedText>
+                <Button title="Try again" variant="secondary" onPress={load} />
+              </View>
+            ) : discoverable === null ? (
               <View style={styles.list}>
                 <Skeleton height={110} radius={Radius.xl} />
                 <Skeleton height={110} radius={Radius.xl} />
@@ -185,11 +194,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
     marginTop: Spacing.half,
-  },
-  badge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
   },
   emptyCard: {
     borderRadius: Radius.xl,

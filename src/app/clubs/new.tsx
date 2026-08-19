@@ -1,6 +1,6 @@
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -53,9 +53,14 @@ function ChoiceRow<T extends string>({
             accessibilityRole="radio"
             accessibilityState={{ checked: active }}
             onPress={() => onChange(option.value)}
-            style={[
+            hitSlop={4}
+            style={({ pressed }) => [
               styles.choice,
-              { backgroundColor: active ? theme.secondary : theme.card, borderColor: active ? theme.secondary : theme.border },
+              {
+                backgroundColor: active ? theme.secondary : theme.card,
+                borderColor: active ? theme.secondary : theme.border,
+                opacity: pressed ? 0.8 : 1,
+              },
             ]}>
             <ThemedText type="small" style={{ color: active ? theme.secondaryForeground : theme.foreground }}>
               {option.label}
@@ -106,59 +111,61 @@ export default function NewClubScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'Create a club', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <TextField label="Club name" value={name} onChangeText={setName} maxLength={120} placeholder="e.g. Weekend Warriors" />
-          <TextField
-            label="Description (optional)"
-            value={description}
-            onChangeText={setDescription}
-            maxLength={2000}
-            multiline
-            numberOfLines={3}
-            style={styles.multiline}
-          />
-          <TextField label="Location (optional)" value={location} onChangeText={setLocation} maxLength={120} placeholder="e.g. Quezon City" />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <TextField label="Club name" value={name} onChangeText={setName} maxLength={120} placeholder="e.g. Weekend Warriors" />
+            <TextField
+              label="Description (optional)"
+              value={description}
+              onChangeText={setDescription}
+              maxLength={2000}
+              multiline
+              numberOfLines={3}
+              style={styles.multiline}
+            />
+            <TextField label="Location (optional)" value={location} onChangeText={setLocation} maxLength={120} placeholder="e.g. Quezon City" />
 
-          <View style={styles.block}>
-            <ThemedText type="smallBold">Skill level</ThemedText>
-            <ChoiceRow options={SKILL_OPTIONS} value={skillLevel} onChange={setSkillLevel} />
-          </View>
-
-          <View style={styles.block}>
-            <ThemedText type="smallBold">Club type</ThemedText>
-            <ChoiceRow options={TYPE_OPTIONS} value={clubType} onChange={setClubType} />
-          </View>
-
-          <View style={styles.block}>
-            <ThemedText type="smallBold">Visibility</ThemedText>
-            <View style={styles.visibilityList}>
-              {VISIBILITY_OPTIONS.map((option) => {
-                const active = option.value === visibility;
-                return (
-                  <Pressable
-                    key={option.value}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: active }}
-                    onPress={() => setVisibility(option.value)}
-                    style={[
-                      styles.visibilityRow,
-                      { backgroundColor: active ? theme.accent : theme.card, borderColor: active ? theme.primary : theme.border },
-                    ]}>
-                    <ThemedText type="small">{option.label}</ThemedText>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.block}>
+              <ThemedText type="smallBold">Skill level</ThemedText>
+              <ChoiceRow options={SKILL_OPTIONS} value={skillLevel} onChange={setSkillLevel} />
             </View>
-          </View>
 
-          {error ? (
-            <ThemedText type="small" themeColor="destructive">
-              {error}
-            </ThemedText>
-          ) : null}
+            <View style={styles.block}>
+              <ThemedText type="smallBold">Club type</ThemedText>
+              <ChoiceRow options={TYPE_OPTIONS} value={clubType} onChange={setClubType} />
+            </View>
 
-          <Button title={submitting ? 'Creating…' : 'Create club'} onPress={submit} disabled={!name.trim() || submitting} loading={submitting} />
-        </ScrollView>
+            <View style={styles.block}>
+              <ThemedText type="smallBold">Visibility</ThemedText>
+              <View style={styles.visibilityList}>
+                {VISIBILITY_OPTIONS.map((option) => {
+                  const active = option.value === visibility;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: active }}
+                      onPress={() => setVisibility(option.value)}
+                      style={[
+                        styles.visibilityRow,
+                        { backgroundColor: active ? theme.accent : theme.card, borderColor: active ? theme.primary : theme.border },
+                      ]}>
+                      <ThemedText type="small">{option.label}</ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {error ? (
+              <ThemedText type="small" themeColor="destructive">
+                {error}
+              </ThemedText>
+            ) : null}
+
+            <Button title={submitting ? 'Creating…' : 'Create club'} onPress={submit} disabled={!name.trim() || submitting} loading={submitting} />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -169,6 +176,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  flex: {
     flex: 1,
   },
   scroll: {

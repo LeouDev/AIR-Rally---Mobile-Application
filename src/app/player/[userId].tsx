@@ -36,26 +36,32 @@ export default function PublicProfileScreen() {
   const [posts, setPosts] = useState<PostWithAuthor[] | null>(null);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [resharedIds, setResharedIds] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!userId) return;
-    const [profileResult, countsResult, postsResult] = await Promise.all([
-      getPublicProfile(userId),
-      getFollowCounts(userId),
-      listPostsByUser(userId),
-    ]);
-    setProfile(profileResult);
-    setCounts(countsResult);
-    setPosts(postsResult.posts);
+    try {
+      const [profileResult, countsResult, postsResult] = await Promise.all([
+        getPublicProfile(userId),
+        getFollowCounts(userId),
+        listPostsByUser(userId),
+      ]);
+      setProfile(profileResult);
+      setCounts(countsResult);
+      setPosts(postsResult.posts);
+      setError(null);
 
-    if (viewerId && !isOwnProfile) {
-      isFollowing(viewerId, userId).then(setFollowing).catch(() => {});
-    }
-    if (viewerId && postsResult.posts.length > 0) {
-      const ids = postsResult.posts.map((p) => p.id);
-      const [liked, reshared] = await Promise.all([listLikedPostIds(viewerId, ids), listResharedPostIds(viewerId, ids)]);
-      setLikedIds(new Set(liked));
-      setResharedIds(new Set(reshared));
+      if (viewerId && !isOwnProfile) {
+        isFollowing(viewerId, userId).then(setFollowing).catch(() => {});
+      }
+      if (viewerId && postsResult.posts.length > 0) {
+        const ids = postsResult.posts.map((p) => p.id);
+        const [liked, reshared] = await Promise.all([listLikedPostIds(viewerId, ids), listResharedPostIds(viewerId, ids)]);
+        setLikedIds(new Set(liked));
+        setResharedIds(new Set(reshared));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "We couldn't load this profile.");
     }
   }, [userId, viewerId, isOwnProfile]);
 
@@ -117,7 +123,15 @@ export default function PublicProfileScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: profile?.display_name ?? 'Profile', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        {profile === undefined ? (
+        {profile === undefined && error ? (
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <ThemedText type="subtitle">Couldn&apos;t load this profile</ThemedText>
+            <ThemedText type="small" themeColor="subtle">
+              {error}
+            </ThemedText>
+            <Button title="Try again" variant="secondary" onPress={load} />
+          </View>
+        ) : profile === undefined ? (
           <View style={styles.block}>
             <Skeleton height={100} radius={Radius.xl} />
           </View>

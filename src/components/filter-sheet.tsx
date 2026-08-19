@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
+import { TextField } from '@/components/ui/text-field';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Amenity } from '@/lib/database.types';
@@ -32,11 +33,13 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={[
+      hitSlop={8}
+      style={({ pressed }) => [
         styles.chip,
         {
           backgroundColor: selected ? theme.secondary : theme.card,
           borderColor: selected ? theme.secondary : theme.border,
+          opacity: pressed ? 0.7 : 1,
         },
       ]}>
       <ThemedText type="small" style={{ color: selected ? theme.secondaryForeground : theme.foreground }}>
@@ -131,139 +134,142 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={styles.block}>
-              <SectionLabel>Sort by</SectionLabel>
-              <View style={styles.chipRow}>
-                {SORT_OPTIONS.map((option) => (
-                  <Chip
-                    key={option.value}
-                    label={option.label}
-                    selected={(draft.sort ?? 'recommended') === option.value}
-                    onPress={() => setDraft({ ...draft, sort: option.value })}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.block}>
-              <SectionLabel>Court type</SectionLabel>
-              <View style={styles.chipRow}>
-                {COURT_TYPES.map((option) => (
-                  <Chip
-                    key={option.label}
-                    label={option.label}
-                    selected={draft.indoorOutdoor === option.value}
-                    onPress={() => setDraft({ ...draft, indoorOutdoor: option.value })}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.block}>
-              <SectionLabel>Price per hour</SectionLabel>
-              <View style={styles.priceRow}>
-                <TextInput
-                  value={minPriceInput}
-                  onChangeText={setMinPriceInput}
-                  placeholder="Min"
-                  placeholderTextColor={theme.placeholder}
-                  keyboardType="numeric"
-                  style={[styles.priceInput, { backgroundColor: theme.card, borderColor: theme.input, color: theme.cardForeground }]}
-                />
-                <ThemedText themeColor="mutedForeground">–</ThemedText>
-                <TextInput
-                  value={maxPriceInput}
-                  onChangeText={setMaxPriceInput}
-                  placeholder="Max"
-                  placeholderTextColor={theme.placeholder}
-                  keyboardType="numeric"
-                  style={[styles.priceInput, { backgroundColor: theme.card, borderColor: theme.input, color: theme.cardForeground }]}
-                />
-              </View>
-            </View>
-
-            <View style={styles.block}>
-              <SectionLabel>Min rating</SectionLabel>
-              <View style={styles.chipRow}>
-                {RATINGS.map((rating) => (
-                  <Chip
-                    key={rating}
-                    label={rating === 0 ? 'Any' : `★ ${rating}+`}
-                    selected={(draft.minRating ?? 0) === rating}
-                    onPress={() => setDraft({ ...draft, minRating: rating || undefined })}
-                  />
-                ))}
-              </View>
-            </View>
-
-            {surfaceTypes.length > 0 ? (
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+            <ScrollView contentContainerStyle={styles.scroll}>
               <View style={styles.block}>
-                <SectionLabel>Surface</SectionLabel>
+                <SectionLabel>Sort by</SectionLabel>
                 <View style={styles.chipRow}>
-                  {surfaceTypes.map((surface) => (
+                  {SORT_OPTIONS.map((option) => (
                     <Chip
-                      key={surface}
-                      label={surface}
-                      selected={draft.surfaceType === surface}
-                      onPress={() =>
-                        setDraft({ ...draft, surfaceType: draft.surfaceType === surface ? undefined : surface })
-                      }
+                      key={option.value}
+                      label={option.label}
+                      selected={(draft.sort ?? 'recommended') === option.value}
+                      onPress={() => setDraft({ ...draft, sort: option.value })}
                     />
                   ))}
                 </View>
               </View>
-            ) : null}
 
-            <View style={styles.block}>
-              <SectionLabel>Open on</SectionLabel>
-              <View style={styles.priceRow}>
-                <TextInput
-                  value={dateInput}
-                  onChangeText={setDateInput}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={theme.placeholder}
-                  style={[styles.priceInput, { backgroundColor: theme.card, borderColor: theme.input, color: theme.cardForeground }]}
-                />
-                <TextInput
-                  value={timeInput}
-                  onChangeText={setTimeInput}
-                  placeholder="HH:MM"
-                  placeholderTextColor={theme.placeholder}
-                  editable={/^\d{4}-\d{2}-\d{2}$/.test(dateInput)}
-                  style={[styles.priceInput, { backgroundColor: theme.card, borderColor: theme.input, color: theme.cardForeground }]}
-                />
-              </View>
-              <ThemedText type="caption" themeColor="mutedForeground">
-                Shows venues open then — check the court page for live availability.
-              </ThemedText>
-            </View>
-
-            {amenities.length > 0 ? (
               <View style={styles.block}>
-                <SectionLabel>Amenities</SectionLabel>
+                <SectionLabel>Court type</SectionLabel>
                 <View style={styles.chipRow}>
-                  {amenities.map((amenity) => (
+                  {COURT_TYPES.map((option) => (
                     <Chip
-                      key={amenity.id}
-                      label={amenity.name}
-                      selected={(draft.amenityIds ?? []).includes(amenity.id)}
-                      onPress={() => toggleAmenity(amenity.id)}
+                      key={option.label}
+                      label={option.label}
+                      selected={draft.indoorOutdoor === option.value}
+                      onPress={() => setDraft({ ...draft, indoorOutdoor: option.value })}
                     />
                   ))}
                 </View>
               </View>
-            ) : null}
-          </ScrollView>
 
-          <View style={[styles.footer, { borderTopColor: theme.border }]}>
-            <View style={styles.footerButton}>
-              <Button title="Reset" variant="secondary" onPress={reset} />
+              <View style={styles.block}>
+                <SectionLabel>Price per hour</SectionLabel>
+                <View style={styles.priceRow}>
+                  <View style={styles.priceField}>
+                    <TextField
+                      label="Min"
+                      value={minPriceInput}
+                      onChangeText={setMinPriceInput}
+                      placeholder="₱0"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <ThemedText themeColor="mutedForeground" style={styles.priceSeparator}>
+                    –
+                  </ThemedText>
+                  <View style={styles.priceField}>
+                    <TextField
+                      label="Max"
+                      value={maxPriceInput}
+                      onChangeText={setMaxPriceInput}
+                      placeholder="No max"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.block}>
+                <SectionLabel>Min rating</SectionLabel>
+                <View style={styles.chipRow}>
+                  {RATINGS.map((rating) => (
+                    <Chip
+                      key={rating}
+                      label={rating === 0 ? 'Any' : `★ ${rating}+`}
+                      selected={(draft.minRating ?? 0) === rating}
+                      onPress={() => setDraft({ ...draft, minRating: rating || undefined })}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              {surfaceTypes.length > 0 ? (
+                <View style={styles.block}>
+                  <SectionLabel>Surface</SectionLabel>
+                  <View style={styles.chipRow}>
+                    {surfaceTypes.map((surface) => (
+                      <Chip
+                        key={surface}
+                        label={surface}
+                        selected={draft.surfaceType === surface}
+                        onPress={() =>
+                          setDraft({ ...draft, surfaceType: draft.surfaceType === surface ? undefined : surface })
+                        }
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.block}>
+                <SectionLabel>Open on</SectionLabel>
+                <View style={styles.priceRow}>
+                  <View style={styles.priceField}>
+                    <TextField label="Date" value={dateInput} onChangeText={setDateInput} placeholder="YYYY-MM-DD" />
+                  </View>
+                  <View style={styles.priceField}>
+                    <TextField
+                      label="Time"
+                      value={timeInput}
+                      onChangeText={setTimeInput}
+                      placeholder="HH:MM"
+                      editable={/^\d{4}-\d{2}-\d{2}$/.test(dateInput)}
+                    />
+                  </View>
+                </View>
+                <ThemedText type="caption" themeColor="mutedForeground">
+                  Shows venues open then — check the court page for live availability.
+                </ThemedText>
+              </View>
+
+              {amenities.length > 0 ? (
+                <View style={styles.block}>
+                  <SectionLabel>Amenities</SectionLabel>
+                  <View style={styles.chipRow}>
+                    {amenities.map((amenity) => (
+                      <Chip
+                        key={amenity.id}
+                        label={amenity.name}
+                        selected={(draft.amenityIds ?? []).includes(amenity.id)}
+                        onPress={() => toggleAmenity(amenity.id)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </ScrollView>
+
+            <View style={[styles.footer, { borderTopColor: theme.border }]}>
+              <View style={styles.footerButton}>
+                <Button title="Reset" variant="secondary" onPress={reset} />
+              </View>
+              <View style={styles.footerButton}>
+                <Button title="Apply" onPress={apply} />
+              </View>
             </View>
-            <View style={styles.footerButton}>
-              <Button title="Apply" onPress={apply} />
-            </View>
-          </View>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </ThemedView>
     </Modal>
@@ -275,6 +281,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  flex: {
     flex: 1,
   },
   header: {
@@ -308,16 +317,14 @@ const styles = StyleSheet.create({
   },
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: Spacing.two,
   },
-  priceInput: {
+  priceField: {
     flex: 1,
-    minHeight: 44,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.three,
-    fontSize: 16,
+  },
+  priceSeparator: {
+    paddingBottom: Spacing.two,
   },
   footer: {
     flexDirection: 'row',

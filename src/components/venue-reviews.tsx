@@ -28,7 +28,8 @@ function StarRow({ value, onChange, size = 22 }: { value: number; onChange?: (v:
           key={n}
           disabled={!onChange}
           accessibilityRole={onChange ? 'button' : undefined}
-          accessibilityLabel={`${n} star${n === 1 ? '' : 's'}`}
+          accessibilityLabel={onChange ? `Rate ${n} out of 5 stars` : `${n} out of 5 stars`}
+          accessibilityState={{ selected: n <= value }}
           hitSlop={6}
           onPress={() => onChange?.(n)}>
           <ThemedText style={{ fontSize: size, color: n <= value ? theme.primary : theme.border }}>★</ThemedText>

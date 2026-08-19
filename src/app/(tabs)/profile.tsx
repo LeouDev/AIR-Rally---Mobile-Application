@@ -9,6 +9,8 @@ import { ReferralCard } from '@/components/referral-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
@@ -27,10 +29,12 @@ function formatMemberSince(iso: string): string {
 export default function ProfileScreen() {
   const theme = useTheme();
   const { session, signOut } = useSession();
+  const { show } = useToast();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [followCounts, setFollowCounts] = useState<FollowCounts | null>(null);
+  const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -38,24 +42,42 @@ export default function ProfileScreen() {
 
   const load = useCallback(() => {
     if (!userId) return;
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-      .then(({ data }) => data && setProfile(data));
-    // No wallet row means no credit has ever moved — a zero balance.
-    supabase
-      .from('user_credit_wallets')
-      .select('balance')
-      .eq('user_id', userId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!error) setCreditBalance(data?.balance ?? 0);
-      });
-    getProfileStats(userId).then(setStats);
-    getFollowCounts(userId).then(setFollowCounts);
-  }, [userId]);
+    setLoading(true);
+    Promise.allSettled([
+      supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+      // No wallet row means no credit has ever moved — a zero balance.
+      supabase.from('user_credit_wallets').select('balance').eq('user_id', userId).maybeSingle(),
+      getProfileStats(userId),
+      getFollowCounts(userId),
+    ]).then(([profileResult, walletResult, statsResult, followResult]) => {
+      let failed = false;
+
+      if (profileResult.status === 'fulfilled') {
+        const { data, error } = profileResult.value;
+        if (error) failed = true;
+        else if (data) setProfile(data);
+      } else {
+        failed = true;
+      }
+
+      if (walletResult.status === 'fulfilled') {
+        const { data, error } = walletResult.value;
+        if (error) failed = true;
+        else setCreditBalance(data?.balance ?? 0);
+      } else {
+        failed = true;
+      }
+
+      if (statsResult.status === 'fulfilled') setStats(statsResult.value);
+      else failed = true;
+
+      if (followResult.status === 'fulfilled') setFollowCounts(followResult.value);
+      else failed = true;
+
+      if (failed) show("Some profile info couldn't be loaded. Switch tabs and back to retry.", 'error');
+      setLoading(false);
+    });
+  }, [userId, show]);
 
   useFocusEffect(load);
 
@@ -101,65 +123,70 @@ export default function ProfileScreen() {
             Manage your account and preferences.
           </ThemedText>
 
-          <View style={[styles.headerCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={styles.headerTop}>
-              <View style={styles.avatarWrap}>
-                <View style={[styles.avatar, { backgroundColor: theme.navy }]}>
-                  {profile?.avatar_url ? (
-                    <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} contentFit="cover" />
-                  ) : (
-                    <ThemedText type="heading" style={{ color: theme.navyForeground }}>
-                      {initials}
-                    </ThemedText>
-                  )}
-                </View>
-                {userId ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Change profile photo"
-                    onPress={handleChangePhoto}
-                    disabled={uploadingAvatar}
-                    style={[styles.avatarEdit, { backgroundColor: theme.foreground, borderColor: theme.card }]}>
-                    <ThemedText style={{ fontSize: 14, color: theme.background }}>
-                      {uploadingAvatar ? '…' : '📷'}
-                    </ThemedText>
-                  </Pressable>
-                ) : null}
-              </View>
-
-              <View style={styles.identity}>
-                <View style={styles.nameRow}>
-                  <ThemedText type="subtitle">{displayName}</ThemedText>
-                  <View style={[styles.rolePill, { backgroundColor: theme.neutralSoft }]}>
-                    <ThemedText type="caption" style={{ color: theme.neutralSoftForeground }}>
-                      {roleLabel}
-                    </ThemedText>
+          {profile === null && loading ? (
+            <Skeleton height={168} radius={Radius.xl} />
+          ) : (
+            <View style={[styles.headerCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={styles.headerTop}>
+                <View style={styles.avatarWrap}>
+                  <View style={[styles.avatar, { backgroundColor: theme.navy }]}>
+                    {profile?.avatar_url ? (
+                      <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} contentFit="cover" />
+                    ) : (
+                      <ThemedText type="heading" style={{ color: theme.navyForeground }}>
+                        {initials}
+                      </ThemedText>
+                    )}
                   </View>
+                  {userId ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Change profile photo"
+                      onPress={handleChangePhoto}
+                      disabled={uploadingAvatar}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={[styles.avatarEdit, { backgroundColor: theme.foreground, borderColor: theme.card }]}>
+                      <ThemedText style={{ fontSize: 14, color: theme.background }}>
+                        {uploadingAvatar ? '…' : '📷'}
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
                 </View>
-                {profile ? (
-                  <ThemedText type="small" themeColor="subtle">
-                    Playing since {formatMemberSince(profile.created_at)}
-                  </ThemedText>
-                ) : null}
+
+                <View style={styles.identity}>
+                  <View style={styles.nameRow}>
+                    <ThemedText type="subtitle">{displayName}</ThemedText>
+                    <View style={[styles.rolePill, { backgroundColor: theme.neutralSoft }]}>
+                      <ThemedText type="caption" style={{ color: theme.neutralSoftForeground }}>
+                        {roleLabel}
+                      </ThemedText>
+                    </View>
+                  </View>
+                  {profile ? (
+                    <ThemedText type="small" themeColor="subtle">
+                      Playing since {formatMemberSince(profile.created_at)}
+                    </ThemedText>
+                  ) : null}
+                </View>
+              </View>
+
+              {userId ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push({ pathname: '/player/[userId]', params: { userId } })}
+                  style={[styles.publicProfileButton, { borderColor: theme.border }]}>
+                  <ThemedText type="smallBold">View public profile</ThemedText>
+                </Pressable>
+              ) : null}
+
+              <View style={[styles.statsRow, { borderTopColor: theme.border }]}>
+                <StatItem label="Plays" value={stats?.tripCount} />
+                <StatItem label="Reviews" value={stats?.reviewCount} />
+                <StatItem label="Followers" value={followCounts?.followers} />
+                <StatItem label="Following" value={followCounts?.following} />
               </View>
             </View>
-
-            {userId ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push({ pathname: '/player/[userId]', params: { userId } })}
-                style={[styles.publicProfileButton, { borderColor: theme.border }]}>
-                <ThemedText type="smallBold">View public profile</ThemedText>
-              </Pressable>
-            ) : null}
-
-            <View style={[styles.statsRow, { borderTopColor: theme.border }]}>
-              <StatItem label="Plays" value={stats?.tripCount} />
-              <StatItem label="Reviews" value={stats?.reviewCount} />
-              <StatItem label="Followers" value={followCounts?.followers} />
-              <StatItem label="Following" value={followCounts?.following} />
-            </View>
-          </View>
+          )}
 
           {profile?.role === 'player' ? <OwnerApplicationCTA ownerStatus={profile.owner_status} /> : null}
 

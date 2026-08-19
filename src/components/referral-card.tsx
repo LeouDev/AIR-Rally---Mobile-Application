@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { Pressable, Share, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 /** "Know someone who owns a court?" — port of the web's ReferralCard.
  * Uses React Native's built-in Share API (no new dependency) instead of
- * a copy button + clipboard package; the link is also plain selectable
- * text, so a long-press still copies it manually on either platform. */
+ * a copy button + clipboard package (none is installed in this app).
+ * The link is still styled as a deliberate, monospaced "copyable" chip
+ * rather than plain wrapped body text, and it's selectable so a
+ * long-press still copies it manually on either platform. */
 export function ReferralCard({ referralCode }: { referralCode: string }) {
   const theme = useTheme();
   const [shared, setShared] = useState(false);
@@ -48,9 +50,11 @@ export function ReferralCard({ referralCode }: { referralCode: string }) {
         style={[styles.button, { borderColor: theme.border }]}>
         <ThemedText type="smallBold">{shared ? 'Shared' : 'Refer a Court Owner'}</ThemedText>
       </Pressable>
-      <ThemedText type="caption" themeColor="mutedForeground" selectable style={styles.link}>
-        {referralUrl}
-      </ThemedText>
+      <View style={[styles.linkChip, { backgroundColor: theme.muted, borderColor: theme.border }]}>
+        <ThemedText type="caption" themeColor="mutedForeground" selectable style={styles.linkText}>
+          {referralUrl}
+        </ThemedText>
+      </View>
     </View>
   );
 }
@@ -85,7 +89,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
-  link: {
-    textDecorationLine: 'underline',
+  linkChip: {
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+  },
+  linkText: {
+    fontFamily: Fonts.mono,
   },
 });

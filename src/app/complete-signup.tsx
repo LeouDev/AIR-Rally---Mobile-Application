@@ -56,12 +56,19 @@ export default function CompleteSignupScreen() {
             air-rally.com/legal.
           </ThemedText>
 
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: agreed }}
-            onPress={() => setAgreed((v) => !v)}
-            style={styles.agreementRow}>
-            <View
+          {/* The checkbox and the inline link are kept as separate,
+              sibling accessible elements — nesting the link's Pressable/
+              onPress inside a parent with accessibilityRole="checkbox"
+              previously collapsed both into one accessible node, which
+              both mislabeled the control and made the link unreachable
+              by assistive tech. */}
+          <View style={styles.agreementRow}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreed }}
+              accessibilityLabel="I agree to the AIR/Rally User Agreement"
+              onPress={() => setAgreed((v) => !v)}
+              hitSlop={10}
               style={[
                 styles.checkbox,
                 {
@@ -74,18 +81,19 @@ export default function CompleteSignupScreen() {
                   ✓
                 </ThemedText>
               ) : null}
-            </View>
+            </Pressable>
             <ThemedText type="small" themeColor="subtle" style={styles.agreementText}>
               I agree to the{' '}
               <ThemedText
                 type="small"
                 themeColor="primary"
+                accessibilityRole="link"
                 onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}>
                 AIR/Rally User Agreement (v{CURRENT_AGREEMENT_VERSION})
               </ThemedText>
               .
             </ThemedText>
-          </Pressable>
+          </View>
 
           {error ? (
             <ThemedText type="small" themeColor="destructive">

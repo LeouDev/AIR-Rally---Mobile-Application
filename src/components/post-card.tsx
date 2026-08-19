@@ -1,5 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, Share, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -63,6 +64,18 @@ export function PostCard({ post, currentUserId, liked, reshared, onToggleLike, o
   const theme = useTheme();
   const isOwn = post.user_id === currentUserId;
 
+  const handleExternalShare = async () => {
+    try {
+      const postUrl = `https://air-rally.com/court-side/${post.id}`;
+      await Share.share({
+        message: `Check out this post on AIR/Rally: ${postUrl}`,
+        url: postUrl,
+      });
+    } catch {
+      // Share sheet dismissed or unavailable — not an error.
+    }
+  };
+
   return (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
       {post.resharer ? (
@@ -87,10 +100,14 @@ export function PostCard({ post, currentUserId, liked, reshared, onToggleLike, o
       <View style={styles.content}>{renderContent(post.content)}</View>
 
       <View style={styles.actionsRow}>
-        <Pressable accessibilityRole="button" onPress={onToggleLike} style={styles.action} hitSlop={6}>
-          <ThemedText style={{ fontSize: 16, color: liked ? theme.primary : theme.mutedForeground }}>
-            {liked ? '♥' : '♡'}
-          </ThemedText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${liked ? 'Unlike' : 'Like'}, ${post.like_count} like${post.like_count === 1 ? '' : 's'}`}
+          accessibilityState={{ selected: liked }}
+          onPress={onToggleLike}
+          style={styles.action}
+          hitSlop={6}>
+          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={18} color={liked ? theme.primary : theme.mutedForeground} />
           <ThemedText type="caption" themeColor="mutedForeground">
             {post.like_count > 0 ? post.like_count : ''}
           </ThemedText>
@@ -98,24 +115,45 @@ export function PostCard({ post, currentUserId, liked, reshared, onToggleLike, o
 
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={`Comment, ${post.comment_count} comment${post.comment_count === 1 ? '' : 's'}`}
           onPress={() => router.push({ pathname: '/court-side/[postId]', params: { postId: post.id } })}
           style={styles.action}
           hitSlop={6}>
-          <ThemedText style={{ fontSize: 16, color: theme.mutedForeground }}>💬</ThemedText>
+          <Ionicons name="chatbubble-outline" size={18} color={theme.mutedForeground} />
           <ThemedText type="caption" themeColor="mutedForeground">
             {post.comment_count ? post.comment_count : ''}
           </ThemedText>
         </Pressable>
 
-        <Pressable accessibilityRole="button" onPress={onToggleReshare} style={styles.action} hitSlop={6}>
-          <ThemedText style={{ fontSize: 16, color: reshared ? theme.primary : theme.mutedForeground }}>↻</ThemedText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Reshare"
+          accessibilityState={{ selected: reshared }}
+          onPress={onToggleReshare}
+          style={styles.action}
+          hitSlop={6}>
+          <Ionicons name={reshared ? 'repeat' : 'repeat-outline'} size={18} color={reshared ? theme.primary : theme.mutedForeground} />
           <ThemedText type="caption" themeColor="mutedForeground">
             {post.reshare_count > 0 ? post.reshare_count : ''}
           </ThemedText>
         </Pressable>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Share post"
+          onPress={handleExternalShare}
+          style={styles.action}
+          hitSlop={6}>
+          <Ionicons name="share-outline" size={18} color={theme.mutedForeground} />
+        </Pressable>
+
         {isOwn && onDelete ? (
-          <Pressable accessibilityRole="button" onPress={onDelete} style={[styles.action, styles.deleteAction]} hitSlop={6}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Delete post"
+            onPress={onDelete}
+            style={[styles.action, styles.deleteAction]}
+            hitSlop={6}>
             <ThemedText type="caption" themeColor="destructive">
               Delete
             </ThemedText>

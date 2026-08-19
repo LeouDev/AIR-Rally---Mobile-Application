@@ -200,7 +200,7 @@ export default function BookingStatusScreen() {
                 {formatBookingWindow(booking.start_time, booking.end_time, timezone)}
               </ThemedText>
 
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
 
               <Row label="Court price" value={formatCentavos(booking.price_amount)} />
               {booking.credit_amount_applied > 0 ? (
@@ -342,8 +342,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    opacity: 0.15,
-    backgroundColor: '#000',
     marginVertical: Spacing.one,
   },
   row: {

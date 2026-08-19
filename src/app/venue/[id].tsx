@@ -1,7 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Linking,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import { BookingPanel } from '@/components/booking-panel';
 import { ThemedText } from '@/components/themed-text';
@@ -23,6 +32,8 @@ export default function VenueDetailScreen() {
   const [venue, setVenue] = useState<VenueDetail | null | undefined>(undefined);
   const [isFavorite, setIsFavorite] = useState<boolean | undefined>(undefined);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [galleryWidth, setGalleryWidth] = useState(0);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -73,9 +84,23 @@ export default function VenueDetailScreen() {
     }
   };
 
-  const coverPath = venue?.imagePaths[0] ?? venue?.cover_image_path ?? null;
+  // Web renders every photo in a gallery — mirror that here instead of
+  // only ever showing imagePaths[0] as a single static cover.
+  const galleryImages = venue
+    ? venue.imagePaths.length > 0
+      ? venue.imagePaths
+      : venue.cover_image_path
+        ? [venue.cover_image_path]
+        : []
+    : [];
   const directions = venue ? directionsUrl(venue) : null;
   const hasContact = Boolean(venue?.phone || venue?.email);
+
+  const onGalleryScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (galleryWidth <= 0) return;
+    const index = Math.round(e.nativeEvent.contentOffset.x / galleryWidth);
+    setGalleryIndex(index);
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -105,14 +130,26 @@ export default function VenueDetailScreen() {
           </View>
         ) : (
           <>
-            <View style={[styles.cover, { backgroundColor: theme.muted }]}>
-              {coverPath ? (
-                <Image
-                  source={{ uri: publicImageUrl(coverPath) }}
-                  style={styles.coverImage}
-                  contentFit="cover"
-                  transition={150}
-                />
+            <View
+              style={[styles.cover, { backgroundColor: theme.muted }]}
+              onLayout={(e) => setGalleryWidth(e.nativeEvent.layout.width)}>
+              {galleryImages.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onMomentumScrollEnd={onGalleryScroll}
+                  style={styles.galleryScroll}>
+                  {galleryImages.map((path, index) => (
+                    <Image
+                      key={`${path}-${index}`}
+                      source={{ uri: publicImageUrl(path) }}
+                      style={[styles.coverImage, galleryWidth > 0 && { width: galleryWidth }]}
+                      contentFit="cover"
+                      transition={150}
+                    />
+                  ))}
+                </ScrollView>
               ) : (
                 <View style={styles.coverFallback}>
                   <ThemedText type="title" themeColor="mutedForeground">
@@ -120,6 +157,22 @@ export default function VenueDetailScreen() {
                   </ThemedText>
                 </View>
               )}
+              {galleryImages.length > 1 ? (
+                <View style={styles.galleryDots} pointerEvents="none">
+                  {galleryImages.map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.galleryDot,
+                        {
+                          backgroundColor:
+                            index === galleryIndex ? theme.rallyForeground : 'rgba(246,241,232,0.5)',
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+              ) : null}
               {userId ? (
                 <Pressable
                   accessibilityRole="button"
@@ -127,9 +180,11 @@ export default function VenueDetailScreen() {
                   onPress={toggleFavorite}
                   hitSlop={8}
                   style={[styles.favoriteButton, { backgroundColor: theme.background }]}>
-                  <ThemedText style={{ fontSize: 20, color: isFavorite ? theme.primary : theme.mutedForeground }}>
-                    {isFavorite ? '♥' : '♡'}
-                  </ThemedText>
+                  <Ionicons
+                    name={isFavorite ? 'heart' : 'heart-outline'}
+                    size={20}
+                    color={isFavorite ? theme.primary : theme.mutedForeground}
+                  />
                 </Pressable>
               ) : null}
             </View>
@@ -286,13 +341,30 @@ const styles = StyleSheet.create({
   cover: {
     height: 220,
   },
-  coverImage: {
+  galleryScroll: {
     flex: 1,
+  },
+  coverImage: {
+    height: 220,
   },
   coverFallback: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  galleryDots: {
+    position: 'absolute',
+    bottom: Spacing.three,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.one,
+  },
+  galleryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   favoriteButton: {
     position: 'absolute',

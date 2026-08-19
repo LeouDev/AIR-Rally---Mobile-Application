@@ -1,6 +1,6 @@
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, PostCard } from '@/components/post-card';
@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { PublicProfile } from '@/lib/database.types';
@@ -31,6 +32,7 @@ export default function CourtSideScreen() {
   const theme = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
+  const { show } = useToast();
 
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -129,7 +131,8 @@ export default function CourtSideScreen() {
       setMentioned(new Map());
       loadFirstPage();
     } catch {
-      // Best-effort — the composer just keeps the draft so the player can retry.
+      // The composer keeps the draft so the player can retry.
+      show("Couldn't post. Please try again.", 'error');
     } finally {
       setPosting(false);
     }
@@ -167,95 +170,107 @@ export default function CourtSideScreen() {
     }
   };
 
-  const handleDelete = async (postId: string) => {
-    setPosts((prev) => prev?.filter((p) => p.id !== postId) ?? prev);
-    try {
-      await deletePost(postId);
-    } catch {
-      loadFirstPage();
-    }
+  const handleDelete = (postId: string) => {
+    Alert.alert('Delete post?', 'This can\'t be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setPosts((prev) => prev?.filter((p) => p.id !== postId) ?? prev);
+          try {
+            await deletePost(postId);
+          } catch {
+            show("Couldn't delete the post. Please try again.", 'error');
+            loadFirstPage();
+          }
+        },
+      },
+    ]);
   };
 
   return (
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'COURT/Side', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <FlatList
-          data={posts ?? []}
-          keyExtractor={(item, index) => `${item.id}-${item.effective_at}-${index}`}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          onEndReachedThreshold={0.4}
-          onEndReached={loadMore}
-          contentContainerStyle={styles.list}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <PostCard
-              post={item}
-              currentUserId={userId ?? ''}
-              liked={likedIds.has(item.id)}
-              reshared={resharedIds.has(item.id)}
-              onToggleLike={() => toggleLike(item.id)}
-              onToggleReshare={() => toggleReshare(item.id)}
-              onDelete={item.user_id === userId ? () => handleDelete(item.id) : undefined}
-            />
-          )}
-          ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}
-          ListHeaderComponent={
-            <View style={styles.composerBlock}>
-              <View style={[styles.composer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <View style={styles.composerRow}>
-                  <Avatar profile={null} />
-                  <TextInput
-                    value={content}
-                    onChangeText={onChangeContent}
-                    placeholder="Share something with COURT/Side…"
-                    placeholderTextColor={theme.placeholder}
-                    multiline
-                    maxLength={2000}
-                    style={[styles.composerInput, { color: theme.cardForeground }]}
-                  />
-                </View>
-                {mentionResults.length > 0 ? (
-                  <View style={[styles.mentionList, { backgroundColor: theme.muted, borderColor: theme.border }]}>
-                    {mentionResults.map((profile) => (
-                      <Pressable
-                        key={profile.id}
-                        accessibilityRole="button"
-                        onPress={() => pickMention(profile)}
-                        style={styles.mentionRow}>
-                        <Avatar profile={profile} size={22} />
-                        <ThemedText type="small">{profile.display_name}</ThemedText>
-                      </Pressable>
-                    ))}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+          <FlatList
+            data={posts ?? []}
+            keyExtractor={(item, index) => `${item.id}-${item.effective_at}-${index}`}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            onEndReachedThreshold={0.4}
+            onEndReached={loadMore}
+            contentContainerStyle={styles.list}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <PostCard
+                post={item}
+                currentUserId={userId ?? ''}
+                liked={likedIds.has(item.id)}
+                reshared={resharedIds.has(item.id)}
+                onToggleLike={() => toggleLike(item.id)}
+                onToggleReshare={() => toggleReshare(item.id)}
+                onDelete={item.user_id === userId ? () => handleDelete(item.id) : undefined}
+              />
+            )}
+            ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}
+            ListHeaderComponent={
+              <View style={styles.composerBlock}>
+                <View style={[styles.composer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <View style={styles.composerRow}>
+                    <Avatar profile={null} />
+                    <TextInput
+                      value={content}
+                      onChangeText={onChangeContent}
+                      placeholder="Share something with COURT/Side…"
+                      placeholderTextColor={theme.placeholder}
+                      multiline
+                      maxLength={2000}
+                      style={[styles.composerInput, { color: theme.cardForeground }]}
+                    />
                   </View>
-                ) : null}
-                <View style={styles.composerFooter}>
-                  <Button
-                    title={posting ? 'Posting…' : 'Post'}
-                    onPress={submitPost}
-                    disabled={!content.trim() || posting}
-                    loading={posting}
-                  />
+                  {mentionResults.length > 0 ? (
+                    <View style={[styles.mentionList, { backgroundColor: theme.muted, borderColor: theme.border }]}>
+                      {mentionResults.map((profile) => (
+                        <Pressable
+                          key={profile.id}
+                          accessibilityRole="button"
+                          onPress={() => pickMention(profile)}
+                          style={styles.mentionRow}>
+                          <Avatar profile={profile} size={22} />
+                          <ThemedText type="small">{profile.display_name}</ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                  <View style={styles.composerFooter}>
+                    <Button
+                      title={posting ? 'Posting…' : 'Post'}
+                      onPress={submitPost}
+                      disabled={!content.trim() || posting}
+                      loading={posting}
+                    />
+                  </View>
                 </View>
               </View>
-            </View>
-          }
-          ListEmptyComponent={
-            posts === null ? (
-              <View style={styles.skeletons}>
-                <Skeleton height={140} radius={Radius.xl} />
-                <Skeleton height={140} radius={Radius.xl} />
-              </View>
-            ) : (
-              <View style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <ThemedText type="subtitle">No posts yet</ThemedText>
-                <ThemedText type="small" themeColor="subtle">
-                  Be the first to share something with the community.
-                </ThemedText>
-              </View>
-            )
-          }
-        />
+            }
+            ListEmptyComponent={
+              posts === null ? (
+                <View style={styles.skeletons}>
+                  <Skeleton height={140} radius={Radius.xl} />
+                  <Skeleton height={140} radius={Radius.xl} />
+                </View>
+              ) : (
+                <View style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <ThemedText type="subtitle">No posts yet</ThemedText>
+                  <ThemedText type="small" themeColor="subtle">
+                    Be the first to share something with the community.
+                  </ThemedText>
+                </View>
+              )
+            }
+          />
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -266,6 +281,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  flex: {
     flex: 1,
   },
   list: {

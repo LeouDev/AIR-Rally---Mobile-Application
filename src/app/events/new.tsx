@@ -1,6 +1,6 @@
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlayerPicker } from '@/components/player-picker';
@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TextField } from '@/components/ui/text-field';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { PublicProfile } from '@/lib/database.types';
@@ -73,6 +74,7 @@ export default function NewOpenPlayScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'Start a game', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <ThemedText type="small" themeColor="subtle">
             Invite your playmates to a court you&apos;ve booked. You pay the venue; splitting it is between you and
@@ -145,19 +147,13 @@ export default function NewOpenPlayScreen() {
                 </View>
               </View>
 
-              <View style={styles.block}>
-                <ThemedText type="smallBold">
-                  Game name <ThemedText type="caption" themeColor="mutedForeground">(optional)</ThemedText>
-                </ThemedText>
-                <TextInput
-                  value={title}
-                  onChangeText={setTitle}
-                  maxLength={120}
-                  placeholder={selected ? `Open Play at ${selected.venueName}` : 'Open Play'}
-                  placeholderTextColor={theme.placeholder}
-                  style={[styles.input, { backgroundColor: theme.card, borderColor: theme.input, color: theme.cardForeground }]}
-                />
-              </View>
+              <TextField
+                label="Game name (optional)"
+                value={title}
+                onChangeText={setTitle}
+                maxLength={120}
+                placeholder={selected ? `Open Play at ${selected.venueName}` : 'Open Play'}
+              />
 
               {selected ? (
                 <PlayerPicker
@@ -191,6 +187,7 @@ export default function NewOpenPlayScreen() {
             </>
           )}
         </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -201,6 +198,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  flex: {
     flex: 1,
   },
   scroll: {
@@ -227,12 +227,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.three,
     gap: 2,
-  },
-  input: {
-    minHeight: 48,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.three,
-    fontSize: 16,
   },
 });

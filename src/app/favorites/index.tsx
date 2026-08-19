@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VenueCard } from '@/components/venue-card';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -18,12 +19,16 @@ export default function FavoritesScreen() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const [venues, setVenues] = useState<VenueMarketplaceRow[] | null>(null);
+  const [error, setError] = useState(false);
 
   const load = useCallback(() => {
     if (!userId) return;
     listFavoriteVenues(userId)
-      .then(setVenues)
-      .catch(() => setVenues([]));
+      .then((rows) => {
+        setVenues(rows);
+        setError(false);
+      })
+      .catch(() => setError(true));
   }, [userId]);
 
   useFocusEffect(load);
@@ -51,7 +56,15 @@ export default function FavoritesScreen() {
           )}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.five }} />}
           ListEmptyComponent={
-            venues === null ? (
+            error ? (
+              <View style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <ThemedText type="subtitle">Couldn&apos;t load your saved courts</ThemedText>
+                <ThemedText type="small" themeColor="subtle">
+                  Check your connection and try again.
+                </ThemedText>
+                <Button title="Try again" variant="outline" onPress={load} />
+              </View>
+            ) : venues === null ? (
               <View style={styles.skeletons}>
                 <Skeleton height={230} radius={Radius.xl} />
                 <Skeleton height={230} radius={Radius.xl} />

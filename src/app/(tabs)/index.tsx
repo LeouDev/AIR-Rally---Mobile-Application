@@ -1,6 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FilterSheet } from '@/components/filter-sheet';
@@ -126,93 +135,99 @@ export default function ExploreScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <FlatList
-          data={venues ?? []}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <VenueCard
-              venue={item}
-              isFavorited={favoriteIds.has(item.id)}
-              onToggleFavorite={userId ? () => toggleFavorite(item.id) : undefined}
-            />
-          )}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={styles.list}
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={
-            <View style={styles.header}>
-              <Wordmark size={22} />
-              <ThemedText type="title">Find a court</ThemedText>
-              <View style={styles.searchRow}>
-                <View
-                  style={[
-                    styles.searchPill,
-                    { backgroundColor: theme.card, borderColor: theme.input },
-                  ]}>
-                  <Ionicons name="search" size={18} color={theme.mutedForeground} />
-                  <TextInput
-                    value={search}
-                    onChangeText={setSearch}
-                    placeholder="Venue, court, city, or barangay"
-                    placeholderTextColor={theme.placeholder}
-                    autoCapitalize="none"
-                    returnKeyType="search"
-                    style={[styles.searchInput, { color: theme.cardForeground }]}
-                  />
-                  {search.length > 0 ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Clear search"
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      onPress={() => setSearch('')}>
-                      <Ionicons name="close-circle" size={18} color={theme.mutedForeground} />
-                    </Pressable>
-                  ) : null}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.flex}>
+          <FlatList
+            data={venues ?? []}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <VenueCard
+                venue={item}
+                isFavorited={favoriteIds.has(item.id)}
+                onToggleFavorite={userId ? () => toggleFavorite(item.id) : undefined}
+              />
+            )}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            contentContainerStyle={styles.list}
+            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={
+              <View style={styles.header}>
+                <Wordmark size={22} />
+                <ThemedText type="title">Find a court</ThemedText>
+                <View style={styles.searchRow}>
+                  <View
+                    style={[
+                      styles.searchPill,
+                      { backgroundColor: theme.card, borderColor: theme.input },
+                    ]}>
+                    <Ionicons name="search" size={18} color={theme.mutedForeground} />
+                    <TextInput
+                      value={search}
+                      onChangeText={setSearch}
+                      placeholder="Venue, court, city, or barangay"
+                      placeholderTextColor={theme.placeholder}
+                      autoCapitalize="none"
+                      returnKeyType="search"
+                      style={[styles.searchInput, { color: theme.cardForeground }]}
+                    />
+                    {search.length > 0 ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear search"
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={() => setSearch('')}>
+                        <Ionicons name="close-circle" size={18} color={theme.mutedForeground} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      activeFilterCount > 0 ? `Filters, ${activeFilterCount} active` : 'Filters'
+                    }
+                    onPress={() => setFilterSheetVisible(true)}
+                    style={[
+                      styles.filterButton,
+                      { backgroundColor: activeFilterCount > 0 ? theme.secondary : theme.card, borderColor: theme.input },
+                    ]}>
+                    <Ionicons name="options-outline" size={20} color={activeFilterCount > 0 ? theme.secondaryForeground : theme.foreground} />
+                    {activeFilterCount > 0 ? (
+                      <View style={[styles.filterBadge, { backgroundColor: theme.primary }]}>
+                        <ThemedText type="caption" style={{ color: theme.primaryForeground, lineHeight: 16 }}>
+                          {activeFilterCount}
+                        </ThemedText>
+                      </View>
+                    ) : null}
+                  </Pressable>
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Filters"
-                  onPress={() => setFilterSheetVisible(true)}
-                  style={[
-                    styles.filterButton,
-                    { backgroundColor: activeFilterCount > 0 ? theme.secondary : theme.card, borderColor: theme.input },
-                  ]}>
-                  <Ionicons name="options-outline" size={20} color={activeFilterCount > 0 ? theme.secondaryForeground : theme.foreground} />
-                  {activeFilterCount > 0 ? (
-                    <View style={[styles.filterBadge, { backgroundColor: theme.primary }]}>
-                      <ThemedText type="caption" style={{ color: theme.primaryForeground, fontSize: 11, lineHeight: 14 }}>
-                        {activeFilterCount}
-                      </ThemedText>
-                    </View>
-                  ) : null}
-                </Pressable>
+                {error ? (
+                  <ThemedText type="small" themeColor="destructive">
+                    {error}
+                  </ThemedText>
+                ) : null}
               </View>
-              {error ? (
-                <ThemedText type="small" themeColor="destructive">
-                  {error}
-                </ThemedText>
-              ) : null}
-            </View>
-          }
-          ListEmptyComponent={
-            venues === null ? (
-              <View style={styles.skeletons}>
-                <Skeleton height={230} radius={Radius.xl} />
-                <Skeleton height={230} radius={Radius.xl} />
-              </View>
-            ) : (
-              <View
-                style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <ThemedText type="subtitle">No venues found</ThemedText>
-                <ThemedText type="small" themeColor="subtle">
-                  {search || activeFilterCount > 0
-                    ? 'Try a different name, area, or fewer filters.'
-                    : 'Venues appear here as owners come aboard.'}
-                </ThemedText>
-              </View>
-            )
-          }
-        />
+            }
+            ListEmptyComponent={
+              venues === null ? (
+                <View style={styles.skeletons}>
+                  <Skeleton height={230} radius={Radius.xl} />
+                  <Skeleton height={230} radius={Radius.xl} />
+                </View>
+              ) : (
+                <View
+                  style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <ThemedText type="subtitle">No venues found</ThemedText>
+                  <ThemedText type="small" themeColor="subtle">
+                    {search || activeFilterCount > 0
+                      ? 'Try a different name, area, or fewer filters.'
+                      : 'Venues appear here as owners come aboard.'}
+                  </ThemedText>
+                </View>
+              )
+            }
+          />
+        </KeyboardAvoidingView>
       </SafeAreaView>
 
       <FilterSheet
@@ -229,6 +244,9 @@ export default function ExploreScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  flex: {
     flex: 1,
   },
   safeArea: {

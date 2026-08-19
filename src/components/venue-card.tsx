@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -109,9 +110,11 @@ export function VenueCard({ venue, isFavorited, onToggleFavorite }: VenueCardPro
           onPress={onToggleFavorite}
           hitSlop={8}
           style={[styles.favoriteButton, { backgroundColor: theme.background }]}>
-          <ThemedText style={{ fontSize: 18, color: isFavorited ? theme.primary : theme.mutedForeground }}>
-            {isFavorited ? '♥' : '♡'}
-          </ThemedText>
+          <Ionicons
+            name={isFavorited ? 'heart' : 'heart-outline'}
+            size={20}
+            color={isFavorited ? theme.primary : theme.mutedForeground}
+          />
         </Pressable>
       ) : null}
     </View>
@@ -158,8 +161,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Spacing.two,
     right: Spacing.two,
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',

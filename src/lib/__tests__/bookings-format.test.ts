@@ -7,8 +7,11 @@ import {
 } from '@/lib/bookings';
 
 describe('formatCentavos', () => {
-  it('drops the decimals on whole-peso amounts', () => {
-    expect(formatCentavos(70000)).toBe('₱700');
+  it('always shows two decimal places, even on whole-peso amounts', () => {
+    // Matches lib/event-split.ts's formatShare(), which always shows two
+    // decimals — the audit found the same currency reading two different
+    // ways depending on which screen displayed it.
+    expect(formatCentavos(70000)).toBe('₱700.00');
   });
 
   it('keeps centavos when they are not zero', () => {
@@ -17,11 +20,11 @@ describe('formatCentavos', () => {
   });
 
   it('groups thousands', () => {
-    expect(formatCentavos(280000)).toBe('₱2,800');
+    expect(formatCentavos(280000)).toBe('₱2,800.00');
   });
 
-  it('renders zero as ₱0, not an empty string', () => {
-    expect(formatCentavos(0)).toBe('₱0');
+  it('renders zero as ₱0.00, not an empty string', () => {
+    expect(formatCentavos(0)).toBe('₱0.00');
   });
 });
 

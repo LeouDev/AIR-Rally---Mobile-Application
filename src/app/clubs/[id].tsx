@@ -6,8 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/post-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Club } from '@/lib/database.types';
@@ -33,18 +35,27 @@ export default function ClubDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
+  const { show } = useToast();
 
   const [club, setClub] = useState<ClubWithViewerState | null | undefined>(undefined);
   const [members, setMembers] = useState<ClubMemberWithProfile[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [clubResult, memberRows] = await Promise.all([getClubForViewer(id, userId), listClubMembers(id)]);
-    setClub(clubResult);
-    setMembers(memberRows);
-  }, [id, userId]);
+    try {
+      const [clubResult, memberRows] = await Promise.all([getClubForViewer(id, userId), listClubMembers(id)]);
+      setClub(clubResult);
+      setMembers(memberRows);
+      setError(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "We couldn't load this club.";
+      setError(msg);
+      show(msg, 'error');
+    }
+  }, [id, userId, show]);
 
   useFocusEffect(
     useCallback(() => {
@@ -59,6 +70,8 @@ export default function ClubDetailScreen() {
       await requestClubMembership(id, userId);
       setMessage(club?.visibility === 'approval_required' ? 'Request sent.' : 'Welcome to the club.');
       load();
+    } catch (e) {
+      show(e instanceof Error ? e.message : "We couldn't send that request.", 'error');
     } finally {
       setBusy(false);
     }
@@ -71,6 +84,8 @@ export default function ClubDetailScreen() {
       await leaveClub(id, userId);
       setMessage("You've left the club.");
       load();
+    } catch (e) {
+      show(e instanceof Error ? e.message : "We couldn't leave the club.", 'error');
     } finally {
       setBusy(false);
     }
@@ -82,7 +97,15 @@ export default function ClubDetailScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: club?.name ?? 'Club', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        {club === undefined ? (
+        {club === undefined && error ? (
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <ThemedText type="subtitle">Couldn&apos;t load this club</ThemedText>
+            <ThemedText type="small" themeColor="subtle">
+              {error}
+            </ThemedText>
+            <Button title="Try again" variant="secondary" onPress={load} />
+          </View>
+        ) : club === undefined ? (
           <View style={styles.block}>
             <Skeleton height={140} radius={Radius.xl} />
           </View>
@@ -108,14 +131,8 @@ export default function ClubDetailScreen() {
             ) : null}
 
             <View style={styles.badgeRow}>
-              <View style={[styles.badge, { backgroundColor: theme.accent }]}>
-                <ThemedText type="caption" style={{ color: theme.accentForeground }}>
-                  {SKILL_LABELS[club.skill_level]}
-                </ThemedText>
-              </View>
-              <View style={[styles.badge, { borderWidth: 1, borderColor: theme.border }]}>
-                <ThemedText type="caption">{TYPE_LABELS[club.club_type]}</ThemedText>
-              </View>
+              <Badge label={SKILL_LABELS[club.skill_level]} tone="accent" />
+              <Badge label={TYPE_LABELS[club.club_type]} tone="neutral" />
             </View>
 
             <ThemedText type="small" themeColor="subtle">
@@ -182,11 +199,7 @@ export default function ClubDetailScreen() {
                       {member.profile?.display_name ?? 'Player'}
                     </ThemedText>
                     {member.role !== 'member' ? (
-                      <View style={[styles.roleBadge, { borderColor: theme.border }]}>
-                        <ThemedText type="caption" themeColor="mutedForeground" style={styles.capitalize}>
-                          {member.role}
-                        </ThemedText>
-                      </View>
+                      <Badge label={member.role.charAt(0).toUpperCase() + member.role.slice(1)} tone="neutral" />
                     ) : null}
                   </View>
                 ))
@@ -229,11 +242,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
   },
-  badge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-  },
   section: {
     gap: Spacing.two,
     marginTop: Spacing.two,
@@ -248,14 +256,5 @@ const styles = StyleSheet.create({
   },
   memberName: {
     flex: 1,
-  },
-  roleBadge: {
-    borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 2,
-  },
-  capitalize: {
-    textTransform: 'capitalize',
   },
 });

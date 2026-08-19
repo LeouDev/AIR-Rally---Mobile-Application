@@ -4,22 +4,25 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { useTheme, type Theme } from '@/hooks/use-theme';
+import { useTheme } from '@/hooks/use-theme';
 import { formatBookingWindow, formatCentavos } from '@/lib/bookings';
 import type { BookingStatus, OwnedVenue } from '@/lib/database.types';
 import { getOwnerAnalytics, getOwnerEarnings, listMyVenues, type OwnerAnalytics, type OwnerEarnings } from '@/lib/owner';
 import { useSession } from '@/providers/session';
 
-function statusColors(status: BookingStatus, theme: Theme): { bg: string; fg: string } {
+type BadgeTone = 'neutral' | 'success' | 'warning' | 'destructive' | 'accent';
+
+function statusTone(status: BookingStatus): BadgeTone {
   switch (status) {
     case 'confirmed':
-      return { bg: theme.successSoft, fg: theme.successSoftForeground };
+      return 'success';
     case 'pending':
-      return { bg: theme.warningSoft, fg: theme.warningSoftForeground };
+      return 'warning';
     default:
-      return { bg: theme.neutralSoft, fg: theme.neutralSoftForeground };
+      return 'neutral';
   }
 }
 
@@ -39,6 +42,14 @@ function formatPct(value: number | null): string {
   if (value === null) return '—';
   const pct = Math.round(value * 100);
   return `${pct > 0 ? '+' : ''}${pct}%`;
+}
+
+/** Whole-number rounding turns any genuinely nonzero-but-small occupancy
+ * into a misleading "0%". Say "under 1%" instead of lying about zero. */
+function formatOccupancyPct(value: number | null): string {
+  if (value === null) return '—';
+  if (value > 0 && value < 0.01) return 'under 1%';
+  return `${Math.round(value * 100)}%`;
 }
 
 function formatHour(hour: number): string {
@@ -148,10 +159,12 @@ export default function OwnerScreen() {
                     </ThemedText>
                     <ThemedText type="small">{Math.round(analytics.bookingInsights.cancellationRate * 100)}% cancelled</ThemedText>
                   </View>
-                  {analytics.occupancy.peakHour !== null ? (
+                  {analytics.occupancy.peakHour !== null &&
+                  analytics.occupancy.lowestHour !== null &&
+                  analytics.occupancy.peakHour !== analytics.occupancy.lowestHour ? (
                     <ThemedText type="caption" themeColor="mutedForeground">
-                      Busiest around {formatHour(analytics.occupancy.peakHour)}
-                      {analytics.occupancy.lowestHour !== null ? `, quietest around ${formatHour(analytics.occupancy.lowestHour)}` : ''}
+                      Busiest around {formatHour(analytics.occupancy.peakHour)}, quietest around{' '}
+                      {formatHour(analytics.occupancy.lowestHour)}
                     </ThemedText>
                   ) : null}
                 </View>
@@ -166,9 +179,7 @@ export default function OwnerScreen() {
                         <ThemedText type="small" numberOfLines={1} style={styles.occupancyName}>
                           {court.courtName}
                         </ThemedText>
-                        <ThemedText type="smallBold">
-                          {court.occupancyPct === null ? '—' : `${Math.round(court.occupancyPct * 100)}%`}
-                        </ThemedText>
+                        <ThemedText type="smallBold">{formatOccupancyPct(court.occupancyPct)}</ThemedText>
                       </View>
                     ))}
                   </View>
@@ -336,7 +347,6 @@ function BookingRow({
   venueTz: string | undefined;
 }) {
   const theme = useTheme();
-  const colors = statusColors(row.status, theme);
   return (
     <View style={[styles.card, styles.bookingRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.bookingInfo}>
@@ -350,20 +360,8 @@ function BookingRow({
           {formatBookingWindow(row.startTime, row.endTime, venueTz ?? 'Asia/Manila')} · {row.paymentProvider}
         </ThemedText>
         <View style={styles.badgeRow}>
-          {row.wasRescheduled ? (
-            <View style={[styles.miniBadge, { backgroundColor: theme.neutralSoft }]}>
-              <ThemedText type="caption" style={{ color: theme.neutralSoftForeground }}>
-                Rescheduled
-              </ThemedText>
-            </View>
-          ) : null}
-          {row.isRescheduleReplacement ? (
-            <View style={[styles.miniBadge, { backgroundColor: theme.neutralSoft }]}>
-              <ThemedText type="caption" style={{ color: theme.neutralSoftForeground }}>
-                From reschedule
-              </ThemedText>
-            </View>
-          ) : null}
+          {row.wasRescheduled ? <Badge label="Rescheduled" tone="neutral" /> : null}
+          {row.isRescheduleReplacement ? <Badge label="From reschedule" tone="neutral" /> : null}
         </View>
         {row.refundedAmount > 0 ? (
           <ThemedText type="caption" themeColor="destructive">
@@ -388,11 +386,7 @@ function BookingRow({
         ) : null}
       </View>
       <View style={styles.bookingMeta}>
-        <View style={[styles.statusPill, { backgroundColor: colors.bg }]}>
-          <ThemedText type="caption" style={{ color: colors.fg }}>
-            {STATUS_LABELS[row.status]}
-          </ThemedText>
-        </View>
+        <Badge label={STATUS_LABELS[row.status]} tone={statusTone(row.status)} />
         <ThemedText type="smallBold">{formatCentavos(row.priceAmount)}</ThemedText>
       </View>
     </View>
@@ -489,18 +483,8 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     alignItems: 'center',
   },
-  miniBadge: {
-    paddingHorizontal: Spacing.one,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
   bookingMeta: {
     alignItems: 'flex-end',
     gap: Spacing.one,
-  },
-  statusPill: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.half,
-    borderRadius: Radius.pill,
   },
 });

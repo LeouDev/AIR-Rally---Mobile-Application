@@ -1,11 +1,13 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
-import { useState } from 'react';
+import { forwardRef, useRef, useState, type ComponentProps, type ComponentType, type Ref } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +23,46 @@ import { useTheme } from '@/hooks/use-theme';
 import { CURRENT_AGREEMENT_VERSION } from '@/lib/legal';
 import { supabase } from '@/lib/supabase';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// TextField isn't declared with forwardRef, but React 19 forwards a `ref`
+// prop to function components at runtime regardless — this cast just
+// gives that already-working runtime behavior a type that TypeScript
+// (still requiring an explicit `ref` prop for non-forwardRef components)
+// will accept, so First/Last name/Email can be focus-chained below.
+const FocusableTextField = TextField as unknown as ComponentType<
+  ComponentProps<typeof TextField> & { ref?: Ref<TextInput> }
+>;
+
+/**
+ * TextField has no built-in accessory slot, so this overlays a show/hide
+ * toggle on top of it — an eye icon absolutely positioned over the input,
+ * offset to sit below the label (smallBold line height 20 + wrapper gap
+ * 6) and centered in the 48px-tall input beneath it. forwardRef so the
+ * return-key chain below can still focus the underlying TextInput.
+ */
+const PasswordField = forwardRef<TextInput, ComponentProps<typeof TextField>>(function PasswordField(
+  { label, ...rest },
+  ref
+) {
+  const theme = useTheme();
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <View style={styles.passwordFieldWrapper}>
+      <FocusableTextField ref={ref} label={label} {...rest} secureTextEntry={!visible} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        hitSlop={4}
+        onPress={() => setVisible((v) => !v)}
+        style={styles.passwordToggle}>
+        <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color={theme.mutedForeground} />
+      </Pressable>
+    </View>
+  );
+});
+
 export default function SignUpScreen() {
   const theme = useTheme();
   const [firstName, setFirstName] = useState('');
@@ -29,26 +71,42 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agreed, setAgreed] = useState(false);
+  const [firstNameError, setFirstNameError] = useState<string | null>(null);
+  const [lastNameError, setLastNameError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
+  const lastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
+
   const handleSignUp = async () => {
     setError(null);
-    if (!firstName.trim() || !lastName.trim()) {
-      setError('Enter your first and last name.');
-      return;
-    }
-    if (!email.trim()) {
-      setError('Enter a valid email address.');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+
+    // Validate every field at once so a user with several mistakes sees
+    // all of them on the first submit, not one per attempt.
+    const nextFirstNameError = firstName.trim() ? null : 'Enter your first name.';
+    const nextLastNameError = lastName.trim() ? null : 'Enter your last name.';
+    const nextEmailError = !email.trim()
+      ? 'Enter your email address.'
+      : !EMAIL_REGEX.test(email.trim())
+        ? 'Enter a valid email address.'
+        : null;
+    const nextPasswordError = password.length < 8 ? 'Password must be at least 8 characters.' : null;
+    const nextConfirmPasswordError = password !== confirmPassword ? 'Passwords do not match.' : null;
+
+    setFirstNameError(nextFirstNameError);
+    setLastNameError(nextLastNameError);
+    setEmailError(nextEmailError);
+    setPasswordError(nextPasswordError);
+    setConfirmPasswordError(nextConfirmPasswordError);
+
+    if (nextFirstNameError || nextLastNameError || nextEmailError || nextPasswordError || nextConfirmPasswordError) {
       return;
     }
     if (!agreed) {
@@ -130,48 +188,84 @@ export default function SignUpScreen() {
             <View style={styles.form}>
               <View style={styles.nameRow}>
                 <View style={styles.nameField}>
-                  <TextField
+                  <FocusableTextField
                     label="First name"
                     value={firstName}
-                    onChangeText={setFirstName}
+                    onChangeText={(text) => {
+                      setFirstName(text);
+                      setFirstNameError(null);
+                    }}
+                    error={firstNameError}
                     autoComplete="given-name"
                     placeholder="Alex"
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => lastNameRef.current?.focus()}
                   />
                 </View>
                 <View style={styles.nameField}>
-                  <TextField
+                  <FocusableTextField
+                    ref={lastNameRef}
                     label="Last name"
                     value={lastName}
-                    onChangeText={setLastName}
+                    onChangeText={(text) => {
+                      setLastName(text);
+                      setLastNameError(null);
+                    }}
+                    error={lastNameError}
                     autoComplete="family-name"
                     placeholder="Santos"
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => emailRef.current?.focus()}
                   />
                 </View>
               </View>
-              <TextField
+              <FocusableTextField
+                ref={emailRef}
                 label="Email"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setEmailError(null);
+                }}
+                error={emailError}
                 autoCapitalize="none"
                 autoComplete="email"
                 keyboardType="email-address"
                 placeholder="you@example.com"
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
-              <TextField
+              <PasswordField
+                ref={passwordRef}
                 label="Password"
                 value={password}
-                onChangeText={setPassword}
-                secureTextEntry
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setPasswordError(null);
+                }}
+                error={passwordError}
                 autoComplete="new-password"
                 placeholder="At least 8 characters"
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => confirmPasswordRef.current?.focus()}
               />
-              <TextField
+              <PasswordField
+                ref={confirmPasswordRef}
                 label="Confirm password"
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  setConfirmPasswordError(null);
+                }}
+                error={confirmPasswordError}
                 autoComplete="new-password"
                 placeholder="Repeat your password"
+                returnKeyType="done"
+                onSubmitEditing={handleSignUp}
               />
 
               <Pressable
@@ -287,5 +381,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.one,
     alignItems: 'center',
+  },
+  passwordFieldWrapper: {
+    position: 'relative',
+  },
+  passwordToggle: {
+    position: 'absolute',
+    top: 32,
+    right: Spacing.two,
+    padding: Spacing.two,
   },
 });

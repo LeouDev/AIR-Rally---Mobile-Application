@@ -159,12 +159,13 @@ export function formatBookingWindow(startIso: string, endIso: string, timeZone: 
   return `${day} · ${formatSlotTime(startIso, timeZone)} – ${formatSlotTime(endIso, timeZone)}`;
 }
 
-/** Centavos → "₱1,234.50" (drops ".00" for whole-peso amounts). */
+/** Centavos → "₱1,234.50" — always two decimal places, matching
+ * lib/event-split.ts's formatShare() so currency reads the same way
+ * everywhere in the app. */
 export function formatCentavos(amount: number): string {
   const pesos = amount / 100;
-  const hasCentavos = amount % 100 !== 0;
   return `₱${pesos.toLocaleString('en-PH', {
-    minimumFractionDigits: hasCentavos ? 2 : 0,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 }

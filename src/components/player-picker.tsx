@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -83,6 +84,7 @@ export function PlayerPicker({
           onChangeText={handleQueryChange}
           placeholder="Search players by name"
           placeholderTextColor={theme.placeholder}
+          accessibilityLabel="Search players by name"
           style={[styles.input, { backgroundColor: theme.card, borderColor: theme.input, color: theme.cardForeground }]}
         />
         {searching ? <ActivityIndicator style={styles.spinner} color={theme.mutedForeground} /> : null}
@@ -125,7 +127,7 @@ export function PlayerPicker({
                 accessibilityLabel={`Remove ${player.display_name}`}
                 onPress={() => remove(player.id)}
                 hitSlop={8}>
-                <ThemedText style={{ color: theme.accentForeground, fontSize: 14 }}>✕</ThemedText>
+                <Ionicons name="close" size={14} color={theme.accentForeground} />
               </Pressable>
             </View>
           ))}
@@ -164,11 +166,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   input: {
-    minHeight: 44,
-    borderRadius: Radius.md,
+    minHeight: 48,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     paddingHorizontal: Spacing.three,
-    fontSize: 15,
+    fontSize: 16,
   },
   spinner: {
     position: 'absolute',
@@ -206,7 +208,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.one,
     paddingHorizontal: Spacing.two,
-    paddingVertical: 5,
+    paddingVertical: Spacing.one,
     borderRadius: Radius.pill,
   },
   splitCard: {

@@ -1,18 +1,45 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { type ComponentProps, useCallback, useState } from 'react';
+import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
+import { useToast } from '@/components/ui/toast';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Profile } from '@/lib/database.types';
 import { changePassword, PHONE_REGEX, updateEmailNotificationPreference, updateProfile } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/providers/session';
+
+/**
+ * TextField has no built-in accessory slot, so this overlays a show/hide
+ * toggle on top of it — an eye icon absolutely positioned over the input,
+ * offset to sit below the label (smallBold line height 20 + wrapper gap
+ * 6) and centered in the 48px-tall input beneath it.
+ */
+function PasswordField({ label, ...rest }: ComponentProps<typeof TextField>) {
+  const theme = useTheme();
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <View style={styles.passwordFieldWrapper}>
+      <TextField label={label} {...rest} secureTextEntry={!visible} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        hitSlop={4}
+        onPress={() => setVisible((v) => !v)}
+        style={styles.passwordToggle}>
+        <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color={theme.mutedForeground} />
+      </Pressable>
+    </View>
+  );
+}
 
 function ProfileFields({
   profile,
@@ -23,10 +50,12 @@ function ProfileFields({
   userId: string;
   onSaved: (profile: Profile) => void;
 }) {
+  const { show } = useToast();
   const [firstName, setFirstName] = useState(profile.first_name ?? '');
   const [lastName, setLastName] = useState(profile.last_name ?? '');
   const [displayName, setDisplayName] = useState(profile.display_name ?? '');
   const [phone, setPhone] = useState(profile.phone ?? '');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -37,13 +66,20 @@ function ProfileFields({
     displayName !== (profile.display_name ?? '') ||
     phone !== (profile.phone ?? '');
 
+  const validatePhoneOnBlur = () => {
+    setPhoneError(phone.trim() && !PHONE_REGEX.test(phone.trim()) ? 'Enter a valid phone number.' : null);
+  };
+
   const save = async () => {
     setError(null);
     setSaved(false);
     if (!firstName.trim()) return setError('Enter your first name.');
     if (!lastName.trim()) return setError('Enter your last name.');
     if (!displayName.trim()) return setError('Enter a display name.');
-    if (phone.trim() && !PHONE_REGEX.test(phone.trim())) return setError('Enter a valid phone number.');
+    if (phone.trim() && !PHONE_REGEX.test(phone.trim())) {
+      setPhoneError('Enter a valid phone number.');
+      return setError('Enter a valid phone number.');
+    }
 
     setSubmitting(true);
     try {
@@ -52,6 +88,7 @@ function ProfileFields({
       setSaved(true);
     } catch {
       setError("That didn't save — try again.");
+      show("That didn't save — try again.", 'error');
     } finally {
       setSubmitting(false);
     }
@@ -73,6 +110,8 @@ function ProfileFields({
         label="Phone"
         value={phone}
         onChangeText={setPhone}
+        onBlur={validatePhoneOnBlur}
+        error={phoneError}
         keyboardType="phone-pad"
         placeholder="+63 900 000 0000"
       />
@@ -121,11 +160,18 @@ function NotificationsToggle({ userId, initialEnabled }: { userId: string; initi
         </View>
         <Pressable
           accessibilityRole="switch"
+          accessibilityLabel="Email notifications"
           accessibilityState={{ checked: enabled }}
+          hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
           onPress={toggle}
           disabled={saving}
           style={[styles.switch, { backgroundColor: enabled ? theme.primary : theme.muted }]}>
-          <View style={[styles.switchThumb, { transform: [{ translateX: enabled ? 20 : 2 }] }]} />
+          <View
+            style={[
+              styles.switchThumb,
+              { backgroundColor: theme.primaryForeground, transform: [{ translateX: enabled ? 20 : 2 }] },
+            ]}
+          />
         </Pressable>
       </View>
     </View>
@@ -133,6 +179,7 @@ function NotificationsToggle({ userId, initialEnabled }: { userId: string; initi
 }
 
 function PasswordFields() {
+  const { show } = useToast();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +200,7 @@ function PasswordFields() {
       setConfirmPassword('');
     } catch {
       setError("That didn't go through — try again.");
+      show("That didn't go through — try again.", 'error');
     } finally {
       setSubmitting(false);
     }
@@ -164,19 +212,17 @@ function PasswordFields() {
       <ThemedText type="small" themeColor="subtle">
         Change the password for this account.
       </ThemedText>
-      <TextField
+      <PasswordField
         label="New password"
         value={password}
         onChangeText={setPassword}
-        secureTextEntry
         autoComplete="new-password"
         placeholder="At least 8 characters"
       />
-      <TextField
+      <PasswordField
         label="Confirm new password"
         value={confirmPassword}
         onChangeText={setConfirmPassword}
-        secureTextEntry
         autoComplete="new-password"
         placeholder="Re-enter your new password"
       />
@@ -190,6 +236,19 @@ function PasswordFields() {
         </ThemedText>
       ) : null}
       <Button title={submitting ? 'Updating…' : 'Update password'} onPress={save} disabled={submitting} loading={submitting} />
+    </View>
+  );
+}
+
+function SupportLinks() {
+  return (
+    <View style={styles.block}>
+      <ThemedText type="subtitle">Support</ThemedText>
+      <Pressable accessibilityRole="link" onPress={() => Linking.openURL('https://air-rally.com/support')}>
+        <ThemedText type="small" themeColor="primary">
+          Get help
+        </ThemedText>
+      </Pressable>
     </View>
   );
 }
@@ -218,18 +277,28 @@ function LegalLinks() {
 
 export default function AccountSettingsScreen() {
   const { session } = useSession();
+  const { show } = useToast();
   const userId = session?.user.id ?? null;
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (!userId) return;
+    setLoadError(null);
     supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle()
-      .then(({ data }) => data && setProfile(data));
-  }, [userId]);
+      .then(({ data, error }) => {
+        if (error) {
+          setLoadError("We couldn't load your account details.");
+          show("We couldn't load your account details.", 'error');
+          return;
+        }
+        if (data) setProfile(data);
+      });
+  }, [userId, show]);
 
   useFocusEffect(load);
 
@@ -237,19 +306,29 @@ export default function AccountSettingsScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'Account settings', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <ThemedText type="small" themeColor="subtle">
-            {session?.user.email}
-          </ThemedText>
-          {profile && userId ? (
-            <>
-              <ProfileFields profile={profile} userId={userId} onSaved={setProfile} />
-              <NotificationsToggle userId={userId} initialEnabled={profile.email_notifications_enabled} />
-              <PasswordFields />
-              <LegalLinks />
-            </>
-          ) : null}
-        </ScrollView>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <ThemedText type="small" themeColor="subtle">
+              {session?.user.email}
+            </ThemedText>
+            {profile && userId ? (
+              <>
+                <ProfileFields profile={profile} userId={userId} onSaved={setProfile} />
+                <NotificationsToggle userId={userId} initialEnabled={profile.email_notifications_enabled} />
+                <PasswordFields />
+                <SupportLinks />
+                <LegalLinks />
+              </>
+            ) : loadError ? (
+              <View style={styles.block}>
+                <ThemedText type="small" themeColor="destructive">
+                  {loadError}
+                </ThemedText>
+                <Button title="Retry" variant="outline" onPress={load} />
+              </View>
+            ) : null}
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -260,6 +339,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  flex: {
     flex: 1,
   },
   scroll: {
@@ -298,6 +380,14 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#ffffff',
+  },
+  passwordFieldWrapper: {
+    position: 'relative',
+  },
+  passwordToggle: {
+    position: 'absolute',
+    top: 32,
+    right: Spacing.two,
+    padding: Spacing.two,
   },
 });

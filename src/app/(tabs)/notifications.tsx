@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Notification } from '@/lib/database.types';
@@ -20,15 +21,21 @@ import { supabase } from '@/lib/supabase';
 export default function NotificationsScreen() {
   const theme = useTheme();
   const [notifications, setNotifications] = useState<Notification[] | null>(null);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from('notifications')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50);
-    if (!error) setNotifications(data);
+    if (fetchError) {
+      setError(true);
+    } else {
+      setNotifications(data);
+      setError(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -80,13 +87,27 @@ export default function NotificationsScreen() {
         <ThemedText type="title" style={styles.heading}>
           Alerts
         </ThemedText>
+        {error && notifications !== null ? (
+          <ThemedText type="small" themeColor="destructive">
+            Couldn&apos;t refresh your alerts. Pull to retry.
+          </ThemedText>
+        ) : null}
         <FlatList
           data={notifications ?? []}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            notifications === null ? null : (
+            error ? (
+              <View
+                style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <ThemedText type="subtitle">Couldn&apos;t load your alerts</ThemedText>
+                <ThemedText type="small" themeColor="subtle">
+                  Check your connection and try again.
+                </ThemedText>
+                <Button title="Try again" variant="outline" onPress={load} />
+              </View>
+            ) : notifications === null ? null : (
               <View
                 style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <ThemedText type="subtitle">You&apos;re all caught up</ThemedText>
@@ -96,35 +117,39 @@ export default function NotificationsScreen() {
               </View>
             )
           }
-          renderItem={({ item }) => (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => openNotification(item)}
-              style={({ pressed }) => [
-                styles.card,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                  opacity: pressed ? 0.9 : 1,
-                },
-              ]}>
-              <View style={styles.cardHeader}>
-                {item.read_at === null ? (
-                  <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />
-                ) : null}
-                <ThemedText type="smallBold" style={styles.cardTitle} numberOfLines={1}>
-                  {item.title}
+          renderItem={({ item }) => {
+            const isUnread = item.read_at === null;
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${isUnread ? 'New: ' : ''}${item.title}. ${item.message}`}
+                onPress={() => openNotification(item)}
+                style={({ pressed }) => [
+                  styles.card,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                ]}>
+                <View style={styles.cardHeader}>
+                  {isUnread ? (
+                    <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />
+                  ) : null}
+                  <ThemedText type="smallBold" style={styles.cardTitle} numberOfLines={1}>
+                    {item.title}
+                  </ThemedText>
+                  {/* Terse by design — it must never push the title out. */}
+                  <ThemedText type="caption" themeColor="mutedForeground">
+                    {formatRelativeTime(item.created_at)}
+                  </ThemedText>
+                </View>
+                <ThemedText type="small" themeColor="subtle" style={styles.cardMessage}>
+                  {item.message}
                 </ThemedText>
-                {/* Terse by design — it must never push the title out. */}
-                <ThemedText type="caption" themeColor="mutedForeground">
-                  {formatRelativeTime(item.created_at)}
-                </ThemedText>
-              </View>
-              <ThemedText type="small" themeColor="subtle" style={styles.cardMessage}>
-                {item.message}
-              </ThemedText>
-            </Pressable>
-          )}
+              </Pressable>
+            );
+          }}
         />
       </SafeAreaView>
     </ThemedView>

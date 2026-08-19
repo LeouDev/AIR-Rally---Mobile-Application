@@ -1,4 +1,5 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,14 +18,24 @@ type Stage = 'exchanging' | 'invalid' | 'form' | 'done';
  * Landing point for the airrally://reset-password link sent by
  * forgot-password.tsx. Registered unconditionally (see _layout.tsx) since
  * it has to be reachable whether or not a session already exists — the
- * same reasoning as legal/[doc]. The `code` param is a PKCE recovery
- * code, exchanged the same way lib/oauth.ts exchanges an OAuth code.
+ * same reasoning as legal/[doc].
+ *
+ * This project's GoTrue instance issues recovery links in the *implicit*
+ * format (access_token/refresh_token in a URL fragment), not a PKCE
+ * `code` — confirmed by resolving a real generated recovery link and
+ * inspecting the redirect, rather than assuming exchangeCodeForSession
+ * (the OAuth pattern in lib/oauth.ts) would apply here too. expo-router's
+ * useLocalSearchParams only sees the query string, not the `#fragment`,
+ * so the incoming URL is parsed by hand here for either shape — a `code`
+ * query param (PKCE, in case the project's auth settings ever change) or
+ * access_token/refresh_token in the query OR fragment (the implicit flow
+ * this project actually uses).
+ *
  * After a successful password update we sign out and send the user back
  * to sign in, rather than trusting the recovery session as a normal
  * signed-in session.
  */
 export default function ResetPasswordScreen() {
-  const { code } = useLocalSearchParams<{ code?: string }>();
   const [stage, setStage] = useState<Stage>('exchanging');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -32,14 +43,42 @@ export default function ResetPasswordScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!code) {
-      setStage('invalid');
-      return;
-    }
-    supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
-      setStage(exchangeError ? 'invalid' : 'form');
-    });
-  }, [code]);
+    let cancelled = false;
+
+    const handleUrl = async (url: string | null) => {
+      if (!url) {
+        if (!cancelled) setStage('invalid');
+        return;
+      }
+
+      const [beforeHash, hash] = url.split('#');
+      const query = new URL(beforeHash).searchParams;
+      const fragment = new URLSearchParams(hash ?? '');
+      const get = (key: string) => query.get(key) ?? fragment.get(key);
+      const code = get('code');
+      const accessToken = get('access_token');
+      const refreshToken = get('refresh_token');
+
+      const { error: sessionError } = code
+        ? await supabase.auth.exchangeCodeForSession(code)
+        : accessToken && refreshToken
+          ? await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          : { error: new Error('missing recovery params') };
+
+      if (!cancelled) setStage(sessionError ? 'invalid' : 'form');
+    };
+
+    // The link that launched the app (cold start) and any link that
+    // arrives while it's already running (warm start) both need handling
+    // — a recovery link can hit either case depending on whether AIR/
+    // Rally was already open.
+    Linking.getInitialURL().then(handleUrl);
+    const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, []);
 
   const handleSubmit = async () => {
     setError(null);

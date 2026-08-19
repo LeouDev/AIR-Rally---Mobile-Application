@@ -23,7 +23,11 @@ export function OwnerApplicationCTA({ ownerStatus }: { ownerStatus: OwnerStatus 
       <Pressable
         accessibilityRole="button"
         onPress={() => Linking.openURL(ONBOARDING_URL)}
-        style={[styles.card, styles.row, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        style={({ pressed }) => [
+          styles.card,
+          styles.row,
+          { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+        ]}>
         <View style={[styles.icon, { backgroundColor: theme.warningSoft }]}>
           <ThemedText style={{ fontSize: 20 }}>🏟</ThemedText>
         </View>
@@ -41,7 +45,10 @@ export function OwnerApplicationCTA({ ownerStatus }: { ownerStatus: OwnerStatus 
     <Pressable
       accessibilityRole="button"
       onPress={() => Linking.openURL(ONBOARDING_URL)}
-      style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+      ]}>
       <View style={styles.row}>
         <View style={[styles.icon, { backgroundColor: theme.accent }]}>
           <ThemedText style={{ fontSize: 20 }}>🏟</ThemedText>

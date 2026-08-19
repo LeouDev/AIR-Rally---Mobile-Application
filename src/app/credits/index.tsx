@@ -1,6 +1,6 @@
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -27,12 +27,18 @@ export default function CreditsScreen() {
 
   const [balance, setBalance] = useState<number | null>(null);
   const [entries, setEntries] = useState<CreditHistoryEntry[] | null>(null);
+  const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     if (!userId) return;
-    const [bal, transactions] = await Promise.all([getCreditBalance(userId), listCreditTransactions(userId)]);
-    setBalance(bal);
-    setEntries(withRunningBalance(transactions, bal));
+    try {
+      const [bal, transactions] = await Promise.all([getCreditBalance(userId), listCreditTransactions(userId)]);
+      setBalance(bal);
+      setEntries(withRunningBalance(transactions, bal));
+      setError(false);
+    } catch {
+      setError(true);
+    }
   }, [userId]);
 
   useFocusEffect(
@@ -49,27 +55,56 @@ export default function CreditsScreen() {
           data={entries ?? []}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <View style={[styles.entryCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.entryRow}>
-                <ThemedText type="small">{creditEntryLabel(item)}</ThemedText>
-                <ThemedText type="smallBold" themeColor={item.amount < 0 ? 'foreground' : 'success'}>
-                  {formatCreditAmount(item.amount)}
-                </ThemedText>
+          renderItem={({ item }) => {
+            const body = (
+              <>
+                <View style={styles.entryRow}>
+                  <ThemedText type="small">{creditEntryLabel(item)}</ThemedText>
+                  <ThemedText type="smallBold" themeColor={item.amount < 0 ? 'foreground' : 'success'}>
+                    {formatCreditAmount(item.amount)}
+                  </ThemedText>
+                </View>
+                <View style={styles.entryRow}>
+                  <ThemedText type="caption" themeColor="mutedForeground">
+                    {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(item.created_at))}
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="mutedForeground">
+                    Balance {formatCreditBalance(item.runningBalance)}
+                  </ThemedText>
+                </View>
+              </>
+            );
+
+            if (item.reference_id) {
+              const referenceId = item.reference_id;
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${creditEntryLabel(item)}, view booking`}
+                  onPress={() => router.push({ pathname: '/booking/[id]', params: { id: referenceId } })}
+                  style={({ pressed }) => [
+                    styles.entryCard,
+                    { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.9 : 1 },
+                  ]}>
+                  {body}
+                </Pressable>
+              );
+            }
+
+            return (
+              <View style={[styles.entryCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                {body}
               </View>
-              <View style={styles.entryRow}>
-                <ThemedText type="caption" themeColor="mutedForeground">
-                  {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(item.created_at))}
-                </ThemedText>
-                <ThemedText type="caption" themeColor="mutedForeground">
-                  Balance {formatCreditBalance(item.runningBalance)}
-                </ThemedText>
-              </View>
-            </View>
-          )}
+            );
+          }}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
           ListHeaderComponent={
             <View style={styles.headerBlock}>
+              {error && entries !== null ? (
+                <ThemedText type="small" themeColor="destructive">
+                  Couldn&apos;t refresh your credits. Try again.
+                </ThemedText>
+              ) : null}
               <View style={[styles.balanceCard, { backgroundColor: theme.secondary }]}>
                 <ThemedText type="caption" style={[styles.balanceLabel, { color: theme.secondaryForeground }]}>
                   AIR/RALLY CREDITS
@@ -97,7 +132,15 @@ export default function CreditsScreen() {
             </View>
           }
           ListEmptyComponent={
-            entries === null ? (
+            error ? (
+              <View style={[styles.emptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <ThemedText type="subtitle">Couldn&apos;t load your credits</ThemedText>
+                <ThemedText type="small" themeColor="subtle">
+                  Check your connection and try again.
+                </ThemedText>
+                <Button title="Try again" variant="outline" onPress={load} />
+              </View>
+            ) : entries === null ? (
               <View style={styles.skeletons}>
                 <Skeleton height={64} radius={Radius.lg} />
                 <Skeleton height={64} radius={Radius.lg} />
