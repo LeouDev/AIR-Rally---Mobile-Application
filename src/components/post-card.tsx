@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Image } from 'expo-image';
-import { useState } from 'react';
-import { Pressable, Share, StyleSheet, View } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import { useRef, useState } from 'react';
+import { Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 
 import { Button } from '@/components/ui/button';
 import { ThemedText } from '@/components/themed-text';
@@ -75,6 +77,85 @@ function EmbeddedEventCard({
         />
       ) : null}
     </Pressable>
+  );
+}
+
+const monoFont = Platform.select({ ios: 'Courier New', default: 'monospace' });
+
+/** The image actually attached when a post is shared externally (see
+ * PostCard's handleExternalShare) — rendered off-screen at all times and
+ * captured with react-native-view-shot right before the share sheet
+ * opens, so Instagram/Threads/X/Messenger get a real picture instead of
+ * a bare link. Deliberately NOT theme-aware (no useTheme()) — this is a
+ * brand asset that leaves the app, so it must look the same regardless
+ * of the sharer's own light/dark setting, same posture as the
+ * transactional emails. Built at 360×640 and captured at 1080×1920 (see
+ * the capture call) rather than laid out at full resolution directly,
+ * so the RN style numbers stay ordinary to read and write. */
+function ShareCard({ post, viewRef }: { post: PostWithAuthor; viewRef: React.RefObject<View | null> }) {
+  const authorName = post.author?.display_name ?? 'A player';
+  const initial = authorName.trim()[0]?.toUpperCase() ?? '?';
+  const event = post.event;
+  const fillPct = event?.max_players ? Math.min(100, (event.attendeeCount / event.max_players) * 100) : null;
+
+  return (
+    <View ref={viewRef} style={shareCardStyles.card} collapsable={false}>
+      <View style={shareCardStyles.top}>
+        <Text style={shareCardStyles.wordmark}>
+          AIR<Text style={shareCardStyles.wordmarkAccent}>/Rally</Text>
+        </Text>
+        <View style={shareCardStyles.tag}>
+          <Text style={shareCardStyles.tagText}>{event ? 'OPEN PLAY' : 'COURT/SIDE'}</Text>
+        </View>
+      </View>
+
+      <View style={shareCardStyles.body}>
+        <View style={shareCardStyles.authorRow}>
+          <View style={shareCardStyles.avatarDot}>
+            <Text style={shareCardStyles.avatarInitial}>{initial}</Text>
+          </View>
+          <View>
+            <Text style={shareCardStyles.authorName}>{authorName}</Text>
+            <Text style={shareCardStyles.authorSub}>{event ? 'is hosting a game' : 'posted on COURT/Side'}</Text>
+          </View>
+        </View>
+
+        {event ? (
+          <View style={shareCardStyles.eventPanel}>
+            <Text style={shareCardStyles.eventEyebrow}>Open Play</Text>
+            <Text style={shareCardStyles.eventTitle}>{event.title}</Text>
+            <Text style={shareCardStyles.eventMeta}>{formatEventWhen(event.start_time)}</Text>
+            {event.venue ? <Text style={shareCardStyles.eventMeta}>{event.venue.name}</Text> : null}
+            <View style={shareCardStyles.progressRow}>
+              {fillPct !== null ? (
+                <View style={shareCardStyles.progressTrack}>
+                  <View style={[shareCardStyles.progressFill, { width: `${fillPct}%` }]} />
+                </View>
+              ) : null}
+              <Text style={shareCardStyles.progressLabel}>
+                {event.attendeeCount}
+                {event.max_players ? ` / ${event.max_players}` : ''} playing
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <>
+            <Text style={shareCardStyles.headline} numberOfLines={6}>
+              {post.content}
+            </Text>
+            <View style={shareCardStyles.statRow}>
+              <Text style={shareCardStyles.stat}>♥ {post.like_count}</Text>
+              <Text style={shareCardStyles.stat}>💬 {post.comment_count}</Text>
+            </View>
+          </>
+        )}
+      </View>
+
+      <View style={shareCardStyles.footer}>
+        <Text style={shareCardStyles.footerTitle}>Play More. Rally More.</Text>
+        <Text style={shareCardStyles.footerSub}>air-rally.com</Text>
+      </View>
+    </View>
   );
 }
 
@@ -167,8 +248,23 @@ export function PostCard({
 }: PostCardProps) {
   const theme = useTheme();
   const isOwn = post.user_id === currentUserId;
+  const shareCardRef = useRef<View>(null);
 
   const handleExternalShare = async () => {
+    // The branded card first — captures the always-mounted, off-screen
+    // ShareCard (see its own comment) and attaches the actual image, not
+    // just a link, to whatever app the sheet's target is.
+    try {
+      const uri = await captureRef(shareCardRef, { format: 'png', quality: 1, width: 1080, height: 1920 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share to AIR/Rally', UTI: 'public.png' });
+        return;
+      }
+    } catch {
+      // Capture failed or sharing isn't available on this device — fall
+      // through to a plain link rather than the share button doing
+      // nothing at all.
+    }
     try {
       const postUrl = `https://air-rally.com/court-side/${post.id}`;
       await Share.share({
@@ -182,6 +278,9 @@ export function PostCard({
 
   return (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View style={styles.shareCardOffscreen} pointerEvents="none">
+        <ShareCard post={post} viewRef={shareCardRef} />
+      </View>
       {post.resharer ? (
         <ThemedText type="caption" themeColor="mutedForeground">
           ↻ Reshared by {post.resharer.display_name ?? 'a player'}
@@ -375,5 +474,165 @@ const styles = StyleSheet.create({
     minHeight: 36,
     alignSelf: 'flex-start',
     paddingHorizontal: Spacing.three,
+  },
+  shareCardOffscreen: {
+    position: 'absolute',
+    top: 0,
+    left: -2000,
+  },
+});
+
+// Fixed brand palette, not theme tokens — see ShareCard's own comment.
+const shareCardStyles = StyleSheet.create({
+  card: {
+    width: 360,
+    height: 640,
+    backgroundColor: '#0f2747',
+    justifyContent: 'space-between',
+  },
+  top: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  wordmark: {
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: '#ffffff',
+  },
+  wordmarkAccent: {
+    color: '#ff8a3d',
+  },
+  tag: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,138,61,0.5)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  tagText: {
+    fontFamily: monoFont,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    color: '#ff8a3d',
+  },
+  body: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 14,
+  },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  avatarDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f3700f',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontFamily: monoFont,
+    fontWeight: '700',
+    fontSize: 12,
+    color: '#0f2747',
+  },
+  authorName: {
+    fontWeight: '700',
+    fontSize: 13,
+    color: '#f3ead9',
+  },
+  authorSub: {
+    fontSize: 10.5,
+    color: '#93a2b8',
+    marginTop: 1,
+  },
+  eventPanel: {
+    backgroundColor: '#f6f1e8',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f3700f',
+    padding: 18,
+  },
+  eventEyebrow: {
+    fontFamily: monoFont,
+    fontSize: 9.5,
+    letterSpacing: 1.4,
+    fontWeight: '700',
+    color: '#f3700f',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  eventTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0f2747',
+    marginBottom: 10,
+    lineHeight: 22,
+  },
+  eventMeta: {
+    fontSize: 12,
+    color: '#2b3a4f',
+    marginBottom: 5,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 5,
+    backgroundColor: '#e6dac6',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#1f9d55',
+  },
+  progressLabel: {
+    fontFamily: monoFont,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1f9d55',
+  },
+  headline: {
+    fontSize: 17,
+    lineHeight: 25,
+    fontWeight: '600',
+    color: '#f3ead9',
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 4,
+  },
+  stat: {
+    fontFamily: monoFont,
+    fontSize: 11.5,
+    color: '#93a2b8',
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingVertical: 22,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(243,234,217,0.14)',
+  },
+  footerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#f3ead9',
+  },
+  footerSub: {
+    fontSize: 11,
+    color: '#cfd8e4',
+    marginTop: 2,
   },
 });

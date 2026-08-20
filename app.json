@@ -50,7 +50,8 @@
           "photosPermission": "AIR/Rally uses your photo library to set a profile picture."
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,
