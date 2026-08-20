@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -192,19 +193,31 @@ export default function NewOpenPlayScreen() {
           ) : available.length === 0 ? (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <ThemedText type="subtitle">Every upcoming booking already has a game</ThemedText>
-              {bookings.map((booking) => (
-                <Pressable
-                  key={booking.bookingId}
-                  accessibilityRole="button"
-                  onPress={() =>
-                    booking.existingEventId &&
-                    router.push({ pathname: '/events/[id]', params: { id: booking.existingEventId } })
-                  }>
-                  <ThemedText type="small" themeColor="primary">
-                    {booking.venueName} · {formatWhen(booking.startTime)}
-                  </ThemedText>
-                </Pressable>
-              ))}
+              <ThemedText type="small" themeColor="subtle">
+                Tap one to open its game instead of starting a new one.
+              </ThemedText>
+              <View style={styles.bookingList}>
+                {bookings.map((booking) => (
+                  <Pressable
+                    key={booking.bookingId}
+                    accessibilityRole="button"
+                    onPress={() =>
+                      booking.existingEventId &&
+                      router.push({ pathname: '/events/[id]', params: { id: booking.existingEventId } })
+                    }
+                    style={({ pressed }) => [
+                      styles.bookingRow,
+                      styles.existingGameRow,
+                      { backgroundColor: theme.muted, borderColor: theme.border },
+                      pressed && { opacity: 0.7 },
+                    ]}>
+                    <ThemedText type="smallBold">
+                      {booking.venueName} · {formatWhen(booking.startTime)}
+                    </ThemedText>
+                    <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
+                  </Pressable>
+                ))}
+              </View>
             </View>
           ) : (
             <>
@@ -390,6 +403,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.three,
     gap: 2,
+  },
+  existingGameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
   },
   segmented: {
     flexDirection: 'row',
