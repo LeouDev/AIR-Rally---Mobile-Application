@@ -1,3 +1,5 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 
 import { supabase } from '@/lib/supabase';
@@ -52,5 +54,81 @@ export async function signInWithProvider(provider: OAuthProvider): Promise<OAuth
   if (exchangeError) {
     return { status: 'error', message: exchangeError.message };
   }
+  return { status: 'signed_in' };
+}
+
+function isCancelledAppleError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ERR_REQUEST_CANCELED';
+}
+
+/**
+ * "Continue with Apple" — required alongside Google/Facebook by App Store
+ * Guideline 4.8, and mechanically nothing like signInWithProvider() above:
+ * no in-app browser, no PKCE code exchange. The native OS sheet hands back
+ * a signed identity token directly; Supabase verifies it itself via
+ * signInWithIdToken(). The nonce round-trip (raw here, SHA-256'd for the
+ * Apple request, raw again for Supabase) stops a captured identity token
+ * from being replayed into a session it was never issued for.
+ *
+ * Apple hands back the user's name ONLY on the very first authorization
+ * ever, and never inside the identity token itself — unlike Google, whose
+ * token carries given_name/family_name/picture, which is what
+ * handle_new_user() reads to fill in a profile (see
+ * 20260810000061_oauth_profile_metadata.sql in the web repo). That trigger
+ * fires on the auth.users INSERT, before this function ever sees fullName,
+ * so by the time signInWithIdToken() resolves the profile row already
+ * exists — nameless. A first-time name has to be written with a direct
+ * profiles update here, not left for a trigger that already ran.
+ */
+export async function signInWithApple(): Promise<OAuthResult> {
+  const rawNonce = Crypto.randomUUID();
+  const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+
+  let credential: AppleAuthentication.AppleAuthenticationCredential;
+  try {
+    credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+      nonce: hashedNonce,
+    });
+  } catch (err) {
+    if (isCancelledAppleError(err)) {
+      return { status: 'cancelled' };
+    }
+    return { status: 'error', message: "That didn't complete — try again." };
+  }
+
+  if (!credential.identityToken) {
+    return { status: 'error', message: "Apple didn't return a usable credential." };
+  }
+
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: 'apple',
+    token: credential.identityToken,
+    nonce: rawNonce,
+  });
+  if (error || !data.user) {
+    return { status: 'error', message: error?.message ?? "Couldn't complete sign-in." };
+  }
+
+  const givenName = credential.fullName?.givenName ?? null;
+  const familyName = credential.fullName?.familyName ?? null;
+  if (givenName || familyName) {
+    // Best-effort: on failure the user is still signed in, just with a
+    // nameless profile they can fill in under Profile — the same
+    // degradation as a Google/Facebook account whose provider withheld a
+    // name, not a reason to fail the sign-in itself.
+    await supabase
+      .from('profiles')
+      .update({
+        first_name: givenName,
+        last_name: familyName,
+        display_name: [givenName, familyName].filter(Boolean).join(' ') || null,
+      })
+      .eq('id', data.user.id);
+  }
+
   return { status: 'signed_in' };
 }

@@ -105,7 +105,11 @@ export default function ProfileScreen() {
       });
       setProfile(updated);
     } catch {
-      // Best-effort — the avatar just stays as it was; nothing to roll back.
+      // The avatar just stays as it was; nothing to roll back. But this
+      // used to fail fully silently — a picked photo could look accepted
+      // and just never appear, with no way to tell upload failed from
+      // "still loading." Surface it instead.
+      show("Couldn't update your photo — try again.", 'error');
     } finally {
       setUploadingAvatar(false);
     }

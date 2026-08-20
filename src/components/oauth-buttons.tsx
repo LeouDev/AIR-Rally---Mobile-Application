@@ -1,24 +1,37 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
-import { signInWithProvider, type OAuthProvider } from '@/lib/oauth';
+import { signInWithApple, signInWithProvider, type OAuthProvider } from '@/lib/oauth';
+
+const APPLE_BUTTON_HEIGHT = 48;
 
 /**
- * "Continue with Google/Facebook" — native counterpart to the web's
- * OAuthButtons.tsx. Same two providers only: Apple isn't configured in
- * Supabase yet, so a button here would just fail on tap. Icons come from
- * the FontAwesome set already bundled in @expo/vector-icons rather than
- * a dedicated brand-SVG package, so this needs no new native dependency
- * (and the rebuild that would trigger).
+ * "Continue with Google/Facebook/Apple" — native counterpart to the web's
+ * OAuthButtons.tsx (web doesn't offer Apple; App Store Guideline 4.8, the
+ * reason Apple is here at all, only governs the iOS app). Google/Facebook
+ * icons come from the FontAwesome set already bundled in
+ * @expo/vector-icons rather than a dedicated brand-SVG package. Apple's
+ * button is Apple's own native component, not styled to match — Apple's
+ * Human Interface Guidelines require using their component as-is, a
+ * custom-styled lookalike is a real rejection reason.
  */
 export function OAuthButtons() {
   const theme = useTheme();
-  const [pending, setPending] = useState<OAuthProvider | null>(null);
+  const scheme = useColorScheme();
+  const [pending, setPending] = useState<OAuthProvider | 'apple' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
 
   const handlePress = async (provider: OAuthProvider) => {
     setError(null);
@@ -33,8 +46,32 @@ export function OAuthButtons() {
     // closed the sheet.
   };
 
+  const handleApplePress = async () => {
+    if (pending !== null) return;
+    setError(null);
+    setPending('apple');
+    const result = await signInWithApple();
+    setPending(null);
+    if (result.status === 'error') {
+      setError(result.message);
+    }
+  };
+
   return (
     <View style={styles.container}>
+      {appleAvailable ? (
+        <AppleAuthentication.AppleAuthenticationButton
+          buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+          buttonStyle={
+            scheme === 'dark'
+              ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+              : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+          }
+          cornerRadius={APPLE_BUTTON_HEIGHT / 2}
+          style={[styles.appleButton, pending !== null && styles.appleButtonDisabled]}
+          onPress={handleApplePress}
+        />
+      ) : null}
       <Pressable
         accessibilityRole="button"
         onPress={() => handlePress('google')}
@@ -98,6 +135,12 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: Radius.pill,
     paddingHorizontal: Spacing.four,
+  },
+  appleButton: {
+    height: APPLE_BUTTON_HEIGHT,
+  },
+  appleButtonDisabled: {
+    opacity: 0.85,
   },
   dividerRow: {
     flexDirection: 'row',
