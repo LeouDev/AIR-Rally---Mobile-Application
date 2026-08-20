@@ -74,8 +74,9 @@ export default function NotificationsScreen() {
 
     // Same mapper the push-tap path uses — but from the Alerts list a
     // web-only destination should stay put rather than "navigate" to the
-    // tab the user is already on.
-    const target = resolveNotificationTarget(notification.link_url);
+    // tab the user is already on. The type is passed as a fallback for
+    // rows written without a link_url (see TYPE_FALLBACK).
+    const target = resolveNotificationTarget(notification.link_url, notification.type);
     if (target !== '/(tabs)/notifications') {
       router.push(target);
     }

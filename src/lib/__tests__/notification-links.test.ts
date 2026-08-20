@@ -28,11 +28,33 @@ describe('resolveNotificationTarget', () => {
   });
 
   it('lands web-only surfaces on Alerts instead of a dead end', () => {
-    // Court Side, clubs and events have no mobile screen yet — routing to
-    // a nonexistent path would strand the user.
-    expect(resolveNotificationTarget('/court-side')).toBe('/(tabs)/notifications');
+    // Clubs has no mobile screen yet — routing to a nonexistent path would
+    // strand the user. (Court Side used to be in this list too, until it
+    // shipped a real screen — see the /court-side test below.)
     expect(resolveNotificationTarget('/clubs')).toBe('/(tabs)/notifications');
     expect(resolveNotificationTarget('/events/abc')).toBe('/(tabs)/notifications');
+  });
+
+  it('sends Court Side notifications to the feed, not Alerts', () => {
+    expect(resolveNotificationTarget('/court-side')).toBe('/court-side');
+  });
+
+  it('falls back on notification type when a row has no link_url', () => {
+    // post_liked/post_reshared/post_mention are written without a
+    // link_url (20260810000032_post_reshares_and_engagement_notifications.sql)
+    // — the Alerts list must not go silent for these just because the DB
+    // row has nothing in link_url.
+    expect(resolveNotificationTarget(null, 'post_liked')).toBe('/court-side');
+    expect(resolveNotificationTarget(null, 'post_reshared')).toBe('/court-side');
+    expect(resolveNotificationTarget(null, 'post_mention')).toBe('/court-side');
+  });
+
+  it('prefers a real link_url over the type fallback', () => {
+    expect(resolveNotificationTarget('/bookings', 'post_liked')).toBe('/(tabs)/bookings');
+  });
+
+  it('ignores the type fallback for types with no mapping', () => {
+    expect(resolveNotificationTarget(null, 'booking_confirmed')).toBe('/(tabs)/notifications');
   });
 
   it('handles a missing link', () => {
