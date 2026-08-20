@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import { useRef, useState } from 'react';
+import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 
 import { RankBadge } from '@/components/ranked/rank-badge';
+import { monoFont, ShareCardFrame } from '@/components/share-card-frame';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -12,13 +15,95 @@ import {
   confirmationTally,
   formatRating,
   formatRatingDelta,
+  myMatchResult,
+  opponentNames,
   RANKED_DISPUTE_REASONS,
+  rankLabel,
   RankedError,
   respondToResult,
   tierInfo,
   type RankedDisputeReason,
   type RankedMatchDetail,
 } from '@/lib/ranked';
+
+/** The image attached when a confirmed result is shared externally (see
+ * ConfirmedView's shareResult) — rendered off-screen and captured with
+ * react-native-view-shot, same technique and shell (ShareCardFrame) as
+ * COURT/Side's post share cards. */
+function RankedResultShareCard({
+  match,
+  currentUserId,
+  viewRef,
+}: {
+  match: RankedMatchDetail;
+  currentUserId: string;
+  viewRef: React.RefObject<View | null>;
+}) {
+  const result = myMatchResult(match, match.players, currentUserId);
+  const authorName = result?.me.profile?.display_name ?? 'A player';
+  const initial = authorName.trim()[0]?.toUpperCase() ?? '?';
+  const opponents = result ? opponentNames(match.players, result.me) : '';
+
+  return (
+    <ShareCardFrame
+      viewRef={viewRef}
+      tag="RANKED"
+      authorInitial={initial}
+      authorName={authorName}
+      authorSub={opponents ? `${result?.won ? 'defeated' : 'played'} ${opponents}` : 'played a ranked match'}>
+      <View style={shareCardStyles.resultGroup}>
+        <View style={shareCardStyles.resultRow}>
+          <Text style={[shareCardStyles.resultWord, result && !result.won && shareCardStyles.resultWordLoss]}>
+            {result?.won ? 'WON' : 'LOST'}
+          </Text>
+          <Text style={shareCardStyles.resultScore}>
+            {result?.myScore}–{result?.theirScore}
+          </Text>
+        </View>
+        <Text style={shareCardStyles.matchType}>Ranked · {match.match_type === 'singles' ? 'Singles' : 'Doubles'}</Text>
+      </View>
+
+      {result && result.me.tier_after !== null && result.me.pips_after !== null ? (
+        <View style={shareCardStyles.rankedPanel}>
+          <View style={shareCardStyles.rankRow}>
+            <Text style={shareCardStyles.rankRowLabel}>TIER</Text>
+            <View style={shareCardStyles.tierShift}>
+              {!result.justPlaced && result.me.tier_before !== null && result.me.pips_before !== null ? (
+                <>
+                  <View style={shareCardStyles.tierBadge}>
+                    <Text style={shareCardStyles.tierBadgeText}>{rankLabel(result.me.tier_before, result.me.pips_before)}</Text>
+                  </View>
+                  <Text style={shareCardStyles.tierArrow}>→</Text>
+                </>
+              ) : null}
+              <View style={[shareCardStyles.tierBadge, shareCardStyles.tierBadgeAfter]}>
+                <Text style={[shareCardStyles.tierBadgeText, shareCardStyles.tierBadgeTextAfter]}>
+                  {rankLabel(result.me.tier_after, result.me.pips_after)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {result.me.rating_after !== null ? (
+            <>
+              <View style={shareCardStyles.rankedDivider} />
+              <View style={shareCardStyles.rankRow}>
+                <Text style={shareCardStyles.rankRowLabel}>Rating (AAR)</Text>
+                <Text style={shareCardStyles.ratingShift}>
+                  {result.me.rating_before !== null ? `${formatRating(result.me.rating_before)} → ` : ''}
+                  {formatRating(result.me.rating_after)}
+                  {result.me.rating_delta !== null ? (
+                    <Text style={shareCardStyles.ratingDelta}> {formatRatingDelta(result.me.rating_delta)}</Text>
+                  ) : null}
+                </Text>
+              </View>
+            </>
+          ) : null}
+        </View>
+      ) : null}
+    </ShareCardFrame>
+  );
+}
 
 export function ResultPhase({ match, currentUserId }: { match: RankedMatchDetail; currentUserId: string }) {
   if (match.status === 'disputed') return <DisputedView match={match} />;
@@ -161,17 +246,15 @@ function AwaitingConfirmationView({ match, currentUserId }: { match: RankedMatch
 
 function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; currentUserId: string }) {
   const theme = useTheme();
-  const me = match.players.find((p) => p.user_id === currentUserId);
-  const won = match.winning_team === me?.team;
-  const myScore = me?.team === 'a' ? match.score_a : match.score_b;
-  const theirScore = me?.team === 'a' ? match.score_b : match.score_a;
-
-  // tier_before is null exactly when this was the match that completed
-  // calibration — there was no visible ladder position before it, so
-  // that's a placement, not a promotion or demotion.
-  const justPlaced = me !== undefined && me.tier_before === null && me.tier_after !== null;
-  const promoted = me !== undefined && me.tier_before !== null && me.tier_after !== null && me.tier_after > me.tier_before;
-  const demoted = me !== undefined && me.tier_before !== null && me.tier_after !== null && me.tier_after < me.tier_before;
+  const shareCardRef = useRef<View>(null);
+  const result = myMatchResult(match, match.players, currentUserId);
+  const me = result?.me;
+  const won = result?.won ?? false;
+  const myScore = result?.myScore;
+  const theirScore = result?.theirScore;
+  const justPlaced = result?.justPlaced ?? false;
+  const promoted = result?.promoted ?? false;
+  const demoted = result?.demoted ?? false;
   const impactful = promoted || demoted;
 
   const shareText = me
@@ -180,14 +263,32 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
       }.`
     : 'AIR/Rally Ranked match result.';
 
-  const shareResult = () => {
-    Share.share({ message: shareText }).catch(() => {
+  const shareResult = async () => {
+    // The branded card first — same capture-then-share technique as
+    // COURT/Side's post share cards. Falls back to the plain-text share
+    // below if capture or expo-sharing is unavailable.
+    try {
+      const uri = await captureRef(shareCardRef, { format: 'png', quality: 1, width: 1080, height: 1920 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share to AIR/Rally', UTI: 'public.png' });
+        return;
+      }
+    } catch {
+      // Capture failed or sharing isn't available on this device — fall
+      // through to the plain-text share rather than doing nothing.
+    }
+    try {
+      await Share.share({ message: shareText });
+    } catch {
       // Share sheet dismissed or unavailable — not an error.
-    });
+    }
   };
 
   return (
     <View style={styles.stack}>
+      <View style={styles.shareCardOffscreen} pointerEvents="none">
+        <RankedResultShareCard match={match} currentUserId={currentUserId} viewRef={shareCardRef} />
+      </View>
       <View style={[styles.navyCard, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
         <ThemedText type="caption" style={[styles.eyebrow, { color: theme.rally }]}>
           MATCH COMPLETE
@@ -450,5 +551,105 @@ const styles = StyleSheet.create({
   disputedFooter: {
     borderTopWidth: 1,
     paddingTop: Spacing.three,
+  },
+  shareCardOffscreen: {
+    position: 'absolute',
+    top: 0,
+    left: -2000,
+  },
+});
+
+// Fixed brand palette, not theme tokens — see RankedResultShareCard's own
+// comment and ShareCardFrame.
+const shareCardStyles = StyleSheet.create({
+  resultGroup: {
+    gap: 2,
+  },
+  resultRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 10,
+  },
+  resultWord: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: '#45c47f',
+  },
+  resultWordLoss: {
+    color: '#f3ead9',
+  },
+  resultScore: {
+    fontFamily: monoFont,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f3ead9',
+  },
+  matchType: {
+    fontSize: 11,
+    color: '#93a2b8',
+  },
+  rankedPanel: {
+    backgroundColor: '#f6f1e8',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f3700f',
+    padding: 16,
+    gap: 12,
+  },
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rankRowLabel: {
+    fontFamily: monoFont,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    fontWeight: '700',
+    color: '#5a6675',
+    textTransform: 'uppercase',
+  },
+  tierShift: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  tierBadge: {
+    borderWidth: 1,
+    borderColor: 'rgba(15,39,71,0.18)',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  tierBadgeAfter: {
+    backgroundColor: '#0f2747',
+    borderColor: '#0f2747',
+  },
+  tierBadgeText: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0f2747',
+  },
+  tierBadgeTextAfter: {
+    color: '#f3ead9',
+  },
+  tierArrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#f3700f',
+  },
+  rankedDivider: {
+    height: 1,
+    backgroundColor: 'rgba(15,39,71,0.12)',
+  },
+  ratingShift: {
+    fontFamily: monoFont,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f2747',
+  },
+  ratingDelta: {
+    color: '#1f9d55',
   },
 });

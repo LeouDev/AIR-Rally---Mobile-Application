@@ -349,6 +349,48 @@ export type RankedMatchDetail = RankedMatch & {
   scorekeeper: PublicProfile | null;
 };
 
+export type MyMatchResult = {
+  me: RankedMatchParticipant;
+  won: boolean;
+  myScore: number;
+  theirScore: number;
+  /** tier_before is null exactly when this was the match that completed
+   * calibration — there was no visible ladder position before it, so
+   * that's a placement, not a promotion or demotion. */
+  justPlaced: boolean;
+  promoted: boolean;
+  demoted: boolean;
+};
+
+/** currentUserId's personal read of a finished match — which side their
+ * score was, whether they won, and whether their tier moved. Null if
+ * currentUserId isn't one of the match's players. Shared by the result
+ * screen and its share card so the two can't drift apart. */
+export function myMatchResult(
+  match: Pick<RankedMatch, 'winning_team' | 'score_a' | 'score_b'>,
+  players: readonly RankedMatchParticipant[],
+  currentUserId: string
+): MyMatchResult | null {
+  const me = players.find((p) => p.user_id === currentUserId);
+  if (!me) return null;
+
+  const myScore = me.team === 'a' ? match.score_a : match.score_b;
+  const theirScore = me.team === 'a' ? match.score_b : match.score_a;
+  const justPlaced = me.tier_before === null && me.tier_after !== null;
+  const promoted = me.tier_before !== null && me.tier_after !== null && me.tier_after > me.tier_before;
+  const demoted = me.tier_before !== null && me.tier_after !== null && me.tier_after < me.tier_before;
+
+  return { me, won: match.winning_team === me.team, myScore, theirScore, justPlaced, promoted, demoted };
+}
+
+/** Display names of everyone on the opposing team, "&"-joined for doubles. */
+export function opponentNames(players: readonly RankedMatchParticipant[], me: Pick<RankedMatchParticipant, 'team'>): string {
+  return players
+    .filter((p) => p.team !== me.team)
+    .map((p) => p.profile?.display_name ?? 'a player')
+    .join(' & ');
+}
+
 async function attachParticipants(players: RankedMatchPlayer[], mode: RankedMode): Promise<RankedMatchParticipant[]> {
   const ids = players.map((p) => p.user_id);
   if (ids.length === 0) return [];

@@ -3,9 +3,10 @@ import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import { useRef, useState } from 'react';
-import { Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
+import { monoFont, ShareCardFrame } from '@/components/share-card-frame';
 import { Button } from '@/components/ui/button';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -80,18 +81,12 @@ function EmbeddedEventCard({
   );
 }
 
-const monoFont = Platform.select({ ios: 'Courier New', default: 'monospace' });
-
 /** The image actually attached when a post is shared externally (see
  * PostCard's handleExternalShare) — rendered off-screen at all times and
  * captured with react-native-view-shot right before the share sheet
  * opens, so Instagram/Threads/X/Messenger get a real picture instead of
- * a bare link. Deliberately NOT theme-aware (no useTheme()) — this is a
- * brand asset that leaves the app, so it must look the same regardless
- * of the sharer's own light/dark setting, same posture as the
- * transactional emails. Built at 360×640 and captured at 1080×1920 (see
- * the capture call) rather than laid out at full resolution directly,
- * so the RN style numbers stay ordinary to read and write. */
+ * a bare link. Body content only — the wordmark/tag/author-row/footer
+ * chrome lives in ShareCardFrame, shared with the Ranked result card. */
 function ShareCard({ post, viewRef }: { post: PostWithAuthor; viewRef: React.RefObject<View | null> }) {
   const authorName = post.author?.display_name ?? 'A player';
   const initial = authorName.trim()[0]?.toUpperCase() ?? '?';
@@ -99,63 +94,42 @@ function ShareCard({ post, viewRef }: { post: PostWithAuthor; viewRef: React.Ref
   const fillPct = event?.max_players ? Math.min(100, (event.attendeeCount / event.max_players) * 100) : null;
 
   return (
-    <View ref={viewRef} style={shareCardStyles.card} collapsable={false}>
-      <View style={shareCardStyles.top}>
-        <Text style={shareCardStyles.wordmark}>
-          AIR<Text style={shareCardStyles.wordmarkAccent}>/Rally</Text>
-        </Text>
-        <View style={shareCardStyles.tag}>
-          <Text style={shareCardStyles.tagText}>{event ? 'OPEN PLAY' : 'COURT/SIDE'}</Text>
-        </View>
-      </View>
-
-      <View style={shareCardStyles.body}>
-        <View style={shareCardStyles.authorRow}>
-          <View style={shareCardStyles.avatarDot}>
-            <Text style={shareCardStyles.avatarInitial}>{initial}</Text>
-          </View>
-          <View>
-            <Text style={shareCardStyles.authorName}>{authorName}</Text>
-            <Text style={shareCardStyles.authorSub}>{event ? 'is hosting a game' : 'posted on COURT/Side'}</Text>
-          </View>
-        </View>
-
-        {event ? (
-          <View style={shareCardStyles.eventPanel}>
-            <Text style={shareCardStyles.eventEyebrow}>Open Play</Text>
-            <Text style={shareCardStyles.eventTitle}>{event.title}</Text>
-            <Text style={shareCardStyles.eventMeta}>{formatEventWhen(event.start_time)}</Text>
-            {event.venue ? <Text style={shareCardStyles.eventMeta}>{event.venue.name}</Text> : null}
-            <View style={shareCardStyles.progressRow}>
-              {fillPct !== null ? (
-                <View style={shareCardStyles.progressTrack}>
-                  <View style={[shareCardStyles.progressFill, { width: `${fillPct}%` }]} />
-                </View>
-              ) : null}
-              <Text style={shareCardStyles.progressLabel}>
-                {event.attendeeCount}
-                {event.max_players ? ` / ${event.max_players}` : ''} playing
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <>
-            <Text style={shareCardStyles.headline} numberOfLines={6}>
-              {post.content}
+    <ShareCardFrame
+      viewRef={viewRef}
+      tag={event ? 'OPEN PLAY' : 'COURT/SIDE'}
+      authorInitial={initial}
+      authorName={authorName}
+      authorSub={event ? 'is hosting a game' : 'posted on COURT/Side'}>
+      {event ? (
+        <View style={shareCardStyles.eventPanel}>
+          <Text style={shareCardStyles.eventEyebrow}>Open Play</Text>
+          <Text style={shareCardStyles.eventTitle}>{event.title}</Text>
+          <Text style={shareCardStyles.eventMeta}>{formatEventWhen(event.start_time)}</Text>
+          {event.venue ? <Text style={shareCardStyles.eventMeta}>{event.venue.name}</Text> : null}
+          <View style={shareCardStyles.progressRow}>
+            {fillPct !== null ? (
+              <View style={shareCardStyles.progressTrack}>
+                <View style={[shareCardStyles.progressFill, { width: `${fillPct}%` }]} />
+              </View>
+            ) : null}
+            <Text style={shareCardStyles.progressLabel}>
+              {event.attendeeCount}
+              {event.max_players ? ` / ${event.max_players}` : ''} playing
             </Text>
-            <View style={shareCardStyles.statRow}>
-              <Text style={shareCardStyles.stat}>♥ {post.like_count}</Text>
-              <Text style={shareCardStyles.stat}>💬 {post.comment_count}</Text>
-            </View>
-          </>
-        )}
-      </View>
-
-      <View style={shareCardStyles.footer}>
-        <Text style={shareCardStyles.footerTitle}>Play More. Rally More.</Text>
-        <Text style={shareCardStyles.footerSub}>air-rally.com</Text>
-      </View>
-    </View>
+          </View>
+        </View>
+      ) : (
+        <>
+          <Text style={shareCardStyles.headline} numberOfLines={6}>
+            {post.content}
+          </Text>
+          <View style={shareCardStyles.statRow}>
+            <Text style={shareCardStyles.stat}>♥ {post.like_count}</Text>
+            <Text style={shareCardStyles.stat}>💬 {post.comment_count}</Text>
+          </View>
+        </>
+      )}
+    </ShareCardFrame>
   );
 }
 
@@ -484,76 +458,6 @@ const styles = StyleSheet.create({
 
 // Fixed brand palette, not theme tokens — see ShareCard's own comment.
 const shareCardStyles = StyleSheet.create({
-  card: {
-    width: 360,
-    height: 640,
-    backgroundColor: '#0f2747',
-    justifyContent: 'space-between',
-  },
-  top: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 24,
-  },
-  wordmark: {
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    color: '#ffffff',
-  },
-  wordmarkAccent: {
-    color: '#ff8a3d',
-  },
-  tag: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,138,61,0.5)',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  tagText: {
-    fontFamily: monoFont,
-    fontSize: 9,
-    letterSpacing: 1.2,
-    color: '#ff8a3d',
-  },
-  body: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 14,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-  },
-  avatarDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f3700f',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    fontFamily: monoFont,
-    fontWeight: '700',
-    fontSize: 12,
-    color: '#0f2747',
-  },
-  authorName: {
-    fontWeight: '700',
-    fontSize: 13,
-    color: '#f3ead9',
-  },
-  authorSub: {
-    fontSize: 10.5,
-    color: '#93a2b8',
-    marginTop: 1,
-  },
   eventPanel: {
     backgroundColor: '#f6f1e8',
     borderLeftWidth: 4,
@@ -618,21 +522,5 @@ const shareCardStyles = StyleSheet.create({
     fontFamily: monoFont,
     fontSize: 11.5,
     color: '#93a2b8',
-  },
-  footer: {
-    paddingHorizontal: 24,
-    paddingVertical: 22,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(243,234,217,0.14)',
-  },
-  footerTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#f3ead9',
-  },
-  footerSub: {
-    fontSize: 11,
-    color: '#cfd8e4',
-    marginTop: 2,
   },
 });
