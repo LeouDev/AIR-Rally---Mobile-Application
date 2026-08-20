@@ -1,7 +1,10 @@
 import type { Post, PostComment, PublicProfile } from '@/lib/database.types';
+import { listEmbeddedEvents, type EmbeddedEvent } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 
-export type PostWithAuthor = Post & { author: PublicProfile | null };
+/** `event` is populated whenever post.event_id is set — a post that
+ * shared a match embeds a joinable card, everywhere a post renders. */
+export type PostWithAuthor = Post & { author: PublicProfile | null; event?: EmbeddedEvent | null };
 export type FeedPost = PostWithAuthor & { effective_at: string; resharer_id: string | null; resharer: PublicProfile | null };
 export type PostCommentWithAuthor = PostComment & { author: PublicProfile | null };
 
@@ -20,6 +23,19 @@ async function attachAuthors<T extends { user_id: string }>(rows: T[]): Promise<
   return rows.map((row) => ({ ...row, author: authors.get(row.user_id) ?? null }));
 }
 
+/** Attaches embedded event summaries to whichever rows carry an
+ * event_id. Not just `!== null`: a row from an unmigrated database
+ * omits the key rather than nulling it, and `undefined` slipping
+ * through here becomes the literal string "undefined" in the next
+ * .in() call (hit this for real testing the web equivalent). */
+async function attachEvents<T extends { event_id: string | null }>(
+  rows: T[]
+): Promise<(T & { event: EmbeddedEvent | null })[]> {
+  const eventIds = Array.from(new Set(rows.map((r) => r.event_id).filter((id): id is string => id !== null && id !== undefined)));
+  const eventsById = await listEmbeddedEvents(eventIds);
+  return rows.map((row) => ({ ...row, event: row.event_id ? (eventsById.get(row.event_id) ?? null) : null }));
+}
+
 /** The COURT/Side feed, via the same court_side_feed() RPC the web uses —
  * SECURITY INVOKER, so RLS applies exactly as a direct query would. The
  * cursor is effective_at (a reshare's own time, not the original post's),
@@ -34,9 +50,9 @@ export async function listFeedPosts({
   const rows = data ?? [];
   const authorIds = rows.map((r) => r.user_id);
   const resharerIds = rows.map((r) => r.resharer_id).filter((id): id is string => id !== null);
-  const profiles = await profilesByIds([...authorIds, ...resharerIds]);
+  const [profiles, rowsWithEvents] = await Promise.all([profilesByIds([...authorIds, ...resharerIds]), attachEvents(rows)]);
 
-  const posts: FeedPost[] = rows.map((row) => ({
+  const posts: FeedPost[] = rowsWithEvents.map((row) => ({
     ...row,
     author: profiles.get(row.user_id) ?? null,
     resharer: row.resharer_id ? (profiles.get(row.resharer_id) ?? null) : null,
@@ -57,15 +73,42 @@ export async function listPostsByUser(
   const { data, error } = await query;
   if (error) throw error;
 
-  const posts = await attachAuthors(data ?? []);
+  const [withAuthors, withEvents] = await Promise.all([attachAuthors(data ?? []), attachEvents(data ?? [])]);
+  const eventById = new Map(withEvents.map((row) => [row.id, row.event]));
+  const posts = withAuthors.map((row) => ({ ...row, event: eventById.get(row.id) ?? null }));
   const nextCursor = data && data.length === limit ? data[data.length - 1].created_at : null;
   return { posts, nextCursor };
 }
 
-export async function createPost(userId: string, content: string): Promise<Post> {
+/** One club's own feed — "My Club". A club post can never be reshared
+ * (post_reshares' insert policy blocks it), so this is a direct query,
+ * not the court_side_feed() RPC — no reshare union to build. */
+export async function listClubPosts(
+  clubId: string,
+  { limit = FEED_PAGE_SIZE, cursor }: { limit?: number; cursor?: string } = {}
+): Promise<{ posts: PostWithAuthor[]; nextCursor: string | null }> {
+  let query = supabase.from('posts').select('*').eq('club_id', clubId).order('created_at', { ascending: false }).limit(limit);
+  if (cursor) query = query.lt('created_at', cursor);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const [withAuthors, withEvents] = await Promise.all([attachAuthors(data ?? []), attachEvents(data ?? [])]);
+  const eventById = new Map(withEvents.map((row) => [row.id, row.event]));
+  const posts = withAuthors.map((row) => ({ ...row, event: eventById.get(row.id) ?? null }));
+  const nextCursor = data && data.length === limit ? data[data.length - 1].created_at : null;
+  return { posts, nextCursor };
+}
+
+export async function createPost(
+  userId: string,
+  content: string,
+  eventId?: string | null,
+  clubId?: string | null
+): Promise<Post> {
   const { data, error } = await supabase
     .from('posts')
-    .insert({ user_id: userId, content, image_url: null, image_paths: [] })
+    .insert({ user_id: userId, content, image_url: null, image_paths: [], event_id: eventId ?? null, club_id: clubId ?? null })
     .select()
     .single();
   if (error) throw error;

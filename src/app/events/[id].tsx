@@ -1,14 +1,14 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
 
 import { EventJoinRequests } from '@/components/events/event-join-requests';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import type { EventAttendeeStatus } from '@/lib/database.types';
 import { useTheme } from '@/hooks/use-theme';
@@ -22,6 +22,7 @@ import {
   type EventDetail,
   type PendingJoinRequest,
 } from '@/lib/events';
+import { createPost } from '@/lib/posts';
 import { useSession } from '@/providers/session';
 
 function formatWhen(iso: string): string {
@@ -39,11 +40,13 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
+  const { show } = useToast();
 
   const [event, setEvent] = useState<EventDetail | null | undefined>(undefined);
   const [myStatus, setMyStatus] = useState<EventAttendeeStatus | null>(null);
   const [pendingRequests, setPendingRequests] = useState<PendingJoinRequest[]>([]);
   const [working, setWorking] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const isOrganiser = userId != null && event?.creator_id === userId;
@@ -89,6 +92,20 @@ export default function EventDetailScreen() {
       setMessage("That didn't work — try again.");
     } finally {
       setWorking(false);
+    }
+  };
+
+  const shareToCourtSide = async () => {
+    if (!id || !userId || !event || sharing) return;
+    setSharing(true);
+    try {
+      await createPost(userId, `Join my game: ${event.title}`, id);
+      show('Shared to COURT/Side.');
+      router.push('/court-side');
+    } catch {
+      show("Couldn't share that. Try again.", 'error');
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -184,6 +201,16 @@ export default function EventDetailScreen() {
                 <ThemedText type="small" themeColor="subtle">
                   {message}
                 </ThemedText>
+              ) : null}
+
+              {userId && (isOrganiser || myStatus === 'joined') ? (
+                <Button
+                  title={sharing ? 'Sharing…' : 'Share to COURT/Side'}
+                  variant="outline"
+                  onPress={shareToCourtSide}
+                  disabled={sharing}
+                  loading={sharing}
+                />
               ) : null}
 
               {isOrganiser ? (

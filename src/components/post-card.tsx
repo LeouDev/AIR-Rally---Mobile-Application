@@ -4,12 +4,78 @@ import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Pressable, Share, StyleSheet, View } from 'react-native';
 
+import { Button } from '@/components/ui/button';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { PublicProfile } from '@/lib/database.types';
+import type { EventAttendeeStatus, PublicProfile } from '@/lib/database.types';
 import { formatRelativeTime } from '@/lib/relative-time';
 import type { PostWithAuthor } from '@/lib/posts';
+
+function formatEventWhen(iso: string): string {
+  return new Date(iso).toLocaleString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+const JOIN_LABEL: Record<EventAttendeeStatus, string> = {
+  pending_approval: 'Requested',
+  joined: 'Joined',
+  waitlisted: 'Waitlisted',
+  cancelled: 'Ask to join',
+};
+
+/** The card a "share this game" post embeds. Join is only interactive
+ * where the parent tracks event status (the main COURT/Side feed);
+ * elsewhere it falls back to a plain tap-through to the full game
+ * screen, which has its own working join/approve UI. */
+function EmbeddedEventCard({
+  event,
+  status,
+  onToggleJoin,
+}: {
+  event: NonNullable<PostWithAuthor['event']>;
+  status?: EventAttendeeStatus | null;
+  onToggleJoin?: (eventId: string) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push({ pathname: '/events/[id]', params: { id: event.id } })}
+      style={[styles.eventCard, { backgroundColor: theme.muted, borderColor: theme.border }]}>
+      <ThemedText type="smallBold">{event.title}</ThemedText>
+      <View style={styles.eventMetaRow}>
+        <Ionicons name="calendar-outline" size={13} color={theme.mutedForeground} />
+        <ThemedText type="caption" themeColor="mutedForeground">
+          {formatEventWhen(event.start_time)}
+        </ThemedText>
+      </View>
+      {event.venue ? (
+        <View style={styles.eventMetaRow}>
+          <Ionicons name="location-outline" size={13} color={theme.mutedForeground} />
+          <ThemedText type="caption" themeColor="mutedForeground">
+            {event.venue.name}
+          </ThemedText>
+        </View>
+      ) : null}
+      <View style={styles.eventMetaRow}>
+        <Ionicons name="people-outline" size={13} color={theme.mutedForeground} />
+        <ThemedText type="caption" themeColor="mutedForeground">
+          {event.attendeeCount}
+          {event.max_players ? ` / ${event.max_players}` : ''} playing
+          {event.isFull ? ' · full' : ''}
+        </ThemedText>
+      </View>
+      {onToggleJoin ? (
+        <Button
+          title={status ? JOIN_LABEL[status] : 'Ask to join'}
+          variant={status ? 'secondary' : 'outline'}
+          style={styles.eventJoinButton}
+          onPress={() => onToggleJoin(event.id)}
+        />
+      ) : null}
+    </Pressable>
+  );
+}
 
 /** "@Name" picked out in bold — a hand-typed mention that doesn't resolve
  * to anyone still degrades gracefully to highlighted plain text, same as
@@ -71,11 +137,25 @@ type PostCardProps = {
   onToggleLike: () => void;
   onToggleReshare: () => void;
   onDelete?: () => void;
+  /** The viewer's status on post.event, if this post shared a game and
+   * the parent tracks it (only the main feed does today). */
+  eventStatus?: EventAttendeeStatus | null;
+  onToggleJoinEvent?: (eventId: string) => void;
 };
 
 /** One post in the feed or on a profile — likes, comments, and reshares
  * are optimistic in the parent; this is purely presentational. */
-export function PostCard({ post, currentUserId, liked, reshared, onToggleLike, onToggleReshare, onDelete }: PostCardProps) {
+export function PostCard({
+  post,
+  currentUserId,
+  liked,
+  reshared,
+  onToggleLike,
+  onToggleReshare,
+  onDelete,
+  eventStatus,
+  onToggleJoinEvent,
+}: PostCardProps) {
   const theme = useTheme();
   const isOwn = post.user_id === currentUserId;
 
@@ -113,6 +193,8 @@ export function PostCard({ post, currentUserId, liked, reshared, onToggleLike, o
       </Pressable>
 
       <View style={styles.content}>{renderContent(post.content)}</View>
+
+      {post.event ? <EmbeddedEventCard event={post.event} status={eventStatus} onToggleJoin={onToggleJoinEvent} /> : null}
 
       <View style={styles.actionsRow}>
         <Pressable
@@ -218,5 +300,22 @@ const styles = StyleSheet.create({
   },
   deleteAction: {
     marginLeft: 'auto',
+  },
+  eventCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: 4,
+  },
+  eventMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  eventJoinButton: {
+    marginTop: Spacing.one,
+    minHeight: 36,
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.three,
   },
 });

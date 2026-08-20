@@ -77,6 +77,7 @@ function RootNavigator() {
           <Stack.Screen name="events/new" />
           <Stack.Screen name="court-side/index" />
           <Stack.Screen name="court-side/[postId]" />
+          <Stack.Screen name="court-side/club/[clubId]" />
           <Stack.Screen name="player/[userId]" />
           <Stack.Screen name="credits/index" />
           <Stack.Screen name="clubs/index" />

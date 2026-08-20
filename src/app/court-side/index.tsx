@@ -12,7 +12,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { PublicProfile } from '@/lib/database.types';
+import type { Club, EventAttendeeStatus, PublicProfile } from '@/lib/database.types';
+import { listClubsForUser } from '@/lib/clubs';
+import { joinEvent, leaveEvent, listMyEventStatuses } from '@/lib/events';
 import { getFollowCounts, getPublicProfile, searchPublicProfiles, type FollowCounts } from '@/lib/follows';
 import {
   createPost,
@@ -40,6 +42,7 @@ export default function CourtSideScreen() {
   const [activeTab, setActiveTab] = useState<(typeof FEED_TABS)[number]>('For you');
   const [myProfile, setMyProfile] = useState<PublicProfile | null>(null);
   const [counts, setCounts] = useState<FollowCounts>({ followers: 0, following: 0 });
+  const [myClubs, setMyClubs] = useState<Club[]>([]);
 
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -47,6 +50,7 @@ export default function CourtSideScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [resharedIds, setResharedIds] = useState<Set<string>>(new Set());
+  const [eventStatuses, setEventStatuses] = useState<Map<string, EventAttendeeStatus>>(new Map());
 
   const [content, setContent] = useState('');
   const [posting, setPosting] = useState(false);
@@ -56,20 +60,28 @@ export default function CourtSideScreen() {
 
   const loadFirstPage = useCallback(async () => {
     try {
-      const [{ posts: rows, nextCursor: cursor }, profileResult, countsResult] = await Promise.all([
+      const [{ posts: rows, nextCursor: cursor }, profileResult, countsResult, clubsResult] = await Promise.all([
         listFeedPosts(),
         userId ? getPublicProfile(userId) : Promise.resolve(null),
         userId ? getFollowCounts(userId) : Promise.resolve({ followers: 0, following: 0 }),
+        userId ? listClubsForUser(userId) : Promise.resolve([]),
       ]);
       setPosts(rows);
       setNextCursor(cursor);
       setMyProfile(profileResult);
       setCounts(countsResult);
+      setMyClubs(clubsResult);
       if (userId && rows.length > 0) {
         const ids = rows.map((r) => r.id);
-        const [liked, reshared] = await Promise.all([listLikedPostIds(userId, ids), listResharedPostIds(userId, ids)]);
+        const eventIds = rows.map((r) => r.event?.id).filter((id): id is string => id !== undefined && id !== null);
+        const [liked, reshared, statuses] = await Promise.all([
+          listLikedPostIds(userId, ids),
+          listResharedPostIds(userId, ids),
+          listMyEventStatuses(userId, eventIds),
+        ]);
         setLikedIds(new Set(liked));
         setResharedIds(new Set(reshared));
+        setEventStatuses(statuses);
       }
     } catch {
       setPosts([]);
@@ -183,6 +195,30 @@ export default function CourtSideScreen() {
     }
   };
 
+  // Not optimistic: a join no longer always lands a seat (it may land
+  // pending_approval or waitlisted instead), so there's nothing safe to
+  // guess here — apply the database's actual answer once it's back.
+  const toggleJoinEvent = async (eventId: string) => {
+    if (!userId) return;
+    const previousStatus = eventStatuses.get(eventId) ?? null;
+    try {
+      const active = previousStatus === 'joined' || previousStatus === 'waitlisted' || previousStatus === 'pending_approval';
+      const nextStatus = active ? null : await joinEvent(userId, eventId);
+      if (active) await leaveEvent(userId, eventId);
+      setEventStatuses((prev) => {
+        const next = new Map(prev);
+        if (nextStatus) next.set(eventId, nextStatus);
+        else next.delete(eventId);
+        return next;
+      });
+      if (nextStatus === 'pending_approval') show('Request sent — the organiser will review it.');
+      else if (nextStatus === 'joined') show("You're in!");
+      else if (nextStatus === 'waitlisted') show("You're on the waitlist.");
+    } catch {
+      show("Couldn't update that. Try again.", 'error');
+    }
+  };
+
   const handleDelete = (postId: string) => {
     Alert.alert('Delete post?', 'This can\'t be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -224,6 +260,8 @@ export default function CourtSideScreen() {
                 onToggleLike={() => toggleLike(item.id)}
                 onToggleReshare={() => toggleReshare(item.id)}
                 onDelete={item.user_id === userId ? () => handleDelete(item.id) : undefined}
+                eventStatus={item.event ? (eventStatuses.get(item.event.id) ?? null) : null}
+                onToggleJoinEvent={toggleJoinEvent}
               />
             )}
             ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}
@@ -274,6 +312,20 @@ export default function CourtSideScreen() {
                     ))}
                   </View>
                 </View>
+                {myClubs.length > 0 ? (
+                  <View style={styles.myClubsRow}>
+                    {myClubs.map((club) => (
+                      <Pressable
+                        key={club.id}
+                        accessibilityRole="button"
+                        onPress={() => router.push({ pathname: '/court-side/club/[clubId]', params: { clubId: club.id } })}
+                        style={[styles.myClubChip, { borderColor: theme.border }]}>
+                        <Ionicons name="people" size={13} color={theme.primary} />
+                        <ThemedText type="small">{club.name}</ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
                 <View style={styles.composerBlock}>
                 <View style={[styles.composer, { backgroundColor: theme.card, borderColor: theme.border }]}>
                   <View style={styles.composerRow}>
@@ -388,6 +440,21 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
     height: 2,
     borderRadius: 1,
+  },
+  myClubsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    marginTop: Spacing.three,
+  },
+  myClubChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
   },
   composerBlock: {
     marginTop: Spacing.four,

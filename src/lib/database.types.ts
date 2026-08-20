@@ -285,6 +285,10 @@ export type Post = {
   like_count: number;
   comment_count: number;
   reshare_count: number;
+  /** Set to embed a joinable match card — "share this game" into COURT/Side. */
+  event_id: string | null;
+  /** Set to scope this post to one club's own feed — see club_role_of() RLS. */
+  club_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -580,7 +584,14 @@ export type Database = {
       follows: TableDef<Follow, Pick<Follow, 'follower_id' | 'following_id'>, never>;
       posts: TableDef<
         Post,
-        { user_id: string; content: string; image_url: string | null; image_paths: string[] },
+        {
+          user_id: string;
+          content: string;
+          image_url: string | null;
+          image_paths: string[];
+          event_id?: string | null;
+          club_id?: string | null;
+        },
         never
       >;
       post_likes: TableDef<PostLike, Pick<PostLike, 'post_id' | 'user_id'>, never>;

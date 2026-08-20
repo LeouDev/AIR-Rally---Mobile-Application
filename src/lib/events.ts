@@ -10,6 +10,52 @@ export type EventWithDetails = CommunityEvent & {
   isFull: boolean;
 };
 
+export type EmbeddedEvent = {
+  id: string;
+  title: string;
+  start_time: string;
+  venue: EventVenue | null;
+  attendeeCount: number;
+  max_players: number | null;
+  isFull: boolean;
+  creator_id: string;
+};
+
+/** Batched lookup for posts.event_id — the "share this game" embedded
+ * card in a COURT/Side post, keyed by an arbitrary id set rather than
+ * "upcoming only" (a shared match's card should still render after the
+ * game has happened). Mirrors the web's listEmbeddedEvents. */
+export async function listEmbeddedEvents(eventIds: string[]): Promise<Map<string, EmbeddedEvent>> {
+  if (eventIds.length === 0) return new Map();
+  const { data: events, error } = await supabase.from('events').select('*').in('id', eventIds);
+  if (error) throw error;
+  if (!events || events.length === 0) return new Map();
+
+  const venueIds = Array.from(new Set(events.map((e) => e.venue_id).filter((id): id is string => id !== null)));
+  const { data: venues, error: venuesError } =
+    venueIds.length > 0
+      ? await supabase.from('venues').select('id, name, city').in('id', venueIds)
+      : { data: [] as EventVenue[], error: null };
+  if (venuesError) throw venuesError;
+  const venuesById = new Map((venues ?? []).map((v) => [v.id, v]));
+
+  return new Map(
+    events.map((event) => [
+      event.id,
+      {
+        id: event.id,
+        title: event.title,
+        start_time: event.start_time,
+        venue: event.venue_id ? (venuesById.get(event.venue_id) ?? null) : null,
+        attendeeCount: event.participant_count,
+        max_players: event.max_players,
+        isFull: event.max_players !== null && event.participant_count >= event.max_players,
+        creator_id: event.creator_id,
+      },
+    ])
+  );
+}
+
 /** Upcoming, soonest first. participant_count is trigger-maintained, so
  * the seated count comes free with the row — no per-event query needed. */
 export async function listUpcomingEvents(limit = 20): Promise<EventWithDetails[]> {
