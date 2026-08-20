@@ -40,9 +40,11 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "galileouuu@gmail.com",
         "ascAppId": "6803324731",
-        "appleTeamId": "Z5643XKUTZ"
+        "appleTeamId": "Z5643XKUTZ",
+        "ascApiKeyPath": "/Users/leou/.config/eas/AuthKey_Z4HV7SV9XF.p8",
+        "ascApiKeyId": "Z4HV7SV9XF",
+        "ascApiKeyIssuerId": "7468b472-22bc-43b9-bd22-9d9547aa1d49"
       }
     }
   }
