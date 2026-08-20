@@ -63,12 +63,18 @@ export function RankCard() {
   // Only ever the *other* mode, and only when both are calibrated —
   // otherwise there's nothing worth a second line.
   const secondary = primary === singles && doubles?.is_calibrated ? doubles : null;
-  // A player_ranks row exists the instant a player's first ranked match
-  // is created, at meaningless placeholder values — is_calibrated is
-  // what makes a rank real. Someone mid-calibration already has a row
-  // in one mode or the other and shouldn't see the same "try it" pitch
-  // as someone who has never touched Ranked at all.
-  const calibrating = !primary ? (singles ?? doubles) : null;
+  // A player_ranks row exists in BOTH modes the instant a player's first
+  // ranked match of EITHER mode is created — not just the mode they
+  // actually played — so `singles ?? doubles` always picked singles even
+  // for a doubles-only player, showing "0 of 10" forever while their real
+  // doubles progress sat unseen. calibration_matches is what actually
+  // distinguishes "touched" from "untouched"; pick whichever mode has more
+  // of it, falling back to either row when neither has been played yet.
+  const calibrating = !primary
+    ? ([singles, doubles].filter((r): r is PlayerRank => r !== null).sort(
+        (a, b) => b.calibration_matches - a.calibration_matches
+      )[0] ?? null)
+    : null;
 
   if (!primary && !calibrating) {
     return (
