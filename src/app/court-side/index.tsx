@@ -16,7 +16,7 @@ import { useTheme } from '@/hooks/use-theme';
 import type { Club, EventAttendeeStatus, PublicProfile } from '@/lib/database.types';
 import { listClubsForUser } from '@/lib/clubs';
 import { joinEvent, leaveEvent, listMyEventStatuses } from '@/lib/events';
-import { getFollowCounts, getPublicProfile, searchPublicProfiles, type FollowCounts } from '@/lib/follows';
+import { followUser, getFollowCounts, getPublicProfile, listFollowingIds, searchPublicProfiles, unfollowUser, type FollowCounts } from '@/lib/follows';
 import { MAX_POST_IMAGES, pickPostImages, uploadPostImages, type PickedPostImage } from '@/lib/post-images';
 import {
   createPost,
@@ -52,6 +52,7 @@ export default function CourtSideScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [resharedIds, setResharedIds] = useState<Set<string>>(new Set());
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [eventStatuses, setEventStatuses] = useState<Map<string, EventAttendeeStatus>>(new Map());
 
   const [content, setContent] = useState('');
@@ -78,14 +79,17 @@ export default function CourtSideScreen() {
       if (userId && rows.length > 0) {
         const ids = rows.map((r) => r.id);
         const eventIds = rows.map((r) => r.event?.id).filter((id): id is string => id !== undefined && id !== null);
-        const [liked, reshared, statuses] = await Promise.all([
+        const authorIds = Array.from(new Set(rows.map((r) => r.user_id)));
+        const [liked, reshared, statuses, following] = await Promise.all([
           listLikedPostIds(userId, ids),
           listResharedPostIds(userId, ids),
           listMyEventStatuses(userId, eventIds),
+          listFollowingIds(userId, authorIds),
         ]);
         setLikedIds(new Set(liked));
         setResharedIds(new Set(reshared));
         setEventStatuses(statuses);
+        setFollowingIds(new Set(following));
       }
     } catch {
       setPosts([]);
@@ -113,9 +117,15 @@ export default function CourtSideScreen() {
       setNextCursor(cursor);
       if (userId && rows.length > 0) {
         const ids = rows.map((r) => r.id);
-        const [liked, reshared] = await Promise.all([listLikedPostIds(userId, ids), listResharedPostIds(userId, ids)]);
+        const authorIds = Array.from(new Set(rows.map((r) => r.user_id)));
+        const [liked, reshared, following] = await Promise.all([
+          listLikedPostIds(userId, ids),
+          listResharedPostIds(userId, ids),
+          listFollowingIds(userId, authorIds),
+        ]);
         setLikedIds((prev) => new Set([...prev, ...liked]));
         setResharedIds((prev) => new Set([...prev, ...reshared]));
+        setFollowingIds((prev) => new Set([...prev, ...following]));
       }
     } finally {
       setLoadingMore(false);
@@ -257,6 +267,26 @@ export default function CourtSideScreen() {
     }
   };
 
+  const toggleFollow = async (authorId: string) => {
+    if (!userId) return;
+    const wasFollowing = followingIds.has(authorId);
+    setFollowingIds((prev) => {
+      const next = new Set(prev);
+      wasFollowing ? next.delete(authorId) : next.add(authorId);
+      return next;
+    });
+    try {
+      wasFollowing ? await unfollowUser(userId, authorId) : await followUser(userId, authorId);
+    } catch {
+      setFollowingIds((prev) => {
+        const next = new Set(prev);
+        wasFollowing ? next.add(authorId) : next.delete(authorId);
+        return next;
+      });
+      show("Couldn't update that. Try again.", 'error');
+    }
+  };
+
   const handleDelete = (postId: string) => {
     Alert.alert('Delete post?', 'This can\'t be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -300,6 +330,8 @@ export default function CourtSideScreen() {
                 onDelete={item.user_id === userId ? () => handleDelete(item.id) : undefined}
                 eventStatus={item.event ? (eventStatuses.get(item.event.id) ?? null) : null}
                 onToggleJoinEvent={toggleJoinEvent}
+                isFollowingAuthor={followingIds.has(item.user_id)}
+                onToggleFollow={toggleFollow}
               />
             )}
             ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}

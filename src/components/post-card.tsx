@@ -142,6 +142,12 @@ type PostCardProps = {
    * the parent tracks it (only the main feed does today). */
   eventStatus?: EventAttendeeStatus | null;
   onToggleJoinEvent?: (eventId: string) => void;
+  /** Per-author follow state for this card. Omitted entirely on screens
+   * that already handle following at a different level — the profile
+   * screen (player/[userId].tsx) has one follow button for the whole
+   * page, not one per post, so it never passes these. */
+  isFollowingAuthor?: boolean;
+  onToggleFollow?: (userId: string) => void;
 };
 
 /** One post in the feed or on a profile — likes, comments, and reshares
@@ -156,6 +162,8 @@ export function PostCard({
   onDelete,
   eventStatus,
   onToggleJoinEvent,
+  isFollowingAuthor,
+  onToggleFollow,
 }: PostCardProps) {
   const theme = useTheme();
   const isOwn = post.user_id === currentUserId;
@@ -180,18 +188,28 @@ export function PostCard({
         </ThemedText>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => post.author && router.push({ pathname: '/player/[userId]', params: { userId: post.author.id } })}
-        style={styles.authorRow}>
-        <Avatar profile={post.author} />
-        <View style={styles.authorText}>
-          <ThemedText type="smallBold">{post.author?.display_name ?? 'A player'}</ThemedText>
-          <ThemedText type="caption" themeColor="mutedForeground">
-            {formatRelativeTime(post.created_at)}
-          </ThemedText>
-        </View>
-      </Pressable>
+      <View style={styles.authorRow}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => post.author && router.push({ pathname: '/player/[userId]', params: { userId: post.author.id } })}
+          style={styles.authorPressable}>
+          <Avatar profile={post.author} />
+          <View style={styles.authorText}>
+            <ThemedText type="smallBold">{post.author?.display_name ?? 'A player'}</ThemedText>
+            <ThemedText type="caption" themeColor="mutedForeground">
+              {formatRelativeTime(post.created_at)}
+            </ThemedText>
+          </View>
+        </Pressable>
+        {!isOwn && onToggleFollow ? (
+          <Button
+            title={isFollowingAuthor ? 'Following' : 'Follow'}
+            variant={isFollowingAuthor ? 'secondary' : 'primary'}
+            style={styles.followButton}
+            onPress={() => post.author && onToggleFollow(post.author.id)}
+          />
+        ) : null}
+      </View>
 
       <View style={styles.content}>{renderContent(post.content)}</View>
 
@@ -286,6 +304,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  authorPressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flexShrink: 1,
+  },
+  followButton: {
+    marginLeft: 'auto',
+    minHeight: 32,
+    paddingHorizontal: Spacing.three,
   },
   avatar: {
     alignItems: 'center',

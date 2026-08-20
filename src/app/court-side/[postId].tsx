@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { followUser, isFollowing, unfollowUser } from '@/lib/follows';
 import { formatRelativeTime } from '@/lib/relative-time';
 import {
   createComment,
@@ -39,6 +40,7 @@ export default function PostDetailScreen() {
   const [comments, setComments] = useState<PostCommentWithAuthor[] | null>(null);
   const [liked, setLiked] = useState(false);
   const [reshared, setReshared] = useState(false);
+  const [following, setFollowing] = useState(false);
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
 
@@ -62,8 +64,24 @@ export default function PostDetailScreen() {
       ]);
       setLiked(likedIds.includes(postId));
       setReshared(resharedIds.includes(postId));
+      if (postResult.data.user_id !== userId) {
+        isFollowing(userId, postResult.data.user_id).then(setFollowing).catch(() => {});
+      }
     }
   }, [postId, userId]);
+
+  const toggleFollow = async () => {
+    if (!userId || !post?.author) return;
+    const authorId = post.author.id;
+    const wasFollowing = following;
+    setFollowing(!wasFollowing);
+    try {
+      wasFollowing ? await unfollowUser(userId, authorId) : await followUser(userId, authorId);
+    } catch {
+      setFollowing(wasFollowing);
+      show("Couldn't update that. Try again.", 'error');
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -156,6 +174,8 @@ export default function PostDetailScreen() {
                     reshared={reshared}
                     onToggleLike={toggleLike}
                     onToggleReshare={toggleReshare}
+                    isFollowingAuthor={following}
+                    onToggleFollow={toggleFollow}
                   />
                   <ThemedText type="smallBold">Comments</ThemedText>
                 </View>
