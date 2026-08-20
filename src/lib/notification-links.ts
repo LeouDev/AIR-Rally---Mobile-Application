@@ -16,6 +16,20 @@ export function resolveNotificationTarget(url: string | null | undefined): Href 
   }
   if (url.startsWith('/bookings')) return '/(tabs)/bookings';
   if (url.startsWith('/list-your-court')) return '/owner';
+
+  const rankedMatchMatch = url.match(/^\/ranked\/match\/([0-9a-f-]{36})/i);
+  if (rankedMatchMatch) {
+    return { pathname: '/ranked/[matchId]', params: { matchId: rankedMatchMatch[1] } };
+  }
+  // apply_ranked_result() (20260810000068_dupr_rating_engine.sql) stamps a
+  // bare '/ranked' link_url on every rank-change notification (calibration
+  // complete, tier/pip up or down) — there is no page at that exact path
+  // on either app (web's own /ranked has a layout but no page.tsx, so it's
+  // dead there too). This app has no dedicated rank-detail screen at all;
+  // the Profile tab's RankCard is the one place a player's own standing
+  // renders, so that's the honest destination.
+  if (url === '/ranked' || url.startsWith('/ranked?')) return '/(tabs)/profile';
+
   if (url.startsWith('/profile')) return '/(tabs)/profile';
   return '/(tabs)/notifications';
 }

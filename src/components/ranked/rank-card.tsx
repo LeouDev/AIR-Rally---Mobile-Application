@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { PlayerRank } from '@/lib/database.types';
-import { getPlayerRank, rankLabel } from '@/lib/ranked';
+import { calibrationState, getPlayerRank, rankLabel } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
 /**
@@ -63,8 +63,14 @@ export function RankCard() {
   // Only ever the *other* mode, and only when both are calibrated —
   // otherwise there's nothing worth a second line.
   const secondary = primary === singles && doubles?.is_calibrated ? doubles : null;
+  // A player_ranks row exists the instant a player's first ranked match
+  // is created, at meaningless placeholder values — is_calibrated is
+  // what makes a rank real. Someone mid-calibration already has a row
+  // in one mode or the other and shouldn't see the same "try it" pitch
+  // as someone who has never touched Ranked at all.
+  const calibrating = !primary ? (singles ?? doubles) : null;
 
-  if (!primary) {
+  if (!primary && !calibrating) {
     return (
       <Pressable
         accessibilityRole="button"
@@ -90,6 +96,44 @@ export function RankCard() {
       </Pressable>
     );
   }
+
+  if (calibrating) {
+    const calibration = calibrationState(calibrating);
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/ranked/leaderboard')}
+        style={({ pressed }) => [
+          styles.card,
+          { backgroundColor: theme.navy, borderColor: theme.navy, opacity: pressed ? 0.85 : 1 },
+        ]}>
+        <ThemedText type="caption" style={[styles.eyebrow, { color: theme.primary }]}>
+          Calibrating
+        </ThemedText>
+        <ThemedText type="subtitle" style={{ color: theme.navyForeground }}>
+          {calibration.played} of {calibration.total} calibration matches played
+        </ThemedText>
+        <View style={styles.calibrationTrack}>
+          {Array.from({ length: calibration.total }, (_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.calibrationSegment,
+                { backgroundColor: i < calibration.played ? theme.primary : `${theme.navyForeground}33` },
+              ]}
+            />
+          ))}
+        </View>
+        <ThemedText type="caption" style={{ color: `${theme.navyForeground}CC` }}>
+          Your tier stays hidden until match {calibration.total}. Results still count — they place you.
+        </ThemedText>
+      </Pressable>
+    );
+  }
+
+  // Unreachable — the two branches above cover !primary — but narrows
+  // `primary` for TypeScript below instead of a non-null assertion.
+  if (!primary) return null;
 
   return (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -155,6 +199,20 @@ const styles = StyleSheet.create({
   },
   cta: {
     alignSelf: 'flex-end',
+  },
+  eyebrow: {
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  calibrationTrack: {
+    flexDirection: 'row',
+    gap: 3,
+    height: 6,
+  },
+  calibrationSegment: {
+    flex: 1,
+    borderRadius: 2,
   },
   secondaryRow: {
     flexDirection: 'row',

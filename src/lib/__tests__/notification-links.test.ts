@@ -45,4 +45,21 @@ describe('resolveNotificationTarget', () => {
     // "/bookings/history" is not a uuid; it must not become /booking/[id].
     expect(resolveNotificationTarget('/bookings/history')).toBe('/(tabs)/bookings');
   });
+
+  it('opens a specific ranked match when the link carries its id', () => {
+    expect(resolveNotificationTarget('/ranked/match/3bff1573-28a8-44b5-87bb-3077743b7290')).toEqual({
+      pathname: '/ranked/[matchId]',
+      params: { matchId: '3bff1573-28a8-44b5-87bb-3077743b7290' },
+    });
+  });
+
+  // apply_ranked_result() stamps a bare '/ranked' link_url on every
+  // rank-change notification (calibration complete, tier/pip up or down).
+  // There is no page at that exact path on either app — this app has no
+  // dedicated rank screen at all — so it lands on Profile, where RankCard
+  // actually renders a player's standing.
+  it('sends rank-change notifications to Profile, not the dead bare /ranked link', () => {
+    expect(resolveNotificationTarget('/ranked')).toBe('/(tabs)/profile');
+    expect(resolveNotificationTarget('/ranked?x=1')).toBe('/(tabs)/profile');
+  });
 });
