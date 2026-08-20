@@ -4,8 +4,8 @@ import type { Href } from 'expo-router';
  * Maps a notification's link (the web app's own URL vocabulary — see the
  * web repo's lib/notificationRoutes.ts, whose hrefs ride along in push
  * payloads as data.url and in notification rows as link_url) onto this
- * app's routes. Anything whose surface only exists on the web (court
- * side, clubs, events) lands on the Alerts tab rather than a dead end.
+ * app's routes. Anything whose surface only exists on the web (clubs)
+ * lands on the Alerts tab rather than a dead end.
  */
 export function resolveNotificationTarget(url: string | null | undefined): Href {
   if (!url) return '/(tabs)/notifications';
@@ -16,6 +16,11 @@ export function resolveNotificationTarget(url: string | null | undefined): Href 
   }
   if (url.startsWith('/bookings')) return '/(tabs)/bookings';
   if (url.startsWith('/list-your-court')) return '/owner';
+
+  const eventMatch = url.match(/^\/events\/([0-9a-f-]{36})/i);
+  if (eventMatch) {
+    return { pathname: '/events/[id]', params: { id: eventMatch[1] } };
+  }
 
   const rankedMatchMatch = url.match(/^\/ranked\/match\/([0-9a-f-]{36})/i);
   if (rankedMatchMatch) {

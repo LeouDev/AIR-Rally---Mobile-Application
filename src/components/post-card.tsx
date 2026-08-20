@@ -10,6 +10,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { EventAttendeeStatus, PublicProfile } from '@/lib/database.types';
 import { formatRelativeTime } from '@/lib/relative-time';
+import { postImagePublicUrl } from '@/lib/post-images';
 import type { PostWithAuthor } from '@/lib/posts';
 
 function formatEventWhen(iso: string): string {
@@ -194,6 +195,19 @@ export function PostCard({
 
       <View style={styles.content}>{renderContent(post.content)}</View>
 
+      {post.image_paths.length > 0 ? (
+        <View style={styles.imageGrid}>
+          {post.image_paths.map((path) => (
+            <Image
+              key={path}
+              source={{ uri: postImagePublicUrl(path) }}
+              style={post.image_paths.length === 1 ? styles.imageSingle : styles.imageGridItem}
+              contentFit="cover"
+            />
+          ))}
+        </View>
+      ) : null}
+
       {post.event ? <EmbeddedEventCard event={post.event} status={eventStatus} onToggleJoin={onToggleJoinEvent} /> : null}
 
       <View style={styles.actionsRow}>
@@ -283,6 +297,21 @@ const styles = StyleSheet.create({
   content: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+  },
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
+  imageSingle: {
+    width: '100%',
+    height: 220,
+  },
+  imageGridItem: {
+    width: '48.5%',
+    aspectRatio: 1,
   },
   mention: {
     fontWeight: '600',

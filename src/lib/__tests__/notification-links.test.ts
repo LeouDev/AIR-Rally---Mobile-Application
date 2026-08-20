@@ -46,6 +46,17 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget('/bookings/history')).toBe('/(tabs)/bookings');
   });
 
+  it('opens a specific event when the link carries its id', () => {
+    // event_join_request/event_registration/event_join_approved/
+    // event_join_declined/waitlist_promoted (20260810000073) all stamp
+    // this — previously null, so every one of these notifications fell
+    // through to the Alerts tab with no destination at all.
+    expect(resolveNotificationTarget('/events/3bff1573-28a8-44b5-87bb-3077743b7290')).toEqual({
+      pathname: '/events/[id]',
+      params: { id: '3bff1573-28a8-44b5-87bb-3077743b7290' },
+    });
+  });
+
   it('opens a specific ranked match when the link carries its id', () => {
     expect(resolveNotificationTarget('/ranked/match/3bff1573-28a8-44b5-87bb-3077743b7290')).toEqual({
       pathname: '/ranked/[matchId]',

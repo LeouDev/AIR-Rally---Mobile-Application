@@ -104,11 +104,12 @@ export async function createPost(
   userId: string,
   content: string,
   eventId?: string | null,
-  clubId?: string | null
+  clubId?: string | null,
+  imagePaths: string[] = []
 ): Promise<Post> {
   const { data, error } = await supabase
     .from('posts')
-    .insert({ user_id: userId, content, image_url: null, image_paths: [], event_id: eventId ?? null, club_id: clubId ?? null })
+    .insert({ user_id: userId, content, image_url: null, image_paths: imagePaths, event_id: eventId ?? null, club_id: clubId ?? null })
     .select()
     .single();
   if (error) throw error;

@@ -1,6 +1,5 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
 import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -197,7 +196,7 @@ export default function PostDetailScreen() {
                       placeholderTextColor={theme.placeholder}
                       style={[styles.input, { color: theme.cardForeground }]}
                       multiline
-                      maxLength={500}
+                      maxLength={280}
                     />
                     <Button title="Send" onPress={submitComment} disabled={!draft.trim() || posting} loading={posting} />
                   </View>

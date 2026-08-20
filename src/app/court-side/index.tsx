@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
@@ -16,6 +17,7 @@ import type { Club, EventAttendeeStatus, PublicProfile } from '@/lib/database.ty
 import { listClubsForUser } from '@/lib/clubs';
 import { joinEvent, leaveEvent, listMyEventStatuses } from '@/lib/events';
 import { getFollowCounts, getPublicProfile, searchPublicProfiles, type FollowCounts } from '@/lib/follows';
+import { MAX_POST_IMAGES, pickPostImages, uploadPostImages, type PickedPostImage } from '@/lib/post-images';
 import {
   createPost,
   deletePost,
@@ -57,6 +59,8 @@ export default function CourtSideScreen() {
   const [mentioned, setMentioned] = useState<Map<string, string>>(new Map());
   const [mentionResults, setMentionResults] = useState<PublicProfile[]>([]);
   const mentionSeq = useRef(0);
+  const [pendingImages, setPendingImages] = useState<PickedPostImage[]>([]);
+  const contentInputRef = useRef<TextInput>(null);
 
   const loadFirstPage = useCallback(async () => {
     try {
@@ -139,11 +143,44 @@ export default function CourtSideScreen() {
     setMentionResults([]);
   };
 
+  /** Inserting "@" through the button re-enters the same live-search path
+   * typing it would — onChangeContent's own regex picks it up from there. */
+  const insertTagTrigger = () => {
+    const next = content.length > 0 && !content.endsWith(' ') ? `${content} @` : `${content}@`;
+    onChangeContent(next);
+    contentInputRef.current?.focus();
+  };
+
+  const addImages = async () => {
+    const room = MAX_POST_IMAGES - pendingImages.length;
+    if (room <= 0) {
+      show(`You can attach up to ${MAX_POST_IMAGES} photos.`, 'error');
+      return;
+    }
+    const picked = await pickPostImages(room);
+    if (picked.length === 0) return;
+    setPendingImages((prev) => [...prev, ...picked].slice(0, MAX_POST_IMAGES));
+  };
+
+  const removeImage = (index: number) => {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const submitPost = async () => {
     if (!userId || !content.trim() || posting) return;
     setPosting(true);
     try {
-      const post = await createPost(userId, content.trim());
+      let imagePaths: string[] = [];
+      if (pendingImages.length > 0) {
+        const upload = await uploadPostImages(userId, pendingImages);
+        imagePaths = upload.paths;
+        upload.errors.forEach((message) => show(message, 'error'));
+        if (imagePaths.length === 0) {
+          setPosting(false);
+          return;
+        }
+      }
+      const post = await createPost(userId, content.trim(), null, null, imagePaths);
       // Only handles that survived edits after being picked — deleting an
       // "@handle" before posting must drop the mention notification too.
       const mentionedIds = Array.from(mentioned.entries())
@@ -154,6 +191,7 @@ export default function CourtSideScreen() {
       }
       setContent('');
       setMentioned(new Map());
+      setPendingImages([]);
       loadFirstPage();
     } catch {
       // The composer keeps the draft so the player can retry.
@@ -331,12 +369,13 @@ export default function CourtSideScreen() {
                   <View style={styles.composerRow}>
                     <Avatar profile={myProfile} />
                     <TextInput
+                      ref={contentInputRef}
                       value={content}
                       onChangeText={onChangeContent}
                       placeholder="Share something with COURT/Side…"
                       placeholderTextColor={theme.placeholder}
                       multiline
-                      maxLength={2000}
+                      maxLength={280}
                       style={[styles.composerInput, { color: theme.cardForeground }]}
                     />
                   </View>
@@ -354,7 +393,44 @@ export default function CourtSideScreen() {
                       ))}
                     </View>
                   ) : null}
-                  <View style={styles.composerFooter}>
+                  {pendingImages.length > 0 ? (
+                    <View style={styles.pendingImageRow}>
+                      {pendingImages.map((image, index) => (
+                        <View key={image.uri} style={styles.pendingImageWrap}>
+                          <Image source={{ uri: image.uri }} style={styles.pendingImage} contentFit="cover" />
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove photo ${index + 1}`}
+                            onPress={() => removeImage(index)}
+                            style={[styles.pendingImageRemove, { backgroundColor: theme.foreground }]}
+                            hitSlop={6}>
+                            <Ionicons name="close" size={12} color={theme.background} />
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  <View style={[styles.composerToolbar, { borderTopColor: theme.border }]}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Add photos"
+                      onPress={addImages}
+                      disabled={pendingImages.length >= MAX_POST_IMAGES}
+                      style={[styles.toolbarButton, pendingImages.length >= MAX_POST_IMAGES && styles.toolbarButtonDisabled]}
+                      hitSlop={6}>
+                      <Ionicons name="images-outline" size={18} color={theme.mutedForeground} />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Tag a player"
+                      onPress={insertTagTrigger}
+                      style={styles.toolbarButton}
+                      hitSlop={6}>
+                      <Ionicons name="at-outline" size={18} color={theme.mutedForeground} />
+                    </Pressable>
+                    <ThemedText type="caption" themeColor="mutedForeground" style={styles.charCount}>
+                      {content.length} / 280
+                    </ThemedText>
                     <Button
                       title={posting ? 'Posting…' : 'Post'}
                       onPress={submitPost}
@@ -488,9 +564,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.two,
   },
-  composerFooter: {
+  pendingImageRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  pendingImageWrap: {
+    position: 'relative',
+  },
+  pendingImage: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
+  },
+  pendingImageRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderTopWidth: 1,
+    paddingTop: Spacing.two,
+  },
+  toolbarButton: {
+    padding: 2,
+  },
+  toolbarButtonDisabled: {
+    opacity: 0.4,
+  },
+  charCount: {
+    marginLeft: 'auto',
   },
   skeletons: {
     gap: Spacing.three,
