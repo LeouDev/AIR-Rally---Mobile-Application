@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { CURRENT_AGREEMENT_VERSION, LEGAL_REVIEW_STATUS } from '@/lib/legal';
+import { CURRENT_AGREEMENT_VERSION } from '@/lib/legal';
 import { PRIVACY, TERMS, type LegalDocument } from '@/lib/legalContent';
 
 const DOCS: Record<string, LegalDocument> = { terms: TERMS, privacy: PRIVACY };
@@ -15,7 +15,7 @@ const DOCS: Record<string, LegalDocument> = { terms: TERMS, privacy: PRIVACY };
  * Renders the actual text of the User Agreement / Privacy Policy in the
  * app, rather than just naming them next to a checkbox — port of the
  * web's /terms and /privacy pages (see components/legal/LegalDocumentView
- * there), same review-status banner, same word-for-word content.
+ * there), same word-for-word content.
  */
 export default function LegalDocumentScreen() {
   const theme = useTheme();
@@ -33,17 +33,6 @@ export default function LegalDocumentScreen() {
           <ThemedText type="small" themeColor="mutedForeground">
             {document === TERMS ? `Version ${CURRENT_AGREEMENT_VERSION} · ` : ''}Last updated 17 August 2026
           </ThemedText>
-
-          <View style={[styles.banner, { backgroundColor: theme.warningSoft, borderColor: theme.warning }]}>
-            <ThemedText type="small" style={{ color: theme.warningSoftForeground }}>
-              <ThemedText type="smallBold" style={{ color: theme.warningSoftForeground }}>
-                {LEGAL_REVIEW_STATUS}.
-              </ThemedText>{' '}
-              This document describes how AIR/Rally actually works today and is written in good faith, but it has not
-              yet been reviewed by a qualified lawyer. If anything here conflicts with Philippine law, the law
-              applies.
-            </ThemedText>
-          </View>
 
           {document.intro.map((paragraph, i) => (
             <ThemedText key={i} type="small">
@@ -93,11 +82,6 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
-  },
-  banner: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.three,
   },
   section: {
     gap: Spacing.two,
