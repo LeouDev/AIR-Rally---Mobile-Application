@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { type ComponentProps, useCallback, useState } from 'react';
-import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -11,7 +11,9 @@ import { TextField } from '@/components/ui/text-field';
 import { useToast } from '@/components/ui/toast';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { deleteAccount } from '@/lib/account';
 import type { Profile } from '@/lib/database.types';
+import { formatCreditBalance, getCreditBalance } from '@/lib/credits';
 import { changePassword, PHONE_REGEX, updateEmailNotificationPreference, updateProfile } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/providers/session';
@@ -275,6 +277,72 @@ function LegalLinks() {
   );
 }
 
+/**
+ * Apple Guideline 5.1.1(v): a self-service, in-app way to delete the
+ * account, and a confirmation the reviewer can't read as casually
+ * mis-tappable — a destructive-styled system Alert naming exactly what's
+ * kept (booking/payment history, for the same reason a receipt survives
+ * a returned purchase) versus what's gone.
+ */
+function DeleteAccountSection({ userId }: { userId: string }) {
+  const { signOut } = useSession();
+  const { show } = useToast();
+  const [deleting, setDeleting] = useState(false);
+  const [checkingBalance, setCheckingBalance] = useState(false);
+
+  const confirmedDelete = async () => {
+    setDeleting(true);
+    try {
+      const result = await deleteAccount();
+      if (!result.success) {
+        show(result.error, 'error');
+        return;
+      }
+      await signOut();
+      // No further navigation here either — the root guard swaps stacks
+      // once the session clears, same as the Profile tab's sign-out.
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const startDelete = async () => {
+    setCheckingBalance(true);
+    const balance = await getCreditBalance(userId).catch(() => 0);
+    setCheckingBalance(false);
+
+    const balanceLine =
+      balance > 0
+        ? ` You will also forfeit your remaining ${formatCreditBalance(balance)} in AIR/Rally Credits — it cannot be refunded or transferred.`
+        : '';
+
+    Alert.alert(
+      'Delete your account?',
+      `This removes your name, photo, and phone number, signs you out everywhere, and permanently blocks this account from signing in again. Booking and payment records are kept for accounting purposes, as required by law — they are no longer linked to any personal details.${balanceLine}\n\nThis cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete account', style: 'destructive', onPress: confirmedDelete },
+      ]
+    );
+  };
+
+  return (
+    <View style={styles.block}>
+      <ThemedText type="subtitle">Delete account</ThemedText>
+      <ThemedText type="small" themeColor="subtle">
+        Permanently delete your AIR/Rally account and personal data.
+      </ThemedText>
+      <Button
+        title="Delete account"
+        variant="destructive"
+        onPress={startDelete}
+        loading={deleting || checkingBalance}
+        disabled={deleting || checkingBalance}
+      />
+    </View>
+  );
+}
+
 export default function AccountSettingsScreen() {
   const { session } = useSession();
   const { show } = useToast();
@@ -318,6 +386,7 @@ export default function AccountSettingsScreen() {
                 <PasswordFields />
                 <SupportLinks />
                 <LegalLinks />
+                <DeleteAccountSection userId={userId} />
               </>
             ) : loadError ? (
               <View style={styles.block}>

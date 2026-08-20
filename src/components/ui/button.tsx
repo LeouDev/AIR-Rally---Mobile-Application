@@ -7,7 +7,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 type ButtonProps = Omit<PressableProps, 'children'> & {
   title: string;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'outline';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'destructive';
   loading?: boolean;
   icon?: ReactNode;
 };
@@ -17,7 +17,9 @@ type ButtonProps = Omit<PressableProps, 'children'> & {
  * design language at most one primary button should compete in a
  * viewport. `outline` is for the bordered secondary CTAs (referral,
  * public-profile, OAuth-style) that several screens were previously
- * hand-rolling as one-off Pressables.
+ * hand-rolling as one-off Pressables. `destructive` is for irreversible
+ * actions (account deletion) — never a plain-text Pressable for these,
+ * so they read as a real, deliberate control.
  */
 export function Button({ title, variant = 'primary', loading, icon, disabled, style, ...rest }: ButtonProps) {
   const theme = useTheme();
@@ -30,7 +32,9 @@ export function Button({ title, variant = 'primary', loading, icon, disabled, st
         ? theme.secondary
         : variant === 'outline'
           ? theme.card
-          : 'transparent';
+          : variant === 'destructive'
+            ? theme.destructiveSoft
+            : 'transparent';
   const pressedBackground =
     variant === 'primary'
       ? theme.primaryPressed
@@ -38,13 +42,17 @@ export function Button({ title, variant = 'primary', loading, icon, disabled, st
         ? theme.navyRaised
         : variant === 'outline'
           ? theme.muted
-          : theme.accent;
+          : variant === 'destructive'
+            ? theme.destructive
+            : theme.accent;
   const textColor =
     variant === 'primary'
       ? theme.primaryForeground
       : variant === 'secondary'
         ? theme.secondaryForeground
-        : theme.foreground;
+        : variant === 'destructive'
+          ? theme.destructiveSoftForeground
+          : theme.foreground;
 
   return (
     <Pressable
