@@ -55,13 +55,6 @@ Web goes first deliberately. During App Store review a Manila owner sees correct
   Nothing generates one otherwise, all four checks confirmed: `@sentry/react-native` ships no `.xcprivacy` (its docs say so explicitly for **statically linked** libraries, which is React Native's default and what this project uses), `expo prebuild` emits none, and the app declared none. The declaration is *derived* from `node_modules/**/*.xcprivacy` rather than guessed — the union of every required-reason API its dependencies declare, plus Sentry's three collected-data categories from Sentry's own documentation. Verified end to end: `prebuild` now emits `ios/AIRRally/PrivacyInfo.xcprivacy`, wired into the Xcode target.
 
   **Worth a human sanity-check before submitting** — it is a compliance declaration, and it is derived from what is in the tree today. A new dependency can add a required-reason API without anyone noticing.
-- [ ] **Production has `077-expand` applied and verified, before an RC carrying the new COURT/Side call site is cut.** This is a shipping precondition, not a development one — the client may be wired against staging now.
-
-  If a binary ships calling the 4-arg `court_side_feed` against a production database that still has only the 2-arg one, **every COURT/Side request fails for every user on that build, permanently** — there is no way to force an App Store update. Same permanent-breakage reasoning that produced expand/contract, pointing the other way: expand/contract protects OLD clients from a dropped function; this protects NEW clients from one that does not exist yet. The same gate applies to the web deploy.
-
-  A stale 2-arg call has been observed failing as **PostgREST `PGRST202`** ("Could not find the function ... in the schema cache") *and* reported as **Postgres `42883`** (`undefined_function`). These are not competing observations. PostgREST answers from its **schema cache**; Postgres raises `undefined_function` when a call actually **reaches** it — so which one you see depends on where the lookup fails, and immediately after a drop that depends on cache-refresh timing. **The same drop can return `42883` to one caller and `PGRST202` to the next, minutes apart, with nothing having changed.**
-
-  So **any alert, log filter or client-side check must match either, never one** — and observing one of them once is not evidence it is the one you will get. A monitor built on a single code goes quiet for the exact failure it exists to catch.
 - [ ] Backend's drift check **findings understood and accepted** — deliberately not "zero findings". Once 076/077/078 are in the tree, production reads as drifted until they are applied, and that red is *correct*. Nobody should block on it, and nobody should ever fix it by editing the check.
 
   **The drift check cannot tell you whether all migrations are applied**, and must not be read as if it can. It compares live object *definitions*, so a migration that changes a definition under an unchanged name is invisible to it — production currently reports four findings while 076 and 079 are also unapplied and unseen. "Drift check green" means "no detected difference", not "production is up to date". Answering the second question directly is what the deferred migration ledger is for, and is exactly what this sweep structurally cannot do.
@@ -74,7 +67,9 @@ Mobile cannot see these and will pass its own checks without them. They are list
 
 - [ ] **QA's booking matrix clean.** Mobile's suite proves the client; the matrix proves the flows against a real backend.
 - [ ] **Backend's staging sequence complete**, through the two-function coexistence measurement. That coexistence is the shape production will briefly be in during the migration, and staging is the only place it is safe to be wrong about.
-- [ ] **Web deployed** — see §2. This is an ordering gate, not just a dependency: the mobile RC must not be submitted before it.
+- [ ] **Web's ANALYTICS branch deployed** — see §2. Ordering gate, not just a dependency: the mobile RC must not be submitted before it.
+
+  Web is holding **two** separate pieces and only one of them is an RC gate. The analytics fix (venue-local revenue + `getOwnerDashboardSummary`) **is**, because the mobile RC carries the matching revenue fix and the two platforms must not disagree about what a week is during App Store review. Web's COURT/Side client work is **not** — it moved to §5 with Following. Conflating them silently drops an ordering gate.
 
 ### Never submit a locally-built archive
 
@@ -117,7 +112,14 @@ These gate **submit**, not **build**, and the last two can only be completed by 
 
 ## 5. Before the first OTA update to production
 
-This does **not** gate the release candidate — the binary ships fine without it. It gates *depending* on OTA, so it sits here rather than in §3, where it would be skipped as obviously-not-blocking and then be untested at the moment it is needed.
+**This is now a live plan, not a contingency.** COURT/Side "Following" was deliberately cut from the release candidate and will ship as the first production OTA update, because it is confined to `src/` and therefore cannot move the fingerprint (see §1). The deciding argument was reversibility: a wrong *sequence* shipped in a binary is permanent, and the same mistake shipped by update is one `republish` away — and sequencing is our most demonstrated failure mode.
+
+Everything below was optional while OTA was hypothetical. None of it is now.
+
+- [ ] **`077-expand` applied and verified on production.** Moved here from the RC gates: the binary no longer carries the 4-arg call site, the *update* does. A client calling the 4-arg `court_side_feed` against a database holding only the 2-arg one fails every COURT/Side request — but by update that is recoverable, which is the whole point of the two-stage plan.
+
+  A stale 2-arg call has been observed as PostgREST `PGRST202` *and* reported as Postgres `42883`. These are not competing observations: PostgREST answers from its schema cache, Postgres raises when a call reaches it, and immediately after a drop that depends on cache-refresh timing. **The same drop can return different codes to callers minutes apart — any alert must match either, never one.**
+- [ ] **Mobile's Following wiring, Web's COURT/Side client work and QA's COURT/Side end-to-end leg all complete.** These stopped being RC gates and became pre-OTA gates; they did not stop being gates.
 
 - [ ] **Publish / install / rollback exercised end to end.** Open since Cycle 1 and never run. An untested rollback procedure is a document, not a rollback procedure.
 
@@ -129,6 +131,10 @@ This does **not** gate the release candidate — the binary ships fine without i
   ```
 
   If any of them moved, the update's runtime version no longer matches the shipped binary and **the update silently will not apply** — the same silent non-application the fingerprint policy causes deliberately, arriving by accident.
+
+  > ⚠️ **`expo prebuild` rewrites `package.json` scripts, and those are fingerprint input.** It changed `"ios": "expo start --ios"` to `"expo run:ios"` during local build work here. Anyone who runs a local build inside the freeze window and commits the result breaks the Following update **off a diff that looks like nothing**. This is now the single most likely way the two-stage plan fails, precisely because it looks harmless.
+  >
+  > It has already been misdiagnosed once: this exact change was filed as evidence of shared-tree collisions between sessions, because that was the more comfortable explanation.
 
 - [ ] **Understand that an environment-value change cannot ship over the air.** `eas.json` is fingerprint input *including its `env` block*. The Sentry DSN lives there. Anyone fixing a wrong env value and reaching for `eas update` will find it silently not applying — that needs a new binary.
 
