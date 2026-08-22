@@ -3,22 +3,20 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { describeEnvironment } from '@/lib/environment';
+import { Sentry } from '@/lib/sentry';
 
 /**
- * The single seam every unrecoverable error passes through.
+ * The single seam every unrecoverable RENDER error passes through.
  *
- * There is deliberately no crash-reporting SDK wired in yet: a provider
- * needs an account and a DSN that only the operator can create, and an
- * unconfigured SDK is strictly worse than none — it adds native weight
- * to every build and reports nothing. See `captureFatalError` below for
- * the exact one-call spot Sentry (or any equivalent) drops into, and the
- * README for the account steps that have to happen first.
+ * Sentry is wired here, and separately installs its own global handlers
+ * at init (see lib/sentry.ts) — so the coverage question and this
+ * function's reach are two different things. This function is what the
+ * error boundary calls; Sentry's own handlers catch everything the
+ * boundary structurally cannot.
  *
- * Until then this still has to earn its place, because "the app went
- * white and I don't know why" is the state it exists to end. So it
- * captures a structured report, keeps the most recent few in storage so
- * they survive the restart that follows a crash, and can format one as
- * plain text the player can send to support from the fallback screen.
+ * The local report still earns its place alongside Sentry: it survives
+ * with no network, it is what "Send report" hands to support, and it is
+ * the only record if the DSN is ever missing or the SDK fails to init.
  *
  * Every function here is best-effort and swallows its own failures.
  * This code runs while the app is already broken; a throw from the error
@@ -63,16 +61,10 @@ function buildReport(error: unknown): ErrorReport {
 /**
  * Call this from an error boundary — nowhere else needs it.
  *
- * TO ADD SENTRY: install and configure it (see README "Crash
- * reporting"), then add one line here:
- *
- *     Sentry.captureException(error, { extra: report });
- *
- * Nothing else in the app has to change; every fatal error already
- * funnels through this function.
- *
- * WHAT THIS DOES NOT SEE — true today, and still true once Sentry is
- * wired, because Sentry would be fed from here:
+ * WHAT THE BOUNDARY ITSELF DOES NOT REACH — and therefore what this
+ * function never sees. Sentry DOES see these, via the global handlers
+ * it installs at init; they simply arrive without the local report's
+ * context and without any fallback UI:
  *
  *   - A throw inside an event handler (the `Reserve & pay` press, a
  *     retry tap). React error boundaries only catch errors thrown
@@ -82,13 +74,10 @@ function buildReport(error: unknown): ErrorReport {
  *     errors and toasts, and reach nothing here.
  *   - A throw inside a timer or subscription callback.
  *
- * So "crash reporting is wired" will mean render-phase crashes are
- * visible, not that all failures are. Closing that gap needs a global
- * handler (ErrorUtils.setGlobalHandler and an unhandled-rejection
- * tracker) feeding this same function — deliberately not done yet, so
- * the limit is recorded rather than assumed away. There are tests
- * asserting these limits so the boundary's edges can't be claimed
- * wider than they are.
+ * The distinction that matters: none of these render the branded error
+ * screen, because there is no render to fall back from. They are
+ * reported, not recovered. Tests assert these limits so the boundary's
+ * reach cannot be claimed wider than it is.
  */
 export function captureFatalError(error: unknown): ErrorReport {
   const report = buildReport(error);
@@ -114,6 +103,11 @@ export function captureFatalError(error: unknown): ErrorReport {
     return lastCapture.report;
   }
   lastCapture = { identity, at, report };
+
+  // The structured report rides along as context — Sentry already has
+  // the error itself, this adds which backend was in play and which
+  // build, which is what turns "TypeError" into something actionable.
+  Sentry.captureException(error, { extra: { ...report } });
 
   // Kept in production builds on purpose. It is the only channel that
   // exists today, and a crash visible in a device log is worth more than

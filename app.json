@@ -53,7 +53,8 @@
         }
       ],
       "expo-apple-authentication",
-      "expo-sharing"
+      "expo-sharing",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,

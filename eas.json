@@ -12,7 +12,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://vdxdmtsnptzodabaojlc.supabase.co",
         "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_y3K576kJx79htObjsJ2trw_31EGIXci",
-        "EXPO_PUBLIC_API_URL": "http://localhost:3000"
+        "EXPO_PUBLIC_API_URL": "http://localhost:3000",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://90ea8908a8552d8801c3b4df6fbc623a@o4511956249018368.ingest.us.sentry.io/4511956256227328"
       },
       "channel": "development"
     },
@@ -22,7 +23,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://vdxdmtsnptzodabaojlc.supabase.co",
         "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_y3K576kJx79htObjsJ2trw_31EGIXci",
-        "EXPO_PUBLIC_API_URL": "http://localhost:3000"
+        "EXPO_PUBLIC_API_URL": "http://localhost:3000",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://90ea8908a8552d8801c3b4df6fbc623a@o4511956249018368.ingest.us.sentry.io/4511956256227328"
       },
       "channel": "development-device"
     },
@@ -31,7 +33,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://hrpbjudsrqcgyrkkodop.supabase.co",
         "EXPO_PUBLIC_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhycGJqdWRzcnFjZ3lya2tvZG9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMDQ3ODIsImV4cCI6MjEwMTc4MDc4Mn0.wxaFARfuptZkYEi0ZPMZpFVUOLSBXvcMxDvDp4Lh77A",
-        "EXPO_PUBLIC_API_URL": "https://air-rally.com"
+        "EXPO_PUBLIC_API_URL": "https://air-rally.com",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://90ea8908a8552d8801c3b4df6fbc623a@o4511956249018368.ingest.us.sentry.io/4511956256227328"
       },
       "channel": "preview"
     },

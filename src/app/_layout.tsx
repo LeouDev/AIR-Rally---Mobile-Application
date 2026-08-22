@@ -8,9 +8,15 @@ import { ErrorScreen } from '@/components/error-screen';
 import { ToastProvider } from '@/components/ui/toast';
 import { Colors } from '@/constants/theme';
 import { useNotificationObserver } from '@/lib/notifications-runtime';
+import { initSentry } from '@/lib/sentry';
 import { SessionProvider, useSession } from '@/providers/session';
 
 SplashScreen.preventAutoHideAsync();
+
+// Module scope, before any component renders: the global handlers Sentry
+// installs have to be in place before the first error can happen, and a
+// crash during startup is exactly the one worth catching.
+initSentry();
 
 /**
  * expo-router wraps a route in a React error boundary whenever that
