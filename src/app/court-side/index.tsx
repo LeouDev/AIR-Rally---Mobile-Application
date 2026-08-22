@@ -33,7 +33,7 @@ import {
 } from '@/lib/posts';
 import { useSession } from '@/providers/session';
 
-const FEED_TABS = ['For you', 'Following', 'Near you'] as const;
+const FEED_TABS = ['For you', 'Following'] as const;
 
 export default function CourtSideScreen() {
   const theme = useTheme();
@@ -368,10 +368,7 @@ export default function CourtSideScreen() {
                         key={tab}
                         accessibilityRole="button"
                         accessibilityState={{ selected: activeTab === tab }}
-                        onPress={() => {
-                          setActiveTab(tab);
-                          if (tab !== 'For you') show(`${tab} feed selected`);
-                        }}
+                        onPress={() => setActiveTab(tab)}
                         style={styles.tab}
                         hitSlop={4}>
                         <ThemedText type="smallBold" themeColor={activeTab === tab ? 'foreground' : 'mutedForeground'}>
