@@ -7,6 +7,7 @@ import { CourtStrip, DateStrip, DurationSegmented, SectionLabel, SlotGrid } from
 import { PlayerPicker } from '@/components/player-picker';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { AvailableSlot, PublicProfile } from '@/lib/database.types';
@@ -50,6 +51,7 @@ function animateNext(): void {
 export function BookingPanel({ venue }: { venue: VenueDetail }) {
   const theme = useTheme();
   const { session } = useSession();
+  const { show } = useToast();
   const dates = useRef(upcomingDates(venue.timezone, VISIBLE_DAYS)).current;
 
   const [courtId, setCourtId] = useState(venue.courts[0]?.id ?? null);
@@ -62,6 +64,13 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [players, setPlayers] = useState<PublicProfile[]>([]);
   const requestSeq = useRef(0);
+  // `submitting` cannot gate a double tap on its own: setState is async,
+  // so two presses landing in the same tick both read the pre-update
+  // value and both reach createCheckoutSession. A ref flips synchronously
+  // on the first one. Whether that would actually double-charge depends
+  // on /api/mobile/checkout being idempotent — a question for the web
+  // repo — but the client should not be the reason we find out.
+  const inFlight = useRef(false);
 
   const court = venue.courts.find((c) => c.id === courtId) ?? null;
 
@@ -87,7 +96,8 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
   }, [courtId, localDate, duration]);
 
   const book = useCallback(async () => {
-    if (!selectedSlot || submitting) return;
+    if (!selectedSlot || inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     setCheckoutError(null);
 
@@ -98,6 +108,7 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
     });
 
     if (!result.success) {
+      inFlight.current = false;
       setCheckoutError(result.error);
       setSubmitting(false);
       // The slot may have been taken while choosing — refresh the grid.
@@ -125,7 +136,14 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
           playerIds: players.map((p) => p.id),
         });
       } catch {
-        setCheckoutError("Booked, but we couldn't invite your players. You can invite them from the game page.");
+        // Routed through the toast, NOT setCheckoutError: this component
+        // unmounts a few lines below when we navigate to the booking
+        // screen, so a message written into its own state is never seen.
+        // That left the exact failure this whole fix exists to remove —
+        // invites disappearing with nothing on screen to say so. The
+        // toast is rendered by ToastProvider above the navigator, so it
+        // survives the transition and lands on the destination.
+        show("Booked — but we couldn't invite your players. Add them from the game page.", 'error');
       }
     }
 
@@ -144,6 +162,7 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
       await WebBrowser.openAuthSessionAsync(url, 'airrally://payment-return');
     }
 
+    inFlight.current = false;
     setSubmitting(false);
     router.push({ pathname: '/booking/[id]', params: { id: bookingId } });
     // `players` and `session` belong here as much as the slot does.
@@ -155,7 +174,7 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
     // The whole `session` object, not `session?.user.id`: React Compiler
     // infers the former and skips optimizing the component entirely when
     // a manual dependency is narrower than what it inferred.
-  }, [selectedSlot, submitting, courtId, localDate, duration, players, session]);
+  }, [selectedSlot, submitting, courtId, localDate, duration, players, session, show]);
 
   if (venue.courts.length === 0 || !court) return null;
 

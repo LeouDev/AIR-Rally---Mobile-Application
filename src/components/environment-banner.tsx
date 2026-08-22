@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
+import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { describeEnvironment, environmentLabel } from '@/lib/environment';
 
@@ -39,7 +39,17 @@ export function EnvironmentBanner() {
     : environmentLabel(status);
 
   return (
-    <View testID="environment-banner" pointerEvents="none" style={[styles.wrap, { paddingTop: insets.top }]}>
+    <View
+      testID="environment-banner"
+      pointerEvents="none"
+      // Anchored to the BOTTOM, not the top. Pinned below insets.top it
+      // landed inside the navigation header and sat on the centered
+      // title — seen on the Ranked leaderboard, where "STAGING" and
+      // "Leaderboard" stacked into what looked like a broken two-line
+      // header. Nothing in this app draws its own chrome at the bottom
+      // of a stack screen, and BottomTabInset lifts it clear of the
+      // native tab bar on the tab screens that do.
+      style={[styles.wrap, { paddingBottom: insets.bottom + BottomTabInset }]}>
       <View style={[styles.pill, { backgroundColor: tone.bg }]}>
         <ThemedText type="caption" numberOfLines={1} style={{ color: tone.fg, lineHeight: 14 }}>
           {label}
@@ -52,15 +62,14 @@ export function EnvironmentBanner() {
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
     alignItems: 'center',
     zIndex: 1000,
   },
   pill: {
-    borderBottomLeftRadius: Radius.sm,
-    borderBottomRightRadius: Radius.sm,
+    borderRadius: Radius.sm,
     paddingHorizontal: Spacing.two,
     paddingVertical: 1,
     maxWidth: '92%',

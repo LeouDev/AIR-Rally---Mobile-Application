@@ -31,6 +31,11 @@ jest.mock('@/lib/follows', () => ({ searchPublicProfiles: jest.fn() }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('expo-web-browser', () => ({ openAuthSessionAsync: jest.fn() }));
 
+// The toast lives above the navigator, which is the whole reason the
+// invite-failure notice is routed through it — assert on the call.
+const mockToastShow = jest.fn();
+jest.mock('@/components/ui/toast', () => ({ useToast: () => ({ show: mockToastShow }) }));
+
 // Only the network call is faked — the real money math, timezone
 // formatting and slot grouping stay in play, so the panel renders and
 // labels its slots exactly as it does in the app.
@@ -127,6 +132,7 @@ const SAM: PublicProfile = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockToastShow.mockClear();
   mockGetAvailableSlots.mockResolvedValue([SLOT_9AM, SLOT_10AM]);
   mockCreateCheckoutSession.mockResolvedValue({
     success: true,
@@ -255,7 +261,7 @@ describe('BookingPanel — invited player roster', () => {
     expect(mockCreateOpenPlay).not.toHaveBeenCalled();
   });
 
-  it('still completes the booking when the invite call fails', async () => {
+  it('still completes the booking when the invite call fails, and says so somewhere that survives', async () => {
     mockCreateOpenPlay.mockRejectedValue(new Error('rpc exploded'));
 
     await renderPanel();
@@ -265,11 +271,16 @@ describe('BookingPanel — invited player roster', () => {
 
     // The payment is the thing the player committed to — a failed invite
     // is reported, never allowed to unwind the booking.
-    await waitFor(() =>
-      expect(
-        screen.getByText("Booked, but we couldn't invite your players. You can invite them from the game page.")
-      ).toBeTruthy()
+    //
+    // The notice goes through the app-level toast, NOT this component's
+    // own state: BookingPanel unmounts immediately afterwards when the
+    // booking screen is pushed, so a message held here would never be
+    // seen — which reopened the very failure this file exists to guard,
+    // invites vanishing with nothing on screen to say so.
+    await waitFor(() => expect(mockCreateCheckoutSession).toHaveBeenCalledTimes(1));
+    expect(mockToastShow).toHaveBeenCalledWith(
+      expect.stringContaining("couldn't invite your players"),
+      'error'
     );
-    expect(mockCreateCheckoutSession).toHaveBeenCalledTimes(1);
   });
 });

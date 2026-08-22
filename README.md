@@ -100,7 +100,7 @@ Steps 1–3 need the operator's own credentials and cannot be done from this rep
 
 The tradeoff Expo names is that builds become necessary more often. That is the correct side to err on for a launch: an OTA update landing on an incompatible binary is a crash on a customer's phone with no way back.
 
-Verified rather than assumed — appending a comment to a screen leaves the fingerprint identical (`d694c828…`), while adding one config plugin changes it (`65a9e6c0…`):
+Verified rather than assumed — appending a comment to a screen leaves the fingerprint unchanged, while adding one config plugin changes it. Recompute rather than trusting any value written down; **the fingerprint moves whenever native config does**, and a stale one in a document is exactly what someone reasons from during an incident. At the time of writing it is `c7b9cf25…`, and `66f5e4b` (expo-image-picker plugin props) already moved it once — **that commit cannot ship over the air and must be in a binary**:
 
 ```bash
 npx expo-updates fingerprint:generate --platform ios

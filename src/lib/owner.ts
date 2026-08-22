@@ -434,12 +434,44 @@ export async function getOwnerAnalytics(ownerId: string): Promise<OwnerAnalytics
     return fresh;
   };
 
-  // The fetch window is instant-based and only has to be a SUPERSET of
-  // the venue-local months we bucket into — one day of slack each side
-  // covers every real UTC offset (max ±14h).
-  const utcNow = localDateIn(now, 'UTC');
-  const fetchFrom = `${shiftDate(monthRange(utcNow, 1).from, -1)}T00:00:00.000Z`;
-  const fetchTo = `${shiftDate(monthRange(utcNow, 0).to, 1)}T23:59:59.999Z`;
+  // The fetch window is derived from the UNION of the venue-local ranges
+  // actually bucketed into — never from UTC's own calendar.
+  //
+  // Deriving it from UTC's month was wrong in a way one day of slack
+  // cannot cover. Slack fixes placing a single INSTANT on a date (max
+  // real offset ±14h). It does nothing when the venue's whole current
+  // MONTH is a different month from UTC's, which is the case for every
+  // Manila venue between local midnight and 08:00 on the 1st: UTC still
+  // said August, so the window ended 1 September while the periods
+  // bucketed into all of September, and every confirmed booking from the
+  // 2nd onward was never fetched. "This month" collapsed to one day's
+  // takings, compared against a full previous month. The mirror case
+  // exists west of UTC, where the comparison month is the one lost.
+  //
+  // Taking min(previousMonth.from) and max(thisMonth.to) across every
+  // timezone in play makes the window correct by construction: it cannot
+  // be narrower than what is bucketed, whatever the zones or the date.
+  // The ±1 day is still needed, but only for its original job — turning
+  // venue-local calendar bounds into UTC instants.
+  // `courts` is non-empty here (the zero-courts case returned `empty`
+  // above), so there is always at least one timezone and always a real
+  // min/max. Seeded from the first zone rather than from null: a `??`
+  // fallback would have had to fall back to something, and the only
+  // other derivation available is UTC's own month — the exact bug this
+  // replaces. Better that the unreachable state be unrepresentable than
+  // that it quietly restore the defect.
+  const timezonesInPlay = [...new Set(courts.map((c) => venuesById.get(c.venue_id)?.timezone ?? 'Asia/Manila'))];
+  const seed = periodsForTimezone(timezonesInPlay[0]);
+  let earliestLocal = seed.previousMonth.from;
+  let latestLocal = seed.thisMonth.to;
+  for (const timezone of timezonesInPlay.slice(1)) {
+    const periods = periodsForTimezone(timezone);
+    if (periods.previousMonth.from < earliestLocal) earliestLocal = periods.previousMonth.from;
+    if (periods.thisMonth.to > latestLocal) latestLocal = periods.thisMonth.to;
+  }
+  // ±1 day turns venue-local calendar bounds into UTC instants safely.
+  const fetchFrom = `${shiftDate(earliestLocal, -1)}T00:00:00.000Z`;
+  const fetchTo = `${shiftDate(latestLocal, 1)}T23:59:59.999Z`;
 
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
