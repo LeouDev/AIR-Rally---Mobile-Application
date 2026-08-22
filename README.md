@@ -57,7 +57,13 @@ Every `EXPO_PUBLIC_*` value is baked in at build time, so two builds on the same
 
 `production`'s values are not in `eas.json` — that profile is linked to EAS's server-side Environment Variables (`environment: "production"`; `eas env:list --environment production`), so it can be rotated without a repo change.
 
-## Why no crash-reporting SDK is installed yet
+## Error handling and crash reporting
+
+`src/app/_layout.tsx` exports an `ErrorBoundary`, which is expo-router's own mechanism — exporting one from a route wraps that route in a React error boundary, and exporting it from the **root** layout wraps the entire app, providers included. No dependency is involved. It renders `ErrorScreen`: AIR/Rally's own palette and wordmark, a plain-language explanation, **Try again** (the router's `retry`), and **Send report**.
+
+`ErrorScreen` never renders `error.message`. That string is where a raw Postgres or Supabase error would otherwise reach a customer; it travels only through **Send report**, and only when the player taps it. A test asserts this directly.
+
+### Why no crash-reporting SDK is installed yet
 
 Every fatal error funnels through one function, `captureFatalError` in `src/lib/error-reporting.ts`. Today it writes a structured report to the device log and keeps the last five in `AsyncStorage`, so a crash survives the restart that follows it.
 

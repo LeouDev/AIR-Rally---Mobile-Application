@@ -1,15 +1,33 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { EnvironmentBanner } from '@/components/environment-banner';
+import { ErrorScreen } from '@/components/error-screen';
 import { ToastProvider } from '@/components/ui/toast';
 import { Colors } from '@/constants/theme';
 import { useNotificationObserver } from '@/lib/notifications-runtime';
 import { SessionProvider, useSession } from '@/providers/session';
 
 SplashScreen.preventAutoHideAsync();
+
+/**
+ * expo-router wraps a route in a React error boundary whenever that
+ * route exports one. Exporting it from the ROOT layout puts a boundary
+ * around the entire app — every screen, and the providers above them —
+ * which is the only placement that can catch a render throw wherever it
+ * happens. Without it the app renders white, with no way back and no
+ * signal that anything went wrong.
+ *
+ * The splash screen has to be dismissed here too: the crash may have
+ * happened before RootNavigator ever reached its own hideAsync, and a
+ * fallback screen behind a splash is still a frozen app.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  SplashScreen.hideAsync().catch(() => {});
+  return <ErrorScreen error={error} retry={retry} />;
+}
 
 export default function RootLayout() {
   return (
