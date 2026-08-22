@@ -24,6 +24,19 @@ npx expo-updates fingerprint:generate --platform ios
 
 Recompute rather than trusting any number written down, and delete `ios/`/`android/` first — native directories are fingerprint input, so a value computed while they exist is not comparable to what EAS builds from.
 
+### What actually is and is not fingerprint input
+
+Read off the generated source list, not assumed. Outside `node_modules`, the inputs are `.gitignore`, **`eas.json`**, the two icon assets, `app.json`, config plugins, autolinking, and **`packageJson:scripts`**.
+
+**Nothing under `src/` is a fingerprint input — zero sources reference it.** So any change confined to `src/` is OTA-shippable by construction, however large. That is a structural fact, not an observation about one commit.
+
+Two counterintuitive consequences worth knowing before someone is surprised:
+
+- **`eas.json` is fingerprint input, including its `env` values.** Changing an environment variable there moves the runtime version, so an env change *cannot* ship over the air.
+- **`package.json` `scripts` are fingerprint input.** `expo prebuild` rewrites them — it changed `"ios": "expo start --ios"` to `"expo run:ios"` during local build work here, and that was reverted. Committing it would have silently moved the runtime version off the most innocuous-looking diff imaginable.
+
+**Freeze all of the above between cutting an RC and publishing an update meant for it.** If any of them changes in between, the update's runtime version no longer matches the shipped binary and it silently will not apply — the same silent non-application the fingerprint policy exists to cause deliberately, arriving by accident.
+
 ## 2. Release ordering — load-bearing
 
 1. Web's analytics fix merges **and deploys** first, including `getOwnerDashboardSummary` moving off `currentWeekBoundsUtc()` in the *same* change. Without that, the owner dashboard and the analytics page disagree about what a week is, on the same site, for the same owner.
