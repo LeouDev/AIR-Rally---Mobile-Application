@@ -453,13 +453,23 @@ export async function getOwnerAnalytics(ownerId: string): Promise<OwnerAnalytics
   // be narrower than what is bucketed, whatever the zones or the date.
   // The ±1 day is still needed, but only for its original job — turning
   // venue-local calendar bounds into UTC instants.
-  // `courts` is non-empty here (the zero-courts case returned `empty`
-  // above), so there is always at least one timezone and always a real
-  // min/max. Seeded from the first zone rather than from null: a `??`
-  // fallback would have had to fall back to something, and the only
-  // other derivation available is UTC's own month — the exact bug this
-  // replaces. Better that the unreachable state be unrepresentable than
-  // that it quietly restore the defect.
+  // LOAD-BEARING PRECONDITION: `courts` is non-empty here — the
+  // zero-courts case returned `empty` well above — so timezonesInPlay[0]
+  // is always defined and there is always a real min/max. That is what
+  // lets this be seeded rather than started from null.
+  //
+  // Seeded deliberately, not with `??`: a fallback would have had to
+  // fall back to something, and the only other derivation available is
+  // UTC's own month — the exact bug this replaces. Better that the
+  // unreachable state be unrepresentable than that it quietly restore
+  // the defect.
+  //
+  // The loop below is also what POPULATES periodsByTimezone. Anything
+  // porting this must keep it eager and keep it before the fetch: with a
+  // lazily-filled cache first touched after the query, a null-seeded
+  // version reads empty every time and silently falls back — a no-op
+  // that still passes its tests. (Found by the Web Engineer while
+  // porting this to ownerAnalytics.ts.)
   const timezonesInPlay = [...new Set(courts.map((c) => venuesById.get(c.venue_id)?.timezone ?? 'Asia/Manila'))];
   const seed = periodsForTimezone(timezonesInPlay[0]);
   let earliestLocal = seed.previousMonth.from;

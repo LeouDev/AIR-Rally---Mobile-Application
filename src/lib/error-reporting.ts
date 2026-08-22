@@ -27,6 +27,12 @@ import { describeEnvironment } from '@/lib/environment';
 
 const STORAGE_KEY = 'airrally.errorReports.v1';
 const MAX_STORED_REPORTS = 5;
+/** Long enough to swallow a re-entrant capture of the same crash (seen
+ * at 18ms), short enough that a genuine crash loop still reports each
+ * pass rather than going silent. */
+const DEDUPE_WINDOW_MS = 1000;
+
+let lastCapture: { identity: string; at: number; report: ErrorReport } | null = null;
 
 export type ErrorReport = {
   /** ISO timestamp, captured at the moment the boundary caught it. */
@@ -64,9 +70,50 @@ function buildReport(error: unknown): ErrorReport {
  *
  * Nothing else in the app has to change; every fatal error already
  * funnels through this function.
+ *
+ * WHAT THIS DOES NOT SEE — true today, and still true once Sentry is
+ * wired, because Sentry would be fed from here:
+ *
+ *   - A throw inside an event handler (the `Reserve & pay` press, a
+ *     retry tap). React error boundaries only catch errors thrown
+ *     during render, commit, or lifecycle — never in a callback.
+ *   - A rejected promise in an async handler, which is the shape of
+ *     every failed network call in this app. Those surface as caught
+ *     errors and toasts, and reach nothing here.
+ *   - A throw inside a timer or subscription callback.
+ *
+ * So "crash reporting is wired" will mean render-phase crashes are
+ * visible, not that all failures are. Closing that gap needs a global
+ * handler (ErrorUtils.setGlobalHandler and an unhandled-rejection
+ * tracker) feeding this same function — deliberately not done yet, so
+ * the limit is recorded rather than assumed away. There are tests
+ * asserting these limits so the boundary's edges can't be claimed
+ * wider than they are.
  */
 export function captureFatalError(error: unknown): ErrorReport {
   const report = buildReport(error);
+
+  // One crash must produce one report.
+  //
+  // Observed on a real dev-client build: a single render throw produced
+  // TWO captures 18ms apart. The boundary's fallback is mounted via
+  // getDerivedStateFromError, and React re-renders around a caught error
+  // in ways that are version- and mode-dependent — the jest environment
+  // captures once, the dev client twice.
+  //
+  // Deduped rather than explained. Proving "this cannot happen in a
+  // production build" needs a production build to prove it on, and the
+  // cost of being wrong is a doubled crash-reporting bill and a halved
+  // free-tier quota once Sentry is wired at this seam. Identity is
+  // message + stack, so two genuinely different crashes in the same
+  // instant are still both recorded, while the same crash re-entering is
+  // recorded once and the caller still gets its report back.
+  const identity = `${report.message}\n${report.stack ?? ''}`;
+  const at = Date.now();
+  if (lastCapture && lastCapture.identity === identity && at - lastCapture.at < DEDUPE_WINDOW_MS) {
+    return lastCapture.report;
+  }
+  lastCapture = { identity, at, report };
 
   // Kept in production builds on purpose. It is the only channel that
   // exists today, and a crash visible in a device log is worth more than
@@ -103,6 +150,7 @@ export async function listRecentReports(): Promise<ErrorReport[]> {
 }
 
 export async function clearReports(): Promise<void> {
+  lastCapture = null;
   try {
     await AsyncStorage.removeItem(STORAGE_KEY);
   } catch {
