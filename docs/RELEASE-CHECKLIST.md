@@ -38,6 +38,15 @@ Web goes first deliberately. During App Store review a Manila owner sees correct
 - [ ] Source-map upload confirmed **succeeding**, not merely configured. A Debug build proves only that the phase no longer fails — the upload is a no-op without an auth token. Only a Release build on EAS exercises it.
 - [ ] `app.json` version is not `0.1.0`. Whatever ships is the public version string permanently, and `error-reporting.ts` stamps it into every crash report, so it is also the version read in support tickets.
 - [ ] Backend's drift check green, or its findings understood and accepted. An unapplied migration showing as drift is correct behaviour and is not fixed by editing the check.
+- [ ] **Sentry delivery confirmed in the dashboard**, not just capture. See §4 — this is a thirty-second check and until someone does it, "we have crash reporting" means captured, not delivered.
+
+### Gates this repo does not own
+
+Mobile cannot see these and will pass its own checks without them. They are listed here because a checklist that only gates what its author controls is complete-looking and wrong — the same shape as everything else in §4.
+
+- [ ] **QA's booking matrix clean.** Mobile's suite proves the client; the matrix proves the flows against a real backend.
+- [ ] **Backend's staging sequence complete**, through the two-function coexistence measurement. That coexistence is the shape production will briefly be in during the migration, and staging is the only place it is safe to be wrong about.
+- [ ] **Web deployed** — see §2. This is an ordering gate, not just a dependency: the mobile RC must not be submitted before it.
 
 ### Never submit a locally-built archive
 
@@ -77,9 +86,11 @@ Written down as unverified rather than quietly passed.
 
 | | |
 | --- | --- |
-| iOS EAS builds | 15/month, 13 spent — **two left** |
-| Android EAS builds | 15/month, none spent |
+| iOS EAS builds | 15 per month |
+| Android EAS builds | 15 per month, separately metered |
 | OTA updates | **1,000 MAUs** on the free plan |
+
+**Read the remaining count off the dashboard rather than from here.** These are consumable and per-platform, and a number written into a document is wrong the moment someone builds. Getting this wrong in both directions has already cost a cycle of churn once: a combined "13 / 30" was read as the iOS allowance when iOS and Android are metered separately.
 
 The MAU ceiling is the one worth planning for. The entire OTA strategy — fingerprint policy, channels, the rollback procedure in the README — runs on a tier covering 1,000 monthly active users. At 1,001 it becomes a paid decision made under pressure, at the exact moment we can least afford a surprise.
 
