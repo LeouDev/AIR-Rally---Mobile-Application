@@ -146,7 +146,16 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
 
     setSubmitting(false);
     router.push({ pathname: '/booking/[id]', params: { id: bookingId } });
-  }, [selectedSlot, submitting, courtId, localDate, duration]);
+    // `players` and `session` belong here as much as the slot does.
+    // PlayerPicker only renders once a slot is chosen, so adding
+    // playmates never changes any of the other dependencies — omitting
+    // them left this callback closed over the empty roster it was built
+    // with, and every invite was silently dropped on the normal path
+    // (it only worked if you happened to re-tap a slot afterwards).
+    // The whole `session` object, not `session?.user.id`: React Compiler
+    // infers the former and skips optimizing the component entirely when
+    // a manual dependency is narrower than what it inferred.
+  }, [selectedSlot, submitting, courtId, localDate, duration, players, session]);
 
   if (venue.courts.length === 0 || !court) return null;
 
