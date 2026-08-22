@@ -106,7 +106,7 @@ const mockListFeedPosts = listFeedPosts as jest.MockedFunction<typeof listFeedPo
 
 async function renderFeed() {
   mockListFeedPosts.mockResolvedValue({ posts: [], nextCursor: null });
-  render(<CourtSideScreen />, { wrapper: Wrapper });
+  await render(<CourtSideScreen />, { wrapper: Wrapper });
   await waitFor(() => expect(mockListFeedPosts).toHaveBeenCalled());
 }
 
@@ -127,7 +127,7 @@ describe('COURT/Side feed tabs', () => {
     await renderFeed();
     const callsBefore = mockListFeedPosts.mock.calls.length;
 
-    fireEvent.press(screen.getByText('Following'));
+    await fireEvent.press(screen.getByText('Following'));
 
     // Selection is the one thing a tab tap legitimately does today, so
     // removing the false announcement must not take it with it.
