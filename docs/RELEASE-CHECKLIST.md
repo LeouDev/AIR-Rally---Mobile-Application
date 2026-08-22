@@ -37,12 +37,12 @@ Web goes first deliberately. During App Store review a Manila owner sees correct
 - [ ] `eas env:list --environment production` shows all four required variables, `EXPO_PUBLIC_SENTRY_DSN` included.
 - [ ] Source-map upload confirmed **succeeding**, not merely configured. A Debug build proves only that the phase no longer fails — the upload is a no-op without an auth token. Only a Release build on EAS exercises it.
 - [ ] `app.json` version is not `0.1.0`. Whatever ships is the public version string permanently, and `error-reporting.ts` stamps it into every crash report, so it is also the version read in support tickets.
-- [ ] Backend's drift check green, or its findings understood and accepted. An unapplied migration showing as drift is correct behaviour and is not fixed by editing the check.
-- [ ] **Sentry delivery confirmed in the dashboard**, not just capture. See §4 — this is a thirty-second check and until someone does it, "we have crash reporting" means captured, not delivered.
+- [ ] Backend's drift check **findings understood and accepted** — deliberately not "zero findings". Once 076/077/078 are in the tree, production reads as drifted until they are applied, and that red is *correct*. Nobody should block on it, and nobody should ever fix it by editing the check.
+- [ ] **Sentry delivery confirmed in the dashboard**, not just capture. See §6 — this is a thirty-second check and until someone does it, "we have crash reporting" means captured, not delivered.
 
 ### Gates this repo does not own
 
-Mobile cannot see these and will pass its own checks without them. They are listed here because a checklist that only gates what its author controls is complete-looking and wrong — the same shape as everything else in §4.
+Mobile cannot see these and will pass its own checks without them. They are listed here because a checklist that only gates what its author controls is complete-looking and wrong — the same shape as everything else in §6.
 
 - [ ] **QA's booking matrix clean.** Mobile's suite proves the client; the matrix proves the flows against a real backend.
 - [ ] **Backend's staging sequence complete**, through the two-function coexistence measurement. That coexistence is the shape production will briefly be in during the migration, and staging is the only place it is safe to be wrong about.
@@ -72,7 +72,32 @@ Any change to a floating or absolutely-positioned element needs eyes on a runnin
 
 `environment-banner.test.tsx` has six passing tests — renders nothing in production, names the environment, never intercepts touches — and not one could catch a positioning collision. That is correct test design, and it is exactly *why* they survived two repositions without failing. The banner has now collided twice, in two different positions, and both were found by looking at a screen.
 
-## 4. Shipping knowingly unverified
+## 4. Before submitting to the App Store
+
+These gate **submit**, not **build**, and the last two can only be completed by the account holder in App Store Connect.
+
+- [ ] **Privacy nutrition labels updated for Sentry.** The listing copy was drafted before Sentry existed in this app. Per Sentry's own privacy-manifest documentation the SDK collects three declarable categories, all as *App Functionality*, neither linked to the user nor used for tracking:
+  - Crash Data (`NSPrivacyCollectedDataTypeCrashData`)
+  - Performance Data (`NSPrivacyCollectedDataTypePerformanceData`)
+  - Other Diagnostic Data (`NSPrivacyCollectedDataTypeOtherDiagnosticData`)
+
+  It also declares three required-reason API accesses: UserDefaults (`CA92.1`), System Boot Time (`35F9.1`), File Timestamp (`C617.1`).
+
+- [ ] **Do not declare camera or microphone.** `66f5e4b` removed both from the binary, so declaring them would be a false statement about what the app collects. That commit has a compliance dimension beyond the Play Store question it was filed under: it keeps the iOS privacy declaration honest.
+
+- [ ] **Confirm a `PrivacyInfo.xcprivacy` reaches the binary.** Sentry's docs state the SDK does *not* ship one for **statically linked** libraries — which is React Native's default, and nothing in this repo sets `useFrameworks`. `app.json` currently has no `ios.privacyManifests` key, though `@expo/config-plugins` supports one. **Unverified:** whether `expo prebuild` emits a usable default. Check the generated `ios/` before submitting; a missing manifest is a review rejection, not a warning.
+
+## 5. Before the first OTA update to production
+
+This does **not** gate the release candidate — the binary ships fine without it. It gates *depending* on OTA, so it sits here rather than in §3, where it would be skipped as obviously-not-blocking and then be untested at the moment it is needed.
+
+- [ ] **Publish / install / rollback exercised end to end.** Open since Cycle 1 and never run. An untested rollback procedure is a document, not a rollback procedure.
+
+Run it on **Android** — separately metered, none spent, and the update mechanism, fingerprint policy and channels are identical, so Android proves the machinery. Sequence: `preview` build → install → `eas update --channel preview` with a cosmetic JS-only change → confirm it installs on relaunch → `eas update:republish` to the previous group → confirm it reverts.
+
+`preview` points at **production Supabase**. Build-and-update only: no bookings, no matches, nothing touching a court slot or money.
+
+## 6. Shipping knowingly unverified
 
 Written down as unverified rather than quietly passed.
 
@@ -89,7 +114,7 @@ Written down as unverified rather than quietly passed.
 - **Source-map upload** — see §3.
 - **`expo-notifications` registration error on every launch** — `Error reading persisted server registration info: FunctionCallException: getRegistrationInfoAsync has failed`. Simulator push registration is the boring explanation and no physical device has been available to compare. **If this appears on physical hardware it becomes a real finding**, not an accepted one — recorded with that condition attached so the first person to see it there does not spend an hour rediscovering it.
 
-## 5. Quotas and ceilings
+## 7. Quotas and ceilings
 
 | | |
 | --- | --- |
@@ -101,7 +126,7 @@ Written down as unverified rather than quietly passed.
 
 The MAU ceiling is the one worth planning for. The entire OTA strategy — fingerprint policy, channels, the rollback procedure in the README — runs on a tier covering 1,000 monthly active users. At 1,001 it becomes a paid decision made under pressure, at the exact moment we can least afford a surprise.
 
-## 6. Post-launch, recorded so it is not rediscovered
+## 8. Post-launch, recorded so it is not rediscovered
 
 - **Nobody can cancel an Open Play game, on either platform.** The service function exists in both repos (`src/lib/events.ts:177` on mobile) and nothing calls it. Small on mobile — a button and a confirmation, with the notification machinery already firing on the status flip.
 - **Cancelling a booking leaves its Open Play game `published`**, so it stays visible and joinable in the Play tab for a court nobody has booked.
@@ -114,7 +139,7 @@ The MAU ceiling is the one worth planning for. The entire OTA strategy — finge
 
   The fix is a slim full-width strip that **reserves layout space**, which cannot overlap by construction. It costs a few points of vertical space on non-production builds only — the right place to spend it. Deliberately not done before the RC: it is P3, invisible to users, and it needs the safe-area handling done properly (a strip consuming `insets.top` must also stop child screens re-applying it) rather than rushed.
 
-## 7. What mobile testing cannot tell you
+## 9. What mobile testing cannot tell you
 
 - **A deep-link pass proves the router works and says nothing about what the database stamps.** `/profile/rank` and `/ranked` both resolve to the Profile tab, so a link-string drift between the two would pass a mobile test identically. Link strings belong to Backend's body-reconciliation sweep, not to a navigation check.
 - **Ranked results obtained before the staging repair are void** — staging was running an `apply_ranked_result` variant present in no commit.
