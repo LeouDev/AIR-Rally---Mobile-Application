@@ -101,9 +101,14 @@ Run it on **Android** — separately metered, none spent, and the update mechani
 
 Written down as unverified rather than quietly passed.
 
+**Every entry here and in §8 carries two things beyond its description: which ENVIRONMENT the claim is true of, and WHAT WOULD RETIRE IT.** Without those, a list of known defects has no mechanism for noticing when one stops being true — each entry is a claim with an expiry date nobody set, expiring silently. That is precisely the failure family this document exists to guard against, reproduced inside the guard. It has already happened once here, within hours of the file being written.
+
 - **Push notification delivery** — unverifiable on staging. Staging holds no Vault secrets, so the webhook path fails open and logs nothing.
+  *Environment:* unverifiable on staging; unverified on production. *Retires when:* Vault secrets exist on staging and the webhook URL is parameterised, then a delivery is observed end to end.
 - **PayMongo stale-booking expiry** — same cause. The sweep silently never runs on staging, which also makes the pending-booking screen's "the slot releases automatically" copy false there.
+  *Environment:* broken on staging; believed working on production, never observed. *Retires when:* a pending booking is watched expiring on its own in either environment.
 - **COURT/Side `court_side_feed` (077)** — verified at volume, but RLS was **not** exercised (connected as `postgres`, `auth.uid()` simulated at SQL level). End-to-end through supabase-js with a real token is unclaimed.
+  *Environment:* staging. *Retires when:* someone drives the feed through supabase-js with a real user token and confirms the scope filter under RLS.
 - **Crash coverage — VERIFIED end to end.** Every link measured rather than inferred:
 
   | Link | Evidence | By |
@@ -118,7 +123,9 @@ Written down as unverified rather than quietly passed.
   Still render-phase only, by design: the local AsyncStorage reports and the branded error screen. A global handler has no fallback UI to render into.
 
   **Source-map upload remains open** — see §3. Do not read this row as covering it.
-- **`expo-notifications` registration error on every launch** — `Error reading persisted server registration info: FunctionCallException: getRegistrationInfoAsync has failed`. Simulator push registration is the boring explanation and no physical device has been available to compare. **If this appears on physical hardware it becomes a real finding**, not an accepted one — recorded with that condition attached so the first person to see it there does not spend an hour rediscovering it.
+  *Environment:* verified on a local debug build against the production Sentry project. *Retires:* already retired, except source maps.
+- **`expo-notifications` registration error on every launch** — `Error reading persisted server registration info: FunctionCallException: getRegistrationInfoAsync has failed`. Simulator push registration is the boring explanation and no physical device has been available to compare.
+  *Environment:* iOS Simulator only; unobserved on hardware. *Retires when:* someone launches on a physical device — **if it appears there it becomes a real finding**, not an accepted one.
 
 ## 7. Quotas and ceilings
 
@@ -135,15 +142,24 @@ The MAU ceiling is the one worth planning for. The entire OTA strategy — finge
 ## 8. Post-launch, recorded so it is not rediscovered
 
 - **Nobody can cancel an Open Play game, on either platform.** The service function exists in both repos (`src/lib/events.ts:177` on mobile) and nothing calls it. Small on mobile — a button and a confirmation, with the notification machinery already firing on the status flip.
-- **Cancelling a booking leaves its Open Play game `published`**, so it stays visible and joinable in the Play tab for a court nobody has booked.
+  *Environment:* both, unaffected by 078 — different mechanism, different fix. *Retires when:* `events.ts:177` is wired to a control on each platform.
+- **Cancelling a booking leaves its Open Play game `published`** — it stays visible and joinable in the Play tab for a court nobody has booked.
+  *Environment:* **LIVE ON PRODUCTION.** Fixed by 078 and verified on staging — booking cancelled, slot returned to `get_available_slots` checked by court id, linked event `status: cancelled` with `cancellation_reason: booking_cancelled`; `getOpenPlayGames` filters `.eq('status','published')` at `events.ts:63-67`, so a cancelled game is excluded by construction. *Retires when:* 078 is applied to production.
+  Deliberately **not** moved to "verified fixed" and not deleted: either would leave someone believing production is fine when the defect is live there today. Stale-and-cautious beats fixed-and-wrong.
 - Orphaned payable PayMongo sessions need a reconciliation sweep.
+  *Environment:* both. *Retires when:* a reconciliation sweep exists and has run once.
 - `reviews.booking_id` survives a booking cancel.
+  *Environment:* both. *Retires when:* the cancel path nulls or flags it.
 - Three policy names exceed Postgres's 63-byte identifier limit.
+  *Environment:* both. *Retires when:* renamed — and the drift check gains a rule flagging any name over 63 bytes, so the next one is caught automatically rather than by memory.
 - Migration governance: no ledger, past numbering collisions, baselining deferred.
+  *Environment:* process, not code. *Retires when:* a migration ledger exists and baselining is done.
 - The 23 React Compiler bail-outs (`expo lint` errors) — those components get no auto-memoization while the rest of the app does.
+  *Environment:* both. *Retires when:* `expo lint` reports zero errors.
 - **The environment banner needs to stop being a fixed-offset overlay.** It has collided twice — pinned to the top it sat inside the navigation header; pinned to the bottom it sat on the sign-up screen's consent row, partially covering the agreement version string. A fixed offset has no safe edge, because there is no offset that is empty on every screen, so a third position relocates the problem rather than removing it.
 
   The fix is a slim full-width strip that **reserves layout space**, which cannot overlap by construction. It costs a few points of vertical space on non-production builds only — the right place to spend it. Deliberately not done before the RC: it is P3, invisible to users, and it needs the safe-area handling done properly (a strip consuming `insets.top` must also stop child screens re-applying it) rather than rushed.
+  *Environment:* non-production builds only — it renders nothing in production. *Retires when:* the banner reserves layout space instead of overlaying.
 
 ## 9. What mobile testing cannot tell you
 
