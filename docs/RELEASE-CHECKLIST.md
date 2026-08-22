@@ -229,6 +229,19 @@ The MAU ceiling is the one worth planning for. The entire OTA strategy — finge
 - **The environment banner needs to stop being a fixed-offset overlay.** It has collided twice — pinned to the top it sat inside the navigation header; pinned to the bottom it sat on the sign-up screen's consent row, partially covering the agreement version string. A fixed offset has no safe edge, because there is no offset that is empty on every screen, so a third position relocates the problem rather than removing it.
 
   The fix is a slim full-width strip that **reserves layout space**, which cannot overlap by construction. It costs a few points of vertical space on non-production builds only — the right place to spend it. Deliberately not done before the RC: it is P3, invisible to users, and it needs the safe-area handling done properly (a strip consuming `insets.top` must also stop child screens re-applying it) rather than rushed.
+- **`/api/mobile/reschedule` says "not found" when it means "already happened".** QA isolated the real variable rather than reporting the symptom: the message doesn't track `status`, it tracks whether `start_time` has passed.
+
+  | State | Message |
+  | --- | --- |
+  | Future + pending | "Only a confirmed booking can be rescheduled" — specific |
+  | Past + pending | "We couldn't find that booking" — generic |
+  | **Past + confirmed** | "We couldn't find that booking" — generic, **and the booking exists** |
+  | Future + cancelled | "Only a confirmed booking can be rescheduled" — specific |
+
+  The eligibility query appears to filter on `start_time > now()` as part of what counts as "found", so a past booking falls out of the query entirely and reads as nonexistent. **Not a security issue** — QA confirmed separately that another user's booking and a fake id are still correctly distinguished from this. The harm is a user seeing a booking in their own Bookings tab and being told by a different screen that it doesn't exist, which reads as a broken app rather than "that already happened."
+
+  *Environment:* both. *Retires when:* the eligibility check separates the time filter from the existence test, and "already started or ended" gets its own message the way cancelled already has one.
+
   *Environment:* non-production builds only — it renders nothing in production. *Retires when:* the banner reserves layout space instead of overlaying.
 
 ## 9. What mobile testing cannot tell you
