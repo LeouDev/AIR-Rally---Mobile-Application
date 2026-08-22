@@ -78,6 +78,31 @@ jest.mock('@/lib/supabase', () => ({
   },
 }));
 
+function seedMany(timezone: string, bookings: { start: string; status?: string; user?: string }[]) {
+  mockDb.venues = [
+    {
+      id: VENUE_ID,
+      owner_id: OWNER_ID,
+      name: 'BGC Smash Pickleball',
+      city: 'Taguig',
+      status: 'active',
+      timezone,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+  ];
+  mockDb.courts = [{ id: COURT_ID, name: 'Rooftop Court', venue_id: VENUE_ID }];
+  mockDb.bookings = bookings.map((b) => ({
+    court_id: COURT_ID,
+    user_id: b.user ?? 'uuuuuuuu-uuuu-uuuu-uuuu-uuuuuuuuuuuu',
+    price_amount: 100_000,
+    currency: 'PHP',
+    status: b.status ?? 'confirmed',
+    start_time: b.start,
+    end_time: new Date(new Date(b.start).getTime() + 3_600_000).toISOString(),
+  }));
+  mockDb.window = null;
+}
+
 function seed(timezone: string, startIso: string) {
   mockDb.venues = [
     {
@@ -136,7 +161,8 @@ describe('fetch window vs venue-local periods', () => {
 
     await getOwnerAnalytics(OWNER_ID);
     // Manila's September ends on the 30th; the window must reach past it.
-    expect(mockDb.window?.to?.slice(0, 10) >= '2026-09-30').toBe(true);
+    expect(mockDb.window?.to?.slice(0, 10) ?? '').toEqual(expect.any(String));
+    expect((mockDb.window?.to ?? '').slice(0, 10) >= '2026-09-30').toBe(true);
   });
 });
 
@@ -157,5 +183,58 @@ describe('control: cases that were already correct must stay correct', () => {
 
     const analytics = await getOwnerAnalytics(OWNER_ID);
     expect(analytics.revenue.today.amount).toBe(100_000);
+  });
+});
+
+
+/**
+ * The window feeds far more than the revenue row. `monthBookings` is the
+ * source for occupancy AND bookingInsights, so a short window
+ * under-reports peak hour, most-booked courts, per-court occupancy,
+ * total bookings, repeat customers and cancellation rate at the same
+ * time — every number on the page, not one of them.
+ */
+describe('everything else the window feeds', () => {
+  it('this week is truncated by the same boundary, and must not be', () => {
+    // Deliberately its own case: thisWeek has its own range and could be
+    // fixed for months while still short for weeks.
+    return (async () => {
+      // 2026-08-31T16:00Z = Tue 1 Sep 00:00 Manila. Manila's week runs
+      // Sun 30 Aug – Sat 5 Sep; UTC still calls it August.
+      jest.setSystemTime(new Date('2026-08-31T16:00:00.000Z'));
+      seedMany('Asia/Manila', [{ start: '2026-09-04T02:00:00.000Z' }]); // Fri 4 Sep, 10:00 Manila
+
+      const analytics = await getOwnerAnalytics(OWNER_ID);
+      expect(analytics.revenue.thisWeek.amount).toBe(100_000);
+    })();
+  });
+
+  it('occupancy and booking insights see the whole venue-local month', async () => {
+    jest.setSystemTime(new Date('2026-08-31T16:00:00.000Z')); // 1 Sep, 00:00 Manila
+    seedMany('Asia/Manila', [
+      { start: '2026-09-10T02:00:00.000Z', user: 'user-1' }, // 10:00 Manila
+      { start: '2026-09-11T02:00:00.000Z', user: 'user-1' }, // repeat customer
+      { start: '2026-09-12T06:00:00.000Z', user: 'user-2', status: 'cancelled' },
+    ]);
+
+    const analytics = await getOwnerAnalytics(OWNER_ID);
+
+    expect(analytics.bookingInsights.totalBookings).toBe(3);
+    expect(analytics.bookingInsights.repeatCustomers).toBe(1);
+    expect(analytics.bookingInsights.cancellationRate).toBeCloseTo(1 / 3);
+    // Peak hour is 10:00 Manila, from the two non-cancelled bookings.
+    expect(analytics.occupancy.peakHour).toBe(10);
+    expect(analytics.occupancy.mostBookedCourts[0]?.bookingCount).toBe(2);
+    expect(analytics.occupancy.perCourt[0]?.bookedHours).toBe(2);
+  });
+
+  it('New York, late on the last of the month: the previous month is a full month', async () => {
+    // 2026-09-01T02:00Z = 31 Aug 22:00 New York. Venue's previous month
+    // is the whole of July; the old window started 31 July.
+    jest.setSystemTime(new Date('2026-09-01T02:00:00.000Z'));
+    seedMany('America/New_York', [{ start: '2026-07-05T14:00:00.000Z' }]); // 5 Jul, 10:00 NY
+
+    const analytics = await getOwnerAnalytics(OWNER_ID);
+    expect(analytics.revenue.thisMonth.previousAmount).toBe(100_000);
   });
 });
