@@ -210,45 +210,130 @@ type AnalyticsBookingRow = {
 
 type OperatingHoursRow = { venue_id: string; day_of_week: number; start_time: string; end_time: string };
 
-function utcDayBounds(daysAgo: number): { start: Date; end: Date } {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysAgo));
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return { start, end };
+/* -------------------------------------------------------------------------
+ * Business periods.
+ *
+ * "Today" is a VENUE-LOCAL calendar day, never a UTC one. Every other
+ * date surface in this app already works that way — get_available_slots
+ * takes a venue-local date, formatBookingWindow and computeOpenStatus
+ * both format in `venues.timezone`, and localStartHour below already
+ * derived the peak booking hour in the venue's own zone. Revenue was the
+ * odd one out: it sliced on UTC midnight, so for a Manila venue (UTC+8)
+ * an owner's "Today" actually ran 8 AM to 8 AM and every morning booking
+ * landed in yesterday's total, dragging the comparison arrows with it.
+ *
+ * Periods are handled as date-only "YYYY-MM-DD" strings rather than
+ * instants: a calendar day has no single UTC extent once venues can sit
+ * in different zones, and zero-padded ISO dates compare correctly with
+ * plain string operators, so no Date arithmetic is needed at comparison
+ * time. Ranges are INCLUSIVE at both ends.
+ *
+ * The period shapes themselves are unchanged from the UTC version — a
+ * full calendar day/week/month containing now (so a confirmed booking
+ * later today still counts toward today), each compared against the
+ * immediately preceding full period, and weeks still start on Sunday to
+ * match Postgres's day_of_week.
+ * ---------------------------------------------------------------------- */
+
+export type LocalDateRange = { from: string; to: string };
+
+/** "YYYY-MM-DD" for an instant as seen in `timeZone`. */
+export function localDateIn(instant: Date, timeZone: string): string {
+  // en-CA formats as YYYY-MM-DD — same trick as bookings.ts.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(instant);
 }
 
-function utcWeekBounds(weeksAgo: number): { start: Date; end: Date } {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - now.getUTCDay() - weeksAgo * 7));
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 7);
-  return { start, end };
+function toYmd(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
-function utcMonthBounds(monthsAgo: number): { start: Date; end: Date } {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsAgo, 1));
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsAgo + 1, 1));
-  return { start, end };
+/** Calendar arithmetic on a date-only value. Safe to run through UTC:
+ * the input carries no time and no zone, so adding days can never cross
+ * a DST transition the way shifting a real instant can. */
+export function shiftDate(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return toYmd(new Date(Date.UTC(y, m - 1, d + days)));
 }
 
-function inRange(iso: string, start: Date, end: Date): boolean {
-  const t = new Date(iso).getTime();
-  return t >= start.getTime() && t < end.getTime();
+/** 0 = Sunday, matching Postgres day_of_week and venue_operating_hours. */
+export function weekdayOf(ymd: string): number {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-function sumConfirmedRevenue(bookings: AnalyticsBookingRow[], start: Date, end: Date): number {
-  return bookings.filter((b) => b.status === 'confirmed' && inRange(b.start_time, start, end)).reduce((sum, b) => sum + b.price_amount, 0);
+/** The calendar day `daysAgo` days before `today`. */
+export function dayRange(today: string, daysAgo: number): LocalDateRange {
+  const day = shiftDate(today, -daysAgo);
+  return { from: day, to: day };
+}
+
+/** The Sunday-to-Saturday week `weeksAgo` weeks before the one holding `today`. */
+export function weekRange(today: string, weeksAgo: number): LocalDateRange {
+  const from = shiftDate(today, -weekdayOf(today) - weeksAgo * 7);
+  return { from, to: shiftDate(from, 6) };
+}
+
+/** The calendar month `monthsAgo` months before the one holding `today`. */
+export function monthRange(today: string, monthsAgo: number): LocalDateRange {
+  const [y, m] = today.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1 - monthsAgo, 1));
+  // Day 0 of the following month is the last day of this one — correct
+  // for 28/29/30/31 without a leap-year branch.
+  const last = new Date(Date.UTC(y, m - monthsAgo, 0));
+  return { from: toYmd(first), to: toYmd(last) };
+}
+
+export function isWithin(ymd: string, range: LocalDateRange): boolean {
+  return ymd >= range.from && ymd <= range.to;
+}
+
+/** Every period one venue's numbers are bucketed into, derived from that
+ * venue's own "today". */
+type VenuePeriods = {
+  today: LocalDateRange;
+  previousDay: LocalDateRange;
+  thisWeek: LocalDateRange;
+  previousWeek: LocalDateRange;
+  thisMonth: LocalDateRange;
+  previousMonth: LocalDateRange;
+};
+
+export function periodsFor(today: string): VenuePeriods {
+  return {
+    today: dayRange(today, 0),
+    previousDay: dayRange(today, 1),
+    thisWeek: weekRange(today, 0),
+    previousWeek: weekRange(today, 1),
+    thisMonth: monthRange(today, 0),
+    previousMonth: monthRange(today, 1),
+  };
+}
+
+/** A booking annotated with the venue context every period decision needs. */
+type DatedBooking = AnalyticsBookingRow & {
+  /** The booking's start date in ITS OWN venue's timezone. */
+  localDate: string;
+  periods: VenuePeriods;
+};
+
+function sumConfirmedRevenue(bookings: DatedBooking[], pick: (p: VenuePeriods) => LocalDateRange): number {
+  return bookings
+    .filter((b) => b.status === 'confirmed' && isWithin(b.localDate, pick(b.periods)))
+    .reduce((sum, b) => sum + b.price_amount, 0);
 }
 
 function revenuePeriod(
-  bookings: AnalyticsBookingRow[],
-  current: { start: Date; end: Date },
-  previous: { start: Date; end: Date }
+  bookings: DatedBooking[],
+  current: (p: VenuePeriods) => LocalDateRange,
+  previous: (p: VenuePeriods) => LocalDateRange
 ): RevenuePeriod {
-  const amount = sumConfirmedRevenue(bookings, current.start, current.end);
-  const previousAmount = sumConfirmedRevenue(bookings, previous.start, previous.end);
+  const amount = sumConfirmedRevenue(bookings, current);
+  const previousAmount = sumConfirmedRevenue(bookings, previous);
   const changePct = previousAmount === 0 ? null : (amount - previousAmount) / previousAmount;
   return { amount, previousAmount, changePct };
 }
@@ -262,20 +347,25 @@ function hoursBetween(startIso: string, endIso: string): number {
   return (new Date(endIso).getTime() - new Date(startIso).getTime()) / (1000 * 60 * 60);
 }
 
-function openHoursInRange(operatingHours: OperatingHoursRow[], venueId: string, from: Date, to: Date): number {
+/** Open hours across an inclusive venue-local date range. Walks calendar
+ * days, not instants, so it counts the same days the bookings above are
+ * bucketed into. */
+export function openHoursInRange(
+  operatingHours: OperatingHoursRow[],
+  venueId: string,
+  range: LocalDateRange
+): number {
   const rowsForVenue = operatingHours.filter((r) => r.venue_id === venueId);
   if (rowsForVenue.length === 0) return 0;
 
   let total = 0;
-  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-  while (cursor.getTime() < to.getTime()) {
-    const dow = cursor.getUTCDay();
+  for (let day = range.from; day <= range.to; day = shiftDate(day, 1)) {
+    const dow = weekdayOf(day);
     for (const row of rowsForVenue) {
       if (row.day_of_week === dow) {
         total += (hmsToMinutes(row.end_time) - hmsToMinutes(row.start_time)) / 60;
       }
     }
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return total;
 }
@@ -322,28 +412,61 @@ export async function getOwnerAnalytics(ownerId: string): Promise<OwnerAnalytics
   if (courts.length === 0) return empty;
   const courtNameById = new Map(courts.map((c) => [c.id, c.name]));
   const courtIds = courts.map((c) => c.id);
+  // One lookup per booking instead of a courts.find() scan inside every
+  // per-booking loop below — and the venue is what carries the timezone
+  // each booking's business day is decided in.
+  const venueByCourtId = new Map<string, OwnedVenue>(
+    courts.flatMap((c) => {
+      const venue = venuesById.get(c.venue_id);
+      return venue ? [[c.id, venue] as [string, OwnedVenue]] : [];
+    })
+  );
 
-  const thisMonth = utcMonthBounds(0);
-  const lastMonth = utcMonthBounds(1);
+  const now = new Date();
+  // Periods are per-timezone, and an owner's venues need not share one.
+  // Derived once per distinct zone rather than per booking.
+  const periodsByTimezone = new Map<string, VenuePeriods>();
+  const periodsForTimezone = (timezone: string): VenuePeriods => {
+    const cached = periodsByTimezone.get(timezone);
+    if (cached) return cached;
+    const fresh = periodsFor(localDateIn(now, timezone));
+    periodsByTimezone.set(timezone, fresh);
+    return fresh;
+  };
+
+  // The fetch window is instant-based and only has to be a SUPERSET of
+  // the venue-local months we bucket into — one day of slack each side
+  // covers every real UTC offset (max ±14h).
+  const utcNow = localDateIn(now, 'UTC');
+  const fetchFrom = `${shiftDate(monthRange(utcNow, 1).from, -1)}T00:00:00.000Z`;
+  const fetchTo = `${shiftDate(monthRange(utcNow, 0).to, 1)}T23:59:59.999Z`;
 
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select('court_id, user_id, price_amount, currency, status, start_time, end_time')
     .in('court_id', courtIds)
-    .gte('start_time', lastMonth.start.toISOString())
-    .lt('start_time', thisMonth.end.toISOString());
+    .gte('start_time', fetchFrom)
+    .lte('start_time', fetchTo);
   if (bookingsError) throw bookingsError;
-  const bookingRows = (bookings ?? []) as AnalyticsBookingRow[];
 
-  const currency = bookingRows.find((b) => b.status === 'confirmed')?.currency ?? 'PHP';
+  const datedBookings: DatedBooking[] = ((bookings ?? []) as AnalyticsBookingRow[]).map((row) => {
+    const timezone = venueByCourtId.get(row.court_id)?.timezone ?? 'Asia/Manila';
+    return {
+      ...row,
+      localDate: localDateIn(new Date(row.start_time), timezone),
+      periods: periodsForTimezone(timezone),
+    };
+  });
+
+  const currency = datedBookings.find((b) => b.status === 'confirmed')?.currency ?? 'PHP';
 
   const revenue = {
-    today: revenuePeriod(bookingRows, utcDayBounds(0), utcDayBounds(1)),
-    thisWeek: revenuePeriod(bookingRows, utcWeekBounds(0), utcWeekBounds(1)),
-    thisMonth: revenuePeriod(bookingRows, thisMonth, lastMonth),
+    today: revenuePeriod(datedBookings, (p) => p.today, (p) => p.previousDay),
+    thisWeek: revenuePeriod(datedBookings, (p) => p.thisWeek, (p) => p.previousWeek),
+    thisMonth: revenuePeriod(datedBookings, (p) => p.thisMonth, (p) => p.previousMonth),
   };
 
-  const monthBookings = bookingRows.filter((b) => inRange(b.start_time, thisMonth.start, thisMonth.end));
+  const monthBookings = datedBookings.filter((b) => isWithin(b.localDate, b.periods.thisMonth));
   const activeMonthBookings = monthBookings.filter((b) => b.status !== 'cancelled');
 
   const { data: operatingHours, error: ohError } = await supabase
@@ -353,7 +476,6 @@ export async function getOwnerAnalytics(ownerId: string): Promise<OwnerAnalytics
   if (ohError) throw ohError;
   const operatingHoursRows = (operatingHours ?? []) as OperatingHoursRow[];
 
-  const now = new Date();
   const bookedHoursByCourtId = new Map<string, number>();
   const bookingCountByCourtId = new Map<string, number>();
   for (const b of activeMonthBookings) {
@@ -363,7 +485,15 @@ export async function getOwnerAnalytics(ownerId: string): Promise<OwnerAnalytics
 
   const perCourt: CourtOccupancy[] = courts.map((court) => {
     const venue = venuesById.get(court.venue_id);
-    const openHours = venue ? openHoursInRange(operatingHoursRows, venue.id, thisMonth.start, now) : 0;
+    // Month-to-date in the venue's own calendar: from the 1st through
+    // today inclusive. Counting the whole month would compare bookings
+    // that exist against open hours that haven't happened yet.
+    const openHours = venue
+      ? openHoursInRange(operatingHoursRows, venue.id, {
+          from: periodsForTimezone(venue.timezone).thisMonth.from,
+          to: localDateIn(now, venue.timezone),
+        })
+      : 0;
     const bookedHours = bookedHoursByCourtId.get(court.id) ?? 0;
     return {
       courtId: court.id,
@@ -381,8 +511,7 @@ export async function getOwnerAnalytics(ownerId: string): Promise<OwnerAnalytics
 
   const hourCounts = new Map<number, number>();
   for (const b of activeMonthBookings) {
-    const venue = venuesById.get(courts.find((c) => c.id === b.court_id)?.venue_id ?? '');
-    const hour = localStartHour(b.start_time, venue?.timezone ?? 'Asia/Manila');
+    const hour = localStartHour(b.start_time, venueByCourtId.get(b.court_id)?.timezone ?? 'Asia/Manila');
     hourCounts.set(hour, (hourCounts.get(hour) ?? 0) + 1);
   }
   let peakHour: number | null = null;
