@@ -120,7 +120,14 @@ Everything below was optional while OTA was hypothetical. None of it is now.
 
 - [ ] **`077-expand` applied and verified on production.** Moved here from the RC gates: the binary no longer carries the 4-arg call site, the *update* does. A client calling the 4-arg `court_side_feed` against a database holding only the 2-arg one fails every COURT/Side request — but by update that is recoverable, which is the whole point of the two-stage plan.
 
-  A stale 2-arg call has been observed as PostgREST `PGRST202` *and* reported as Postgres `42883`. These are not competing observations: PostgREST answers from its schema cache, Postgres raises when a call reaches it, and immediately after a drop that depends on cache-refresh timing. **The same drop can return different codes to callers minutes apart — any alert must match either, never one.**
+  A stale 2-arg call has been observed as PostgREST `PGRST202` and reported as Postgres `42883`. After a fourth measurement the two windows are settled, not just the fact that both occur:
+
+  | State | Code | Why |
+  | --- | --- | --- |
+  | Cache **fresh** (steady state) | `PGRST202` | PostgREST answers from cache, never reaches Postgres |
+  | Cache **stale** (the transient window right after a drop) | `42883` | PostgREST believes the function exists, sends SQL, Postgres raises `undefined_function` |
+
+  **Alerts and log filters match either** — the transient window is exactly when a deploy goes wrong. **Automated tests pin to `PGRST202`** — a test asserting `42883` never passes outside the seconds right after a schema change. **Direct SQL tooling is always `42883`** — it never goes through PostgREST's cache.
 - [ ] **Mobile's Following wiring, Web's COURT/Side client work and QA's COURT/Side end-to-end leg all complete.** These stopped being RC gates and became pre-OTA gates; they did not stop being gates.
 
 - [ ] **Publish / install / rollback exercised end to end.** Open since Cycle 1 and never run. An untested rollback procedure is a document, not a rollback procedure.
@@ -149,6 +156,14 @@ Run it on **Android** — separately metered, none spent, and the update mechani
 Written down as unverified rather than quietly passed.
 
 **Every entry here and in §8 carries two things beyond its description: which ENVIRONMENT the claim is true of, and WHAT WOULD RETIRE IT.** Without those, a list of known defects has no mechanism for noticing when one stops being true — each entry is a claim with an expiry date nobody set, expiring silently. That is precisely the failure family this document exists to guard against, reproduced inside the guard. It has already happened once here, within hours of the file being written.
+
+- **Concurrent double-booking cannot double-charge — VERIFIED, not just reasoned.** Worth recording that this claim was upgraded twice, because the upgrade path is itself the lesson.
+
+  It was first closed on **static analysis**: three independent readers traced the code and agreed that `bookings`' GiST exclusion constraint on `(court_id, tstzrange(start,end))` for `status in ('pending','confirmed')` means a losing concurrent insert raises `23P01` *before* PayMongo is ever touched. Reasoning, not measurement — closed on the strength of agreement, not evidence.
+
+  QA treated "three people read the same code and agreed" as a different claim from "the race was run", and ran it: two genuinely concurrent `POST`s to `/api/mobile/checkout`, identical court and slot, same token. One succeeded (booking created, checkout URL issued); the other returned `200` with "That time slot is no longer available." Exactly one row exists server-side afterward — no duplicate, no orphan, no partial state.
+
+  *Environment:* staging, at the network layer against the real database — the first time this was exercised as an actual race rather than read as code. *Retires:* already retired as a claim; kept here as the record that it was reopened deliberately after being closed on weaker evidence, not because anyone doubted the first answer.
 
 - **Push notification delivery** — unverifiable on staging. Staging holds no Vault secrets, so the webhook path fails open and logs nothing.
   *Environment:* unverifiable on staging; unverified on production. *Retires when:* Vault secrets exist on staging and the webhook URL is parameterised, then a delivery is observed end to end.
@@ -197,6 +212,8 @@ The MAU ceiling is the one worth planning for. The entire OTA strategy — finge
   *Environment:* both. *Retires when:* a reconciliation sweep exists and has run once.
 - `reviews.booking_id` survives a booking cancel.
   *Environment:* both. *Retires when:* the cancel path nulls or flags it.
+- **`/api/mobile/cancel` never stamps `cancelled_at` / `cancelled_by`.** Every booking cancelled through it has both null; other cancellation paths populate them. Nothing in the mobile client reads either field, and refund eligibility computes from `status`/`paid_at`, so this is audit-trail, not functional. **Unchecked:** whether web's admin tooling displays these fields — if it does, this is a visible blank rather than a latent one.
+  *Environment:* both, via the mobile cancel path specifically. *Retires when:* support tooling exists or a support queue starts — deliberately not "when the code is fixed". Unlike most P3s here, the cost of leaving this **grows**: "who cancelled this and when" is the most common question a booking platform's support queue gets, and at twelve bookings nobody is asking. When a queue exists, the gap sits in what is by then the primary path, and applies **retroactively** to everything cancelled before the fix lands.
 - Three policy names exceed Postgres's 63-byte identifier limit.
   *Environment:* both. *Retires when:* renamed — and the drift check gains a rule flagging any name over 63 bytes, so the next one is caught automatically rather than by memory.
 - Migration governance: no ledger, past numbering collisions, baselining deferred.
