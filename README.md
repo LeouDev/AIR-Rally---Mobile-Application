@@ -23,13 +23,100 @@ npx expo start
 
 ## Environments
 
-**Every profile — `.env.local` (day-to-day `npx expo start`), and `eas.json`'s `development`, `development-device`, `preview`, and `production` build profiles — points at production Supabase (`hrpbjudsrqcgyrkkodop`) and `https://air-rally.com`.** There is no hosted staging deployment of the web app (checked — no staging domain in `vercel.json` or `.env.staging`) and no separate staging mobile config either; production is the only environment this app talks to, full stop. A Supabase bearer token is only valid against the project that issued it, so `EXPO_PUBLIC_SUPABASE_URL` and whatever `EXPO_PUBLIC_API_URL` points at must always target the *same* project's data, or every `/api/mobile/*` call 401s.
+| Where | Supabase project | `EXPO_PUBLIC_API_URL` |
+| --- | --- | --- |
+| `.env.local` (day-to-day `npx expo start`) | **staging** `vdxdmtsnptzodabaojlc` | `http://localhost:3000` |
+| `eas.json` → `development` (simulator) | **staging** | `http://localhost:3000` |
+| `eas.json` → `development-device` | **staging** | `http://localhost:3000` (see below) |
+| `eas.json` → `preview` | **production** `hrpbjudsrqcgyrkkodop` | `https://air-rally.com` |
+| `eas.json` → `production` | **production**, via EAS server-side env | `https://air-rally.com` |
 
-This is a real, live consequence, not a hypothetical: **every booking, venue, credit, and profile this app touches from any build — including a plain `npx expo start` on a laptop — is real production data.** PayMongo on production is currently in TEST mode (card charges are simulated), but nothing else about a booking is simulated. Do not create test data through this app without a clear plan to clean it up through the app's own flows (e.g. cancelling a booking/match you created), never by deleting rows directly.
+**The binding rule: `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_API_URL` must target the same Supabase project.** A Supabase access token is only valid against the project that issued it, so a staging token sent to production's API 401s on every `/api/mobile/*` call — checkout, cancel, reschedule, account deletion. Reads keep working, which is what makes the mistake easy to miss until someone tries to pay. `src/lib/environment.ts` detects this pairing at runtime and the in-app banner names it.
 
-`production`'s values are not in this file — that profile is linked to EAS's server-side Environment Variables (`environment: "production"`; `eas env:list --environment production`) rather than an inline `env` block, so it can be rotated without a repo change. The other three profiles' values are inline here and in `eas.json` and must be kept in sync with `production`'s by hand.
+### Local development needs the web dev server
 
-If a hosted staging deployment of the web app (and a separate staging Supabase project) is ever stood up again, retarget `development`/`development-device`/`preview` at it — that's what removes the production-data tradeoff for day-to-day development.
+`http://localhost:3000` is the web repo's own dev server, which already points at the same staging project:
+
+```bash
+cd "/Users/leou/AIR:Rally" && npm run dev
+```
+
+Without it, browsing, availability, COURT/Side, Ranked and profile all work against staging; the four `/api/mobile/*` calls fail with the app's ordinary "Could not reach AIR/Rally" message.
+
+`development-device` builds run on a real handset, where `localhost` is the *phone*, not your Mac. Override `EXPO_PUBLIC_API_URL` with your Mac's LAN address (`http://192.168.x.x:3000`) or a tunnel before building that profile.
+
+### `preview` is still production
+
+`preview` is an installable internal build with no dev server attached, so it needs a *hosted* API — and there is no staging deployment of the web app (`vercel.json` carries no staging domain). It therefore stays on production Supabase and `https://air-rally.com`, and **anything done in a preview build is real production data**. PayMongo on production is in TEST mode, so card charges are simulated; nothing else about a booking is. Clean up test data through the app's own flows (cancel the booking/match you created), never by deleting rows directly.
+
+Standing up a staging web deployment is what removes this last exception — retarget `preview` at it and every non-production surface is off production for good.
+
+### Telling builds apart
+
+Every `EXPO_PUBLIC_*` value is baked in at build time, so two builds on the same home screen look identical while writing to different databases. `EnvironmentBanner` (rendered by the root layout) shows a persistent label on any build that is not correctly-configured production, and a red one when the API base and Supabase project disagree. It renders nothing at all on a real production build.
+
+`production`'s values are not in `eas.json` — that profile is linked to EAS's server-side Environment Variables (`environment: "production"`; `eas env:list --environment production`), so it can be rotated without a repo change.
+
+## Why no crash-reporting SDK is installed yet
+
+Every fatal error funnels through one function, `captureFatalError` in `src/lib/error-reporting.ts`. Today it writes a structured report to the device log and keeps the last five in `AsyncStorage`, so a crash survives the restart that follows it.
+
+A provider is **not** installed because one cannot be configured without an account only the operator can create, and an unconfigured SDK is strictly worse than none — it adds native weight to every build and reports nothing.
+
+**To add Sentry** (recommended: it is the option Expo documents for this architecture, and the free tier covers 5,000 events/month):
+
+1. Create a Sentry account and a React Native project; note the **org slug**, **project name** and **DSN**.
+2. Create an **organization auth token** under Developer Settings → Auth Tokens.
+3. Add `SENTRY_AUTH_TOKEN` to the EAS build environment with *sensitive* visibility (`eas env:create`).
+4. Run `npx @sentry/wizard@latest -i reactNative` — it installs the package, wires the Metro config and adds the init call.
+5. Add one line to `captureFatalError`:
+   ```ts
+   Sentry.captureException(error, { extra: report });
+   ```
+6. Make a new release build. Source maps upload as part of it, so a native rebuild is required; JS-only OTA updates need `npx sentry-expo-upload-sourcemaps dist`.
+
+Steps 1–3 need the operator's own credentials and cannot be done from this repo.
+
+## Why `fingerprint` and not `appVersion`
+
+`fingerprint` hashes everything that can affect the native runtime — dependencies, config plugins, `app.json`, native directories — and derives the runtime version from that hash. An update only installs on a binary whose fingerprint matches, so **a change that needs a new binary cannot be shipped over the air by mistake**. `appVersion` would have left that guarantee resting on someone remembering to bump `version` after every native change.
+
+The tradeoff Expo names is that builds become necessary more often. That is the correct side to err on for a launch: an OTA update landing on an incompatible binary is a crash on a customer's phone with no way back.
+
+Verified rather than assumed — appending a comment to a screen leaves the fingerprint identical (`d694c828…`), while adding one config plugin changes it (`65a9e6c0…`):
+
+```bash
+npx expo-updates fingerprint:generate --platform ios
+```
+
+### Publishing
+
+```bash
+eas update --channel preview --message "what changed"
+```
+
+Ship to `preview` first and confirm on a real install. Only then:
+
+```bash
+eas update --channel production --message "what changed"
+```
+
+### Rollback
+
+An update is a pointer, so rolling back is republishing the pointer, not deleting anything:
+
+```bash
+eas update:list --branch production          # find the last good update group
+eas update:republish --group <GROUP_ID>      # re-point the channel at it
+```
+
+`eas update:roll-back-to-embedded --channel production` is the escape hatch when *no* published update is good — it sends clients back to the JS that shipped inside the binary.
+
+Three things worth knowing before relying on any of this:
+
+- **Rollback is not instant.** Clients pick up the change on their next launch-and-check, so anyone mid-session keeps the bad update until they relaunch.
+- **A rollback cannot fix a bad native build.** If the fingerprint changed, the only route is a new binary through App Store review.
+- **The first OTA-capable build is the next one made.** Adding `expo-updates` changes the native runtime; binaries built before this commit have no update client and will never receive an update. Nothing already installed or submitted is affected by this change.
 
 ## Phase 0 status
 

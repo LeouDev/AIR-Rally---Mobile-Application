@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { EnvironmentBanner } from '@/components/environment-banner';
 import { ToastProvider } from '@/components/ui/toast';
 import { Colors } from '@/constants/theme';
 import { useNotificationObserver } from '@/lib/notifications-runtime';
@@ -66,6 +67,9 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={navigationTheme}>
+      {/* Overlay, not a sibling row — renders nothing at all on a
+          correctly-configured production build. */}
+      <EnvironmentBanner />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={session !== null && needsAgreement === false}>
           <Stack.Screen name="(tabs)" />
