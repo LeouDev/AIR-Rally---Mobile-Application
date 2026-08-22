@@ -66,6 +66,12 @@ grep -rn "PROBE\|__DEBUG_\|setTimeout(() => { throw" src/
 
 Temporary probes are a different order of hazard from everything else on this list: a screen-level `setTimeout` that throws does not degrade anything, it crashes the app on a timer for real users.
 
+### Behavioural tests cannot see position
+
+Any change to a floating or absolutely-positioned element needs eyes on a running build, and **no amount of green justifies skipping it**.
+
+`environment-banner.test.tsx` has six passing tests — renders nothing in production, names the environment, never intercepts touches — and not one could catch a positioning collision. That is correct test design, and it is exactly *why* they survived two repositions without failing. The banner has now collided twice, in two different positions, and both were found by looking at a screen.
+
 ## 4. Shipping knowingly unverified
 
 Written down as unverified rather than quietly passed.
@@ -81,6 +87,7 @@ Written down as unverified rather than quietly passed.
 
   The local AsyncStorage reports and the branded error screen remain render-phase only, by design: a global handler has no fallback UI to render into.
 - **Source-map upload** — see §3.
+- **`expo-notifications` registration error on every launch** — `Error reading persisted server registration info: FunctionCallException: getRegistrationInfoAsync has failed`. Simulator push registration is the boring explanation and no physical device has been available to compare. **If this appears on physical hardware it becomes a real finding**, not an accepted one — recorded with that condition attached so the first person to see it there does not spend an hour rediscovering it.
 
 ## 5. Quotas and ceilings
 
@@ -103,6 +110,9 @@ The MAU ceiling is the one worth planning for. The entire OTA strategy — finge
 - Three policy names exceed Postgres's 63-byte identifier limit.
 - Migration governance: no ledger, past numbering collisions, baselining deferred.
 - The 23 React Compiler bail-outs (`expo lint` errors) — those components get no auto-memoization while the rest of the app does.
+- **The environment banner needs to stop being a fixed-offset overlay.** It has collided twice — pinned to the top it sat inside the navigation header; pinned to the bottom it sat on the sign-up screen's consent row, partially covering the agreement version string. A fixed offset has no safe edge, because there is no offset that is empty on every screen, so a third position relocates the problem rather than removing it.
+
+  The fix is a slim full-width strip that **reserves layout space**, which cannot overlap by construction. It costs a few points of vertical space on non-production builds only — the right place to spend it. Deliberately not done before the RC: it is P3, invisible to users, and it needs the safe-area handling done properly (a strip consuming `insets.top` must also stop child screens re-applying it) rather than rushed.
 
 ## 7. What mobile testing cannot tell you
 
