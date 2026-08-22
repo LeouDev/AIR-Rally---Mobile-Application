@@ -104,6 +104,8 @@ Two things will bite you, both discovered the slow way:
 
 **`npx expo run:ios` may not target the simulator.** With an iPhone paired to this Mac it resolves to that physical device and fails with `No code signing certificates are available to use` — *including* when passed the simulator's own UDID via `--device`. That is why the steps above drive `xcodebuild` directly. Making `expo run:ios` work unmodified is an Xcode signing setup for the paired device, not a project change.
 
+**Confirm a Metro bundle contains your app before concluding anything from grepping it.** A bundle Metro serves can legitimately contain no app code — no `BookingPanel`, no `EnvironmentBanner` — in which case grepping it for a DSN, a string or a component returns zero for reasons that have nothing to do with what you were testing. The zero is true about the artifact and false about the world.
+
 **Delete `ios/` when you are done.** Native directories are fingerprint input, so any `expo-updates fingerprint:generate` run while `ios/` exists is not comparable to the CNG values EAS builds from.
 
 ## Over-the-air updates
