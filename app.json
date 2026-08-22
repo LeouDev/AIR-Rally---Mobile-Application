@@ -54,7 +54,13 @@
       ],
       "expo-apple-authentication",
       "expo-sharing",
-      "@sentry/react-native"
+      [
+        "@sentry/react-native",
+        {
+          "organization": "air-rally",
+          "project": "air-rally"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

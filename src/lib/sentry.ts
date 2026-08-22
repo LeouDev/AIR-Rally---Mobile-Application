@@ -25,6 +25,11 @@ export function initSentry(): void {
   Sentry.init({
     dsn: DSN,
     environment: status.environment,
+    // Dev only. Sentry's transport is otherwise completely silent, so
+    // there is no way to tell "captured and sent" from "never fired"
+    // without dashboard access — which is exactly the gap that made the
+    // coverage claim unverifiable in the first place.
+    debug: __DEV__,
     // Errors only. Performance tracing is a separate and much larger
     // volume of events, and the free tier is 5,000/month — turning it on
     // by reflex is how a quota disappears before the first real crash.
