@@ -63,6 +63,12 @@
         "projectId": "c802dbac-e219-48e5-8216-0f64bd45f8fe"
       }
     },
-    "owner": "galileouuu"
+    "owner": "galileouuu",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c802dbac-e219-48e5-8216-0f64bd45f8fe"
+    }
   }
 }

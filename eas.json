@@ -13,7 +13,8 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://vdxdmtsnptzodabaojlc.supabase.co",
         "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_y3K576kJx79htObjsJ2trw_31EGIXci",
         "EXPO_PUBLIC_API_URL": "http://localhost:3000"
-      }
+      },
+      "channel": "development"
     },
     "development-device": {
       "developmentClient": true,
@@ -22,7 +23,8 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://vdxdmtsnptzodabaojlc.supabase.co",
         "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_y3K576kJx79htObjsJ2trw_31EGIXci",
         "EXPO_PUBLIC_API_URL": "http://localhost:3000"
-      }
+      },
+      "channel": "development-device"
     },
     "preview": {
       "distribution": "internal",
@@ -30,11 +32,13 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://hrpbjudsrqcgyrkkodop.supabase.co",
         "EXPO_PUBLIC_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhycGJqdWRzcnFjZ3lya2tvZG9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMDQ3ODIsImV4cCI6MjEwMTc4MDc4Mn0.wxaFARfuptZkYEi0ZPMZpFVUOLSBXvcMxDvDp4Lh77A",
         "EXPO_PUBLIC_API_URL": "https://air-rally.com"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
-      "environment": "production"
+      "environment": "production",
+      "channel": "production"
     }
   },
   "submit": {

@@ -83,7 +83,18 @@ A provider is **not** installed because one cannot be configured without an acco
 
 Steps 1–3 need the operator's own credentials and cannot be done from this repo.
 
-## Why `fingerprint` and not `appVersion`
+## Over-the-air updates
+
+`expo-updates` is configured with `runtimeVersion: { "policy": "fingerprint" }`. Each build profile publishes to its own channel:
+
+| Build profile | Channel |
+| --- | --- |
+| `development` | `development` |
+| `development-device` | `development-device` |
+| `preview` | `preview` |
+| `production` | `production` |
+
+### Why `fingerprint` and not `appVersion`
 
 `fingerprint` hashes everything that can affect the native runtime — dependencies, config plugins, `app.json`, native directories — and derives the runtime version from that hash. An update only installs on a binary whose fingerprint matches, so **a change that needs a new binary cannot be shipped over the air by mistake**. `appVersion` would have left that guarantee resting on someone remembering to bump `version` after every native change.
 
