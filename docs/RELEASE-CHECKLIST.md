@@ -35,10 +35,10 @@ Web goes first deliberately. During App Store review a Manila owner sees correct
 ## 3. Before cutting the RC
 
 - [ ] `eas env:list --environment production` shows all four required variables, `EXPO_PUBLIC_SENTRY_DSN` included.
-- [ ] Source-map upload confirmed **succeeding**, not merely configured. A Debug build proves only that the phase no longer fails — the upload is a no-op without an auth token. Only a Release build on EAS exercises it.
 - [ ] `app.json` version is not `0.1.0`. Whatever ships is the public version string permanently, and `error-reporting.ts` stamps it into every crash report, so it is also the version read in support tickets.
 - [ ] Backend's drift check **findings understood and accepted** — deliberately not "zero findings". Once 076/077/078 are in the tree, production reads as drifted until they are applied, and that red is *correct*. Nobody should block on it, and nobody should ever fix it by editing the check.
-- [ ] **Sentry delivery confirmed in the dashboard**, not just capture. See §6 — this is a thirty-second check and until someone does it, "we have crash reporting" means captured, not delivered.
+- [x] **Sentry capture and delivery verified end to end.** See §6 for the evidence chain.
+- [ ] **Source-map upload confirmed on a RELEASE build** — the first real crash arrives readable, not minified. Deliberately a separate line from the one above: the probes ran on a local *debug* build, where Metro serves source maps and `DebugSymbolicator` handles symbolication, so a readable trace there proves nothing about release. The slugs fixed the build *failure*; whether the upload *succeeds* with the real token is a different observation and only a release build can make it.
 
 ### Gates this repo does not own
 
@@ -104,14 +104,20 @@ Written down as unverified rather than quietly passed.
 - **Push notification delivery** — unverifiable on staging. Staging holds no Vault secrets, so the webhook path fails open and logs nothing.
 - **PayMongo stale-booking expiry** — same cause. The sweep silently never runs on staging, which also makes the pending-booking screen's "the slot releases automatically" copy false there.
 - **COURT/Side `court_side_feed` (077)** — verified at volume, but RLS was **not** exercised (connected as `postgres`, `auth.uid()` simulated at SQL level). End-to-end through supabase-js with a real token is unclaimed.
-- **Crash coverage — capture measured, delivery unconfirmed.** On a real build, Sentry's global handlers demonstrably *capture* an uncaught handler throw and an unhandled rejection — the two shapes the error boundary structurally cannot reach. That much is empirical.
+- **Crash coverage — VERIFIED end to end.** Every link measured rather than inferred:
 
-  Delivery is not. The evidence is `Captured error event` lines, and `@sentry/core`'s `client.js:736` emits that at the **top of `_captureEvent`, before `_processEvent` is called** — transport happens in the `.then()` afterwards, and the failure path only logs on rejection. A malformed DSN, a deleted project, a network failure or rate limiting all produce an identical `Captured` line followed by silence.
+  | Link | Evidence | By |
+  | --- | --- | --- |
+  | `initSentry()` actually runs | launch log: `Session replay disabled via configuration` | QA, on device |
+  | Capture works for the shapes the boundary cannot reach | `SENTRY-PROBE-A` (uncaught handler throw), `SENTRY-PROBE-B` (unhandled rejection) | local release-mode-independent build |
+  | **Delivery works** | both probe events visible in the Sentry project | founder, in the dashboard |
+  | Same project everywhere | `.env.local`, `eas.json` and EAS production all resolve to `4511956256227328` | — |
 
-  Closing it costs thirty seconds: open the Sentry dashboard and look for the probe events. Until someone does, "we have crash reporting" means captured, not delivered.
+  Worth keeping the reason delivery needed separate confirmation, because the log is misleading: `@sentry/core`'s `client.js:736` emits `Captured error event` at the **top of `_captureEvent`, before `_processEvent` is called**, and the failure path only logs on *rejection*. A malformed DSN, a deleted project, a network failure or rate limiting all produce an identical `Captured` line followed by silence. Capture logs can never evidence delivery.
 
-  The local AsyncStorage reports and the branded error screen remain render-phase only, by design: a global handler has no fallback UI to render into.
-- **Source-map upload** — see §3.
+  Still render-phase only, by design: the local AsyncStorage reports and the branded error screen. A global handler has no fallback UI to render into.
+
+  **Source-map upload remains open** — see §3. Do not read this row as covering it.
 - **`expo-notifications` registration error on every launch** — `Error reading persisted server registration info: FunctionCallException: getRegistrationInfoAsync has failed`. Simulator push registration is the boring explanation and no physical device has been available to compare. **If this appears on physical hardware it becomes a real finding**, not an accepted one — recorded with that condition attached so the first person to see it there does not spend an hour rediscovering it.
 
 ## 7. Quotas and ceilings
