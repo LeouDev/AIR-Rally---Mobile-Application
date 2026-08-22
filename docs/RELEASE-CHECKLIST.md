@@ -6,7 +6,7 @@ This exists because the state below was held across several parallel working ses
 
 ---
 
-## 1. Four changes must ship in the same binary
+## 1. Five changes must ship in the same binary
 
 These all move the OTA runtime version, so **none of them can ship over the air**. An `eas update` carrying any of them silently does not apply, because the update no longer matches the binary's fingerprint.
 
@@ -16,6 +16,7 @@ These all move the OTA runtime version, so **none of them can ship over the air*
 | Sentry install (`6cc8927`) | native dependency **and** a config plugin |
 | Sentry org/project slugs (`91207f5`) | config-plugin props again |
 | iOS privacy manifest (`ios.privacyManifests`) | native config; **verified** — adding it moved the hash `7d6b11ea` → `1261e1f5` |
+| App version, `app.json` (0.1.0 → 1.0.0) | `expo.version` is fingerprint input; **verified** — moved the hash `1261e1f5` → `f4f64031` |
 
 Verify before cutting:
 
@@ -49,7 +50,7 @@ Web goes first deliberately. During App Store review a Manila owner sees correct
 ## 3. Before cutting the RC
 
 - [ ] `eas env:list --environment production` shows all four required variables, `EXPO_PUBLIC_SENTRY_DSN` included.
-- [ ] `app.json` version is not `0.1.0`. Whatever ships is the public version string permanently, and `error-reporting.ts` stamps it into every crash report, so it is also the version read in support tickets.
+- [x] `app.json` version set to `1.0.0`, matching `package.json`. Whatever ships is the public version string permanently, and `error-reporting.ts` stamps it into every crash report, so it is also the version read in support tickets. Confirmed fingerprint-moving: `1261e1f5` → `f4f64031`.
 - [x] **iOS privacy manifest declared in `app.json`.** Moved here from "before submitting" because it is **fingerprint input and cannot be retrofitted** — if the RC is cut without it, fixing it costs a second binary out of two.
 
   Nothing generates one otherwise, all four checks confirmed: `@sentry/react-native` ships no `.xcprivacy` (its docs say so explicitly for **statically linked** libraries, which is React Native's default and what this project uses), `expo prebuild` emits none, and the app declared none. The declaration is *derived* from `node_modules/**/*.xcprivacy` rather than guessed — the union of every required-reason API its dependencies declare, plus Sentry's three collected-data categories from Sentry's own documentation. Verified end to end: `prebuild` now emits `ios/AIRRally/PrivacyInfo.xcprivacy`, wired into the Xcode target.
