@@ -83,6 +83,29 @@ A provider is **not** installed because one cannot be configured without an acco
 
 Steps 1–3 need the operator's own credentials and cannot be done from this repo.
 
+## Local native builds
+
+EAS build credits are limited; local simulator builds are free and compile every native module for real, so they are the right place to verify anything native (`expo-updates`, `@sentry/react-native`, config-plugin changes).
+
+Prerequisites: Xcode, and CocoaPods via Homebrew (`brew install cocoapods` — Homebrew's Ruby, not the system 2.6, which is too old).
+
+```bash
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+npx expo prebuild --platform ios
+xcodebuild -workspace ios/AIRRally.xcworkspace -scheme AIRRally -configuration Debug \
+  -sdk iphonesimulator -destination "platform=iOS Simulator,id=<simulator-udid>" \
+  -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO
+xcrun simctl install <simulator-udid> ios/build/Build/Products/Debug-iphonesimulator/AIRRally.app
+```
+
+Two things will bite you, both discovered the slow way:
+
+**`LANG` must be set or `pod install` fails.** CocoaPods 1.17 on Ruby 4.0 calls `String#unicode_normalize` on the installation root and dies with `Encoding::CompatibilityError: Unicode Normalization not appropriate for ASCII-8BIT` when the locale is unset. The error names normalization, not encoding, so it does not look like a locale problem.
+
+**`npx expo run:ios` may not target the simulator.** With an iPhone paired to this Mac it resolves to that physical device and fails with `No code signing certificates are available to use` — *including* when passed the simulator's own UDID via `--device`. That is why the steps above drive `xcodebuild` directly. Making `expo run:ios` work unmodified is an Xcode signing setup for the paired device, not a project change.
+
+**Delete `ios/` when you are done.** Native directories are fingerprint input, so any `expo-updates fingerprint:generate` run while `ios/` exists is not comparable to the CNG values EAS builds from.
+
 ## Over-the-air updates
 
 `expo-updates` is configured with `runtimeVersion: { "policy": "fingerprint" }`. Each build profile publishes to its own channel:
