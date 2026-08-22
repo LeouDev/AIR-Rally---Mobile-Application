@@ -1,4 +1,4 @@
-import type { Post, PostComment, PublicProfile } from '@/lib/database.types';
+import type { CourtSideFeedScope, Post, PostComment, PublicProfile } from '@/lib/database.types';
 import { listEmbeddedEvents, type EmbeddedEvent } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 
@@ -36,15 +36,36 @@ async function attachEvents<T extends { event_id: string | null }>(
   return rows.map((row) => ({ ...row, event: row.event_id ? (eventsById.get(row.event_id) ?? null) : null }));
 }
 
+/** court_side_feed()'s keyset cursor. effective_at alone isn't unique — a
+ * post and a reshare (or two posts) can share an instant — so the RPC
+ * takes `id` as a tiebreaker. Both fields travel together always: the
+ * function raises if only one is supplied. */
+export type FeedCursor = { effectiveAt: string; id: string };
+
 /** The COURT/Side feed, via the same court_side_feed() RPC the web uses —
- * SECURITY INVOKER, so RLS applies exactly as a direct query would. The
- * cursor is effective_at (a reshare's own time, not the original post's),
- * which is invisible to callers: still just an ISO string from the last row. */
+ * SECURITY INVOKER, so RLS applies exactly as a direct query would.
+ * `scope` is required with no default on the RPC itself (see
+ * CourtSideFeedScope) — omitting it is exactly the bug that shipped
+ * 'Following' as a tab that filtered nothing, so this wrapper does not
+ * default it either. `following` returns zero rows for a signed-out
+ * caller rather than raising; callers must hide the tab instead of
+ * showing an always-empty feed, the same false signal removed from the
+ * tabs themselves. */
 export async function listFeedPosts({
+  scope,
   limit = FEED_PAGE_SIZE,
   cursor,
-}: { limit?: number; cursor?: string } = {}): Promise<{ posts: FeedPost[]; nextCursor: string | null }> {
-  const { data, error } = await supabase.rpc('court_side_feed', { p_limit: limit, p_cursor: cursor });
+}: {
+  scope: CourtSideFeedScope;
+  limit?: number;
+  cursor?: FeedCursor;
+}): Promise<{ posts: FeedPost[]; nextCursor: FeedCursor | null }> {
+  const { data, error } = await supabase.rpc('court_side_feed', {
+    p_scope: scope,
+    p_limit: limit,
+    p_cursor: cursor?.effectiveAt,
+    p_cursor_id: cursor?.id,
+  });
   if (error) throw error;
 
   const rows = data ?? [];
@@ -58,7 +79,8 @@ export async function listFeedPosts({
     resharer: row.resharer_id ? (profiles.get(row.resharer_id) ?? null) : null,
   }));
 
-  const nextCursor = rows.length === limit ? rows[rows.length - 1].effective_at : null;
+  const lastRow = rows[rows.length - 1];
+  const nextCursor = rows.length === limit ? { effectiveAt: lastRow.effective_at, id: lastRow.id } : null;
   return { posts, nextCursor };
 }
 

@@ -8,31 +8,24 @@ import { listFeedPosts } from '@/lib/posts';
 /**
  * COURT/Side's tabs must never claim to have changed a feed they did not.
  *
- * The feed comes from court_side_feed(p_limit, p_cursor), which has no
- * scope parameter (web repo migration 20260810000072) — so every tab
- * rendered the same unfiltered feed. Mobile went further than web and
- * TOLD the player otherwise: tapping a tab popped a "<tab> feed
- * selected" toast over a feed nothing had filtered. Web failed
- * silently. A missing feature is a gap; announcing it worked is a lie,
- * and only the lie was ours to fix from here.
- *
- * 'Near you' is gone rather than quiet. It needs a device location,
- * which means expo-location — a native dependency already declined once
- * for Explore's radius filter (see the note in lib/venues.ts), and one
+ * 'Near you' is gone rather than quiet — it needs a device location,
+ * which means expo-location, a native dependency already declined once
+ * for Explore's radius filter (see the note in lib/venues.ts) and one
  * that moves the OTA fingerprint, so it cannot reach installed builds
  * without a new binary. A tab that can never do its job should not be
  * offered.
  *
- * 'Following' stays and becomes real once the RPC learns a scope
- * parameter; the filtering has to happen in the RPC, because the feed
- * pages 20 rows at a time on effective_at and filtering a page after
- * the fetch gives a player who follows three people near-empty pages
- * and a cursor that skips past what they should have seen.
+ * 'Following' is real: court_side_feed() takes a required p_scope with
+ * no default (web repo migration 20260810000077_court_side_feed_scope.sql)
+ * and filters in the RPC — not client-side, because the feed pages 20
+ * rows at a time on a composite (effective_at, id) cursor, and filtering
+ * a page after the fetch would give a player who follows three people
+ * near-empty pages and a cursor that skips content they should have seen.
  *
- * Until then the assertion below is on ANY toast, not on that one
- * string, so the claim cannot return under new wording. When scope does
- * land, rewrite this against the query the tab produces — do not loosen
- * it to let the announcement back.
+ * An anonymous caller gets zero rows back for 'following' rather than an
+ * error, so the client's own job is to hide the tab when signed out —
+ * showing it and rendering nothing is the same lie the toast used to
+ * tell, just spelled differently.
  */
 
 const METRICS: Metrics = {
@@ -56,9 +49,16 @@ jest.mock('expo-router', () => {
   };
 });
 
+const SIGNED_IN_SESSION = { user: { id: '11111111-1111-1111-1111-111111111111' } };
+
+// A mutable mock rather than a fixed jest.mock return, so the signed-out
+// test can flip session to null without a second render file — the tab's
+// visibility depends on this, so it has to be a real variable, not a
+// module-scope constant baked in at mock time.
+let mockSession: typeof SIGNED_IN_SESSION | null = SIGNED_IN_SESSION;
 jest.mock('@/providers/session', () => ({
   useSession: () => ({
-    session: { user: { id: '11111111-1111-1111-1111-111111111111' } },
+    session: mockSession,
     isLoaded: true,
     needsAgreement: false,
     markAgreementAccepted: jest.fn(),
@@ -112,6 +112,7 @@ async function renderFeed() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSession = SIGNED_IN_SESSION;
 });
 
 describe('COURT/Side feed tabs', () => {
@@ -123,26 +124,36 @@ describe('COURT/Side feed tabs', () => {
     expect(screen.getByText('Following')).toBeTruthy();
   });
 
-  it('moves the selection without claiming the feed changed', async () => {
+  it('hides Following rather than showing an always-empty feed when signed out', async () => {
+    mockSession = null;
+    await renderFeed();
+
+    expect(screen.getByText('For you')).toBeTruthy();
+    expect(screen.queryByText('Following')).toBeNull();
+
+    // The initial load must never have asked for a scope it can't serve.
+    expect(mockListFeedPosts).toHaveBeenCalledWith(expect.objectContaining({ scope: 'for_you' }));
+    expect(mockListFeedPosts).not.toHaveBeenCalledWith(expect.objectContaining({ scope: 'following' }));
+  });
+
+  it('switching to Following asks the RPC for that scope, with no false announcement', async () => {
     await renderFeed();
     const callsBefore = mockListFeedPosts.mock.calls.length;
 
     await fireEvent.press(screen.getByText('Following'));
 
-    // Selection is the one thing a tab tap legitimately does today, so
-    // removing the false announcement must not take it with it.
+    // Selection moves...
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Following' }).props.accessibilityState).toEqual({
         selected: true,
       });
     });
-
-    // Nothing may claim the feed changed...
+    // ...nothing announces it happened...
     expect(mockToastShow).not.toHaveBeenCalled();
-    // ...and nothing did: no refetch, because there is no scope to
-    // refetch under. If this line ever fails the feature landed, and the
-    // assertion above should be rewritten against the new query rather
-    // than loosened to let the announcement back.
-    expect(mockListFeedPosts.mock.calls.length).toBe(callsBefore);
+    // ...and the feed actually reloads, this time scoped for real. Two
+    // calls, not one: switching tabs must fetch a fresh first page under
+    // the new scope, not just relabel what 'For you' already returned.
+    expect(mockListFeedPosts.mock.calls.length).toBeGreaterThan(callsBefore);
+    expect(mockListFeedPosts).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'following' }));
   });
 });

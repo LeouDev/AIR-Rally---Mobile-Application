@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { Club, EventAttendeeStatus, PublicProfile } from '@/lib/database.types';
+import type { Club, CourtSideFeedScope, EventAttendeeStatus, PublicProfile } from '@/lib/database.types';
 import { listClubsForUser } from '@/lib/clubs';
 import { joinEvent, leaveEvent, listMyEventStatuses } from '@/lib/events';
 import { followUser, getFollowCounts, getPublicProfile, listFollowingIds, searchPublicProfiles, unfollowUser, type FollowCounts } from '@/lib/follows';
@@ -29,6 +29,7 @@ import {
   resharePost,
   unlikePost,
   unresharePost,
+  type FeedCursor,
   type FeedPost,
 } from '@/lib/posts';
 import { useSession } from '@/providers/session';
@@ -42,12 +43,23 @@ export default function CourtSideScreen() {
   const { show } = useToast();
 
   const [activeTab, setActiveTab] = useState<(typeof FEED_TABS)[number]>('For you');
+  // Signed out never has a 'following' scope to show — 'Following' selected
+  // with nothing behind it is the same lie court_side_feed() itself warns
+  // against (an anonymous caller gets zero rows, not an error), so the tab
+  // is hidden rather than left selectable, and the effective tab falls
+  // back rather than requesting a scope with no session to filter by. A
+  // sign-out mid-view is the only way to reach this while activeTab still
+  // says 'Following'; signing back in resumes it, which is the point of
+  // not clearing the underlying state.
+  const effectiveTab = !userId && activeTab === 'Following' ? 'For you' : activeTab;
+  const visibleTabs = userId ? FEED_TABS : FEED_TABS.filter((tab) => tab !== 'Following');
+  const scope: CourtSideFeedScope = effectiveTab === 'Following' ? 'following' : 'for_you';
   const [myProfile, setMyProfile] = useState<PublicProfile | null>(null);
   const [counts, setCounts] = useState<FollowCounts>({ followers: 0, following: 0 });
   const [myClubs, setMyClubs] = useState<Club[]>([]);
 
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<FeedCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
@@ -66,7 +78,7 @@ export default function CourtSideScreen() {
   const loadFirstPage = useCallback(async () => {
     try {
       const [{ posts: rows, nextCursor: cursor }, profileResult, countsResult, clubsResult] = await Promise.all([
-        listFeedPosts(),
+        listFeedPosts({ scope }),
         userId ? getPublicProfile(userId) : Promise.resolve(null),
         userId ? getFollowCounts(userId) : Promise.resolve({ followers: 0, following: 0 }),
         userId ? listClubsForUser(userId) : Promise.resolve([]),
@@ -94,7 +106,7 @@ export default function CourtSideScreen() {
     } catch {
       setPosts([]);
     }
-  }, [userId]);
+  }, [userId, scope]);
 
   useFocusEffect(
     useCallback(() => {
@@ -112,7 +124,7 @@ export default function CourtSideScreen() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const { posts: rows, nextCursor: cursor } = await listFeedPosts({ cursor: nextCursor });
+      const { posts: rows, nextCursor: cursor } = await listFeedPosts({ scope, cursor: nextCursor });
       setPosts((prev) => [...(prev ?? []), ...rows]);
       setNextCursor(cursor);
       if (userId && rows.length > 0) {
@@ -130,7 +142,7 @@ export default function CourtSideScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [nextCursor, loadingMore, userId]);
+  }, [nextCursor, loadingMore, userId, scope]);
 
   const onChangeContent = (value: string) => {
     setContent(value);
@@ -363,18 +375,29 @@ export default function CourtSideScreen() {
                     </ThemedText>
                   </View>
                   <View style={[styles.tabsRow, { borderBottomColor: theme.border }]}>
-                    {FEED_TABS.map((tab) => (
+                    {visibleTabs.map((tab) => (
                       <Pressable
                         key={tab}
                         accessibilityRole="button"
-                        accessibilityState={{ selected: activeTab === tab }}
-                        onPress={() => setActiveTab(tab)}
+                        accessibilityState={{ selected: effectiveTab === tab }}
+                        onPress={() => {
+                          if (tab === effectiveTab) return;
+                          // Cleared synchronously, not left to the reload:
+                          // a stale nextCursor from the OUTGOING scope must
+                          // never survive into a loadMore fired against the
+                          // INCOMING one — the two scopes paginate on
+                          // different rows, so that cursor would be
+                          // meaningless once scope changes underneath it.
+                          setPosts(null);
+                          setNextCursor(null);
+                          setActiveTab(tab);
+                        }}
                         style={styles.tab}
                         hitSlop={4}>
-                        <ThemedText type="smallBold" themeColor={activeTab === tab ? 'foreground' : 'mutedForeground'}>
+                        <ThemedText type="smallBold" themeColor={effectiveTab === tab ? 'foreground' : 'mutedForeground'}>
                           {tab}
                         </ThemedText>
-                        {activeTab === tab ? <View style={[styles.tabIndicator, { backgroundColor: theme.primary }]} /> : null}
+                        {effectiveTab === tab ? <View style={[styles.tabIndicator, { backgroundColor: theme.primary }]} /> : null}
                       </Pressable>
                     ))}
                   </View>

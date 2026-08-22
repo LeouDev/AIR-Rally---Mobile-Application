@@ -276,6 +276,11 @@ export type Follow = {
   created_at: string;
 };
 
+/** court_side_feed()'s p_scope — required, no default (see the web repo's
+ * 20260810000077_court_side_feed_scope.sql). `for_you` is unfiltered;
+ * `following` is posts/reshares by people you follow, plus your own. */
+export type CourtSideFeedScope = 'for_you' | 'following';
+
 export type Post = {
   id: string;
   user_id: string;
@@ -694,8 +699,17 @@ export type Database = {
         };
         Returns: AvailableSlot[];
       };
+      /** p_scope is required with no default (see CourtSideFeedScope's own
+       * comment). p_cursor and p_cursor_id are a matched pair — the
+       * composite keyset cursor (effective_at, id) — and the function
+       * raises 22023 if exactly one is supplied without the other. */
       court_side_feed: {
-        Args: { p_limit?: number; p_cursor?: string };
+        Args: {
+          p_scope: CourtSideFeedScope;
+          p_limit?: number;
+          p_cursor?: string;
+          p_cursor_id?: string;
+        };
         Returns: (Post & { effective_at: string; resharer_id: string | null })[];
       };
       invite_event_players: {
