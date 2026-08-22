@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
 import { Wordmark } from '@/components/wordmark';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { getFriendlyAuthErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
 
 type Stage = 'exchanging' | 'invalid' | 'form' | 'done';
@@ -94,7 +95,7 @@ export default function ResetPasswordScreen() {
     const { error: updateError } = await supabase.auth.updateUser({ password });
     if (updateError) {
       setSubmitting(false);
-      setError(updateError.message);
+      setError(getFriendlyAuthErrorMessage(updateError));
       return;
     }
     await supabase.auth.signOut();

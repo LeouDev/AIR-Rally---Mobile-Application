@@ -12,6 +12,7 @@ import { Image } from 'expo-image';
 
 import { Wordmark } from '@/components/wordmark';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { getFriendlyAuthErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
 
 export default function SignInScreen() {
@@ -33,11 +34,7 @@ export default function SignInScreen() {
     });
     setSubmitting(false);
     if (signInError) {
-      setError(
-        signInError.message === 'Invalid login credentials'
-          ? 'Incorrect email or password.'
-          : signInError.message
-      );
+      setError(getFriendlyAuthErrorMessage(signInError));
     }
     // Success needs no navigation — the root layout's Protected guard
     // swaps to (tabs) the moment the session lands.

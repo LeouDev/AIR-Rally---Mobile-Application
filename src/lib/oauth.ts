@@ -2,6 +2,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 
+import { getFriendlyAuthErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
 
 export type OAuthProvider = 'google' | 'facebook';
@@ -36,7 +37,7 @@ export async function signInWithProvider(provider: OAuthProvider): Promise<OAuth
     options: { redirectTo: REDIRECT_URL, skipBrowserRedirect: true },
   });
   if (error || !data.url) {
-    return { status: 'error', message: error?.message ?? "Couldn't start sign-in." };
+    return { status: 'error', message: error ? getFriendlyAuthErrorMessage(error) : "Couldn't start sign-in." };
   }
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, REDIRECT_URL);
@@ -52,7 +53,7 @@ export async function signInWithProvider(provider: OAuthProvider): Promise<OAuth
 
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   if (exchangeError) {
-    return { status: 'error', message: exchangeError.message };
+    return { status: 'error', message: getFriendlyAuthErrorMessage(exchangeError) };
   }
   return { status: 'signed_in' };
 }
@@ -110,7 +111,7 @@ export async function signInWithApple(): Promise<OAuthResult> {
     nonce: rawNonce,
   });
   if (error || !data.user) {
-    return { status: 'error', message: error?.message ?? "Couldn't complete sign-in." };
+    return { status: 'error', message: error ? getFriendlyAuthErrorMessage(error) : "Couldn't complete sign-in." };
   }
 
   const givenName = credential.fullName?.givenName ?? null;

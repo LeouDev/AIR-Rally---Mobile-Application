@@ -20,6 +20,7 @@ import { TextField } from '@/components/ui/text-field';
 import { Wordmark } from '@/components/wordmark';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { getFriendlyAuthErrorMessage } from '@/lib/auth-errors';
 import { CURRENT_AGREEMENT_VERSION } from '@/lib/legal';
 import { supabase } from '@/lib/supabase';
 
@@ -131,7 +132,7 @@ export default function SignUpScreen() {
 
     if (signUpError) {
       setSubmitting(false);
-      setError(signUpError.message);
+      setError(getFriendlyAuthErrorMessage(signUpError));
       return;
     }
 

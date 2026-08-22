@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
 import { Wordmark } from '@/components/wordmark';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { getFriendlyAuthErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
 
 const REDIRECT_URL = 'airrally://reset-password';
@@ -37,7 +38,7 @@ export default function ForgotPasswordScreen() {
     });
     setSubmitting(false);
     if (resetError) {
-      setError(resetError.message);
+      setError(getFriendlyAuthErrorMessage(resetError));
       return;
     }
     setSent(true);
