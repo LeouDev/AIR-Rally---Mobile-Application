@@ -6,7 +6,7 @@ This exists because the state below was held across several parallel working ses
 
 ---
 
-## 1. Three changes must ship in the same binary
+## 1. Four changes must ship in the same binary
 
 These all move the OTA runtime version, so **none of them can ship over the air**. An `eas update` carrying any of them silently does not apply, because the update no longer matches the binary's fingerprint.
 
@@ -15,6 +15,7 @@ These all move the OTA runtime version, so **none of them can ship over the air*
 | `66f5e4b` — camera/microphone permission removal | config-plugin props are fingerprint input |
 | Sentry install (`6cc8927`) | native dependency **and** a config plugin |
 | Sentry org/project slugs (`91207f5`) | config-plugin props again |
+| iOS privacy manifest (`ios.privacyManifests`) | native config; **verified** — adding it moved the hash `7d6b11ea` → `1261e1f5` |
 
 Verify before cutting:
 
@@ -49,6 +50,11 @@ Web goes first deliberately. During App Store review a Manila owner sees correct
 
 - [ ] `eas env:list --environment production` shows all four required variables, `EXPO_PUBLIC_SENTRY_DSN` included.
 - [ ] `app.json` version is not `0.1.0`. Whatever ships is the public version string permanently, and `error-reporting.ts` stamps it into every crash report, so it is also the version read in support tickets.
+- [x] **iOS privacy manifest declared in `app.json`.** Moved here from "before submitting" because it is **fingerprint input and cannot be retrofitted** — if the RC is cut without it, fixing it costs a second binary out of two.
+
+  Nothing generates one otherwise, all four checks confirmed: `@sentry/react-native` ships no `.xcprivacy` (its docs say so explicitly for **statically linked** libraries, which is React Native's default and what this project uses), `expo prebuild` emits none, and the app declared none. The declaration is *derived* from `node_modules/**/*.xcprivacy` rather than guessed — the union of every required-reason API its dependencies declare, plus Sentry's three collected-data categories from Sentry's own documentation. Verified end to end: `prebuild` now emits `ios/AIRRally/PrivacyInfo.xcprivacy`, wired into the Xcode target.
+
+  **Worth a human sanity-check before submitting** — it is a compliance declaration, and it is derived from what is in the tree today. A new dependency can add a required-reason API without anyone noticing.
 - [ ] **Production has `077-expand` applied and verified, before an RC carrying the new COURT/Side call site is cut.** This is a shipping precondition, not a development one — the client may be wired against staging now.
 
   If a binary ships calling the 4-arg `court_side_feed` against a production database that still has only the 2-arg one, **every COURT/Side request fails for every user on that build, permanently** — there is no way to force an App Store update. Same permanent-breakage reasoning that produced expand/contract, pointing the other way: expand/contract protects OLD clients from a dropped function; this protects NEW clients from one that does not exist yet. The same gate applies to the web deploy.
@@ -114,6 +120,17 @@ These gate **submit**, not **build**, and the last two can only be completed by 
 This does **not** gate the release candidate — the binary ships fine without it. It gates *depending* on OTA, so it sits here rather than in §3, where it would be skipped as obviously-not-blocking and then be untested at the moment it is needed.
 
 - [ ] **Publish / install / rollback exercised end to end.** Open since Cycle 1 and never run. An untested rollback procedure is a document, not a rollback procedure.
+
+- [ ] **Fingerprint inputs frozen since the RC commit.** Checkable, not remembered — diff these seven paths against the RC commit and require an empty result:
+
+  ```bash
+  git diff --stat <rc-commit> -- .gitignore eas.json app.json package.json       assets/images/app-icon.png assets/images/mark.png
+  # plus: no dependency added, removed or version-changed (autolinking is an input)
+  ```
+
+  If any of them moved, the update's runtime version no longer matches the shipped binary and **the update silently will not apply** — the same silent non-application the fingerprint policy causes deliberately, arriving by accident.
+
+- [ ] **Understand that an environment-value change cannot ship over the air.** `eas.json` is fingerprint input *including its `env` block*. The Sentry DSN lives there. Anyone fixing a wrong env value and reaching for `eas update` will find it silently not applying — that needs a new binary.
 
 Run it on **Android** — separately metered, none spent, and the update mechanism, fingerprint policy and channels are identical, so Android proves the machinery. Sequence: `preview` build → install → `eas update --channel preview` with a cosmetic JS-only change → confirm it installs on relaunch → `eas update:republish` to the previous group → confirm it reverts.
 
