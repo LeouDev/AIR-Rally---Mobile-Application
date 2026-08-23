@@ -261,10 +261,10 @@ export default function ProfileScreen() {
                 onPress={() => router.push('/clubs')}
               />
               <ShortcutCard
-                icon="calendar-outline"
-                title="Open Play"
-                subtitle="Join a game, or start one on a court you've booked."
-                onPress={() => router.push('/(tabs)/play')}
+                icon="trophy-outline"
+                title="Games"
+                subtitle="Your ranked record — wins, rank, and match history."
+                onPress={() => router.push('/ranked/games')}
               />
               <ShortcutCard
                 icon="list-outline"

@@ -143,9 +143,9 @@ export function RankCard() {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/ranked/history')}
+          onPress={() => router.push('/ranked/games')}
           style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
-          <ThemedText type="smallBold">Match history</ThemedText>
+          <ThemedText type="smallBold">My games</ThemedText>
         </Pressable>
       </View>
     </View>
