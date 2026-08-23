@@ -1,4 +1,11 @@
-import { myMatchResult, opponentNames, type RankedMatchParticipant } from '@/lib/ranked';
+import { getActiveMatchForEvent, myMatchResult, opponentNames, type RankedMatchParticipant } from '@/lib/ranked';
+import { supabase } from '@/lib/supabase';
+
+jest.mock('@/lib/supabase', () => ({
+  supabase: { from: jest.fn() },
+}));
+
+const mockFrom = supabase.from as jest.MockedFunction<typeof supabase.from>;
 
 function participant(overrides: Partial<RankedMatchParticipant>): RankedMatchParticipant {
   return {
@@ -97,6 +104,45 @@ describe('myMatchResult', () => {
     const result = myMatchResult({ winning_team: 'a', score_a: 11, score_b: 9 }, [opponent], 'someone-else');
 
     expect(result).toBeNull();
+  });
+});
+
+describe('getActiveMatchForEvent', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function mockChain(result: { data: unknown; error: unknown }) {
+    const limit = jest.fn(async () => result);
+    const order = jest.fn(() => ({ limit }));
+    const inFn = jest.fn(() => ({ order }));
+    const eq = jest.fn(() => ({ in: inFn }));
+    const select = jest.fn(() => ({ eq }));
+    mockFrom.mockReturnValue({ select } as never);
+    return { select, eq, inFn, order, limit };
+  }
+
+  it("scopes to this event's own active match — not just any match with this event_id in its history", async () => {
+    const { select, eq, inFn } = mockChain({ data: [{ id: 'match-1', status: 'live' }], error: null });
+
+    const match = await getActiveMatchForEvent('event-1');
+
+    expect(select).toHaveBeenCalledWith('id, status');
+    expect(eq).toHaveBeenCalledWith('event_id', 'event-1');
+    expect(inFn).toHaveBeenCalledWith('status', ['lobby', 'officiating', 'live', 'awaiting_confirmation']);
+    expect(match).toEqual({ id: 'match-1', status: 'live' });
+  });
+
+  it('returns null rather than a stale link when the only matches for this event have all finished', async () => {
+    mockChain({ data: [], error: null });
+
+    await expect(getActiveMatchForEvent('event-1')).resolves.toBeNull();
+  });
+
+  it('propagates a query failure rather than silently offering to start a duplicate match', async () => {
+    mockChain({ data: null, error: { code: '08006', message: 'connection lost' } });
+
+    await expect(getActiveMatchForEvent('event-1')).rejects.toBeTruthy();
   });
 });
 

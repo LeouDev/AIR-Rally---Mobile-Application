@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import type { EventAttendeeStatus } from '@/lib/database.types';
+import type { EventAttendeeStatus, RankedMatch } from '@/lib/database.types';
 import { useTheme } from '@/hooks/use-theme';
 import { calculateSplit, formatShare } from '@/lib/event-split';
 import {
@@ -25,6 +25,7 @@ import {
   type PendingJoinRequest,
 } from '@/lib/events';
 import { createPost } from '@/lib/posts';
+import { getActiveMatchForEvent, matchStatusLabel } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
 function formatWhen(iso: string): string {
@@ -50,6 +51,10 @@ export default function EventDetailScreen() {
   const [working, setWorking] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // undefined = still checking; null = none underway right now.
+  const [activeRankedMatch, setActiveRankedMatch] = useState<Pick<RankedMatch, 'id' | 'status'> | null | undefined>(
+    undefined
+  );
 
   const isOrganiser = userId != null && event?.creator_id === userId;
 
@@ -66,6 +71,9 @@ export default function EventDetailScreen() {
         }
       })
       .catch(() => setEvent(null));
+    getActiveMatchForEvent(id)
+      .then(setActiveRankedMatch)
+      .catch(() => setActiveRankedMatch(null));
   }, [id, userId]);
 
   useFocusEffect(load);
@@ -222,6 +230,31 @@ export default function EventDetailScreen() {
                 <ThemedText type="small" themeColor="subtle">
                   {message}
                 </ThemedText>
+              ) : null}
+
+              {activeRankedMatch === undefined ? null : activeRankedMatch ? (
+                <Button
+                  title={`Ranked match: ${matchStatusLabel(activeRankedMatch)}`}
+                  variant="outline"
+                  onPress={() =>
+                    router.push({ pathname: '/ranked/[matchId]', params: { matchId: activeRankedMatch.id } })
+                  }
+                />
+              ) : // Only once you're actually on this court and in the
+              // game — a ranked match needs a real party, not just an
+              // interested visitor. Mirrors the web event page's own
+              // gating exactly (see its comment there).
+              userId && event.court_id && (myStatus === 'joined' || isOrganiser) ? (
+                <Button
+                  title="Start a Ranked match here"
+                  variant="outline"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/ranked/new',
+                      params: { event: event.id, court: event.court_id! },
+                    })
+                  }
+                />
               ) : null}
 
               {userId && (isOrganiser || myStatus === 'joined') ? (

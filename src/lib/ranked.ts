@@ -464,6 +464,27 @@ export async function getActiveMatch(userId: string): Promise<RankedMatchDetail 
   return getMatch(matches[0].id);
 }
 
+/** The event's own active ranked match, if one is underway — same
+ * event → "still going" bridge as the web event page. RLS on
+ * ranked_matches means a match in progress only comes back here for
+ * its own participants/creator/scorekeeper/admin; a fellow attendee
+ * who isn't in that particular match sees nothing and the caller
+ * falls through to the "start one" bridge instead, even though one is
+ * already underway elsewhere in this session. Pre-existing scope
+ * limit inherited from the policy, not something this query adds. */
+export async function getActiveMatchForEvent(eventId: string): Promise<Pick<RankedMatch, 'id' | 'status'> | null> {
+  const { data, error } = await supabase
+    .from('ranked_matches')
+    .select('id, status')
+    .eq('event_id', eventId)
+    .in('status', ACTIVE_MATCH_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+  return data[0] as unknown as Pick<RankedMatch, 'id' | 'status'>;
+}
+
 export type RankedMatchSummary = {
   match: RankedMatch;
   /** The viewer's own line in this match. */

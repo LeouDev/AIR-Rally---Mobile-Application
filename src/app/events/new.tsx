@@ -9,6 +9,7 @@ import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TextField } from '@/components/ui/text-field';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -20,46 +21,6 @@ import { getPublicProfile } from '@/lib/follows';
 import { useSession } from '@/providers/session';
 
 type GameMode = 'casual' | 'ranked';
-
-/**
- * The two-state "which kind of game" and "singles or doubles" pickers,
- * same visual language as booking-picker.tsx's DurationSegmented — a
- * bordered, muted-fill row with a navy pill for the active option.
- */
-function SegmentedControl<T extends string>({
-  options,
-  selected,
-  onSelect,
-}: {
-  options: readonly { value: T; label: string }[];
-  selected: T;
-  onSelect: (value: T) => void;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.segmented, { backgroundColor: theme.muted, borderColor: theme.input }]}>
-      {options.map((option) => {
-        const isSelected = option.value === selected;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isSelected }}
-            onPress={() => onSelect(option.value)}
-            style={({ pressed }) => [
-              styles.segment,
-              isSelected && { backgroundColor: theme.navy },
-              pressed && { opacity: 0.85 },
-            ]}>
-            <ThemedText type="smallBold" style={{ color: isSelected ? theme.navyForeground : theme.mutedForeground }}>
-              {option.label}
-            </ThemedText>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-PH', {
@@ -409,18 +370,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
-  },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: 3,
-  },
-  segment: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: Radius.lg - 3,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
