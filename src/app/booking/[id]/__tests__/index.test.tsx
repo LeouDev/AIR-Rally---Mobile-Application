@@ -65,13 +65,23 @@ function bookingFixture(overrides: Partial<BookingWithCourt>): BookingWithCourt 
 }
 
 describe('BookingStatusScreen — a credit-final booking is denied, not absent', () => {
-  it('shows a disabled cancel control naming the reason, not nothing', async () => {
+  it('shows a disabled cancel control, explained by the card above rather than a per-button caption', async () => {
+    // The founder flagged the same explanation appearing three times on
+    // one screen (the card, this caption, Reschedule's own caption) —
+    // the caption was removed. The property that still has to hold is
+    // "a disabled control is explained somewhere on screen", now pinned
+    // against the card's text instead of a caption directly beneath it.
     mockGetBooking.mockResolvedValue(bookingFixture({ credit_amount_applied: 30000 }));
     await render(<BookingStatusScreen />);
 
     const cancelButton = await screen.findByLabelText('Cancel booking');
     expect(cancelButton.props.accessibilityState.disabled).toBe(true);
-    expect(screen.getByText("Can't be cancelled — paid with AIR/Rally Credits.")).toBeTruthy();
+    expect(screen.queryByText("Can't be cancelled — paid with AIR/Rally Credits.")).toBeNull();
+    await waitFor(() => {
+      expect(
+        screen.getByText(/This booking used AIR\/Rally Credits, which makes it final/)
+      ).toBeTruthy();
+    });
   });
 
   it('surfaces the 48-hour policy on the screen itself, not only inside a dialog this booking can never open', async () => {
@@ -118,13 +128,18 @@ describe('BookingStatusScreen — a credit-final booking is denied, not absent',
  * nothing on screen explaining why it failed.
  */
 describe('BookingStatusScreen — a credit-final booking cannot be rescheduled either', () => {
-  it('shows a disabled reschedule control naming the reason, not an enabled one that will fail', async () => {
+  it('shows a disabled reschedule control, explained by the same card rather than its own caption', async () => {
     mockGetBooking.mockResolvedValue(bookingFixture({ credit_amount_applied: 30000 }));
     await render(<BookingStatusScreen />);
 
     const rescheduleButton = await screen.findByLabelText('Reschedule');
     expect(rescheduleButton.props.accessibilityState.disabled).toBe(true);
-    expect(screen.getByText("Can't be rescheduled — paid with AIR/Rally Credits.")).toBeTruthy();
+    expect(screen.queryByText("Can't be rescheduled — paid with AIR/Rally Credits.")).toBeNull();
+    await waitFor(() => {
+      expect(
+        screen.getByText(/This booking used AIR\/Rally Credits, which makes it final/)
+      ).toBeTruthy();
+    });
   });
 
   it('still offers a real, enabled reschedule control for an ordinary confirmed booking', async () => {

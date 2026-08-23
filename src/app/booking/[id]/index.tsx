@@ -306,17 +306,14 @@ export default function BookingStatusScreen() {
                 />
               )
             ) : nonCancellableDueToCredit ? (
-              // Disabled, not absent. A missing control and a denied one
-              // look identical until a customer wonders which — this
-              // says which, in the same caption style TextField uses for
-              // an inline error, and reuses the rationale that was
-              // already spelled out above the price breakdown.
-              <View style={styles.disabledActionBlock}>
-                <Button title="Cancel booking" variant="ghost" onPress={() => {}} disabled />
-                <ThemedText type="caption" themeColor="mutedForeground">
-                  Can&apos;t be cancelled — paid with AIR/Rally Credits.
-                </ThemedText>
-              </View>
+              // Disabled, not absent — a missing control and a denied
+              // one look identical until a customer wonders which. No
+              // caption here: the card directly above already explains
+              // why in full ("used AIR/Rally Credits, which makes it
+              // final..."), and a disabled control immediately beneath
+              // that sentence doesn't need to restate it. Founder caught
+              // the same explanation appearing three times on one screen.
+              <Button title="Cancel booking" variant="ghost" onPress={() => {}} disabled />
             ) : null}
 
             {maybeReschedulable && !nonCancellableDueToCredit ? (
@@ -328,18 +325,9 @@ export default function BookingStatusScreen() {
                 }
               />
             ) : nonCancellableDueToCredit ? (
-              // Same reasoning as the disabled Cancel control just above:
-              // the server now refuses this exact request (a Credit-paid
-              // confirmed→cancelled transition, which is what a
-              // reschedule is under the hood), so offering an enabled
-              // button here would be a request the customer can tap that
-              // is guaranteed to fail with no explanation on screen.
-              <View style={styles.disabledActionBlock}>
-                <Button title="Reschedule" variant="secondary" onPress={() => {}} disabled />
-                <ThemedText type="caption" themeColor="mutedForeground">
-                  Can&apos;t be rescheduled — paid with AIR/Rally Credits.
-                </ThemedText>
-              </View>
+              // Same reasoning as the disabled Cancel control above: no
+              // caption, the card already explains it in full.
+              <Button title="Reschedule" variant="secondary" onPress={() => {}} disabled />
             ) : null}
 
             <Button title="See my bookings" onPress={() => router.replace('/(tabs)/bookings')} />
@@ -364,16 +352,6 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
 const styles = StyleSheet.create({
   policyNote: {
     marginTop: Spacing.one,
-  },
-  // Gap-based spacing, not a negative margin pulling the caption up
-  // toward the button — that was the founder's device screenshot: text
-  // visibly overlapping the button's own chrome. A negative margin
-  // assumes zero natural spacing between the two children AND a fixed
-  // caption height; a real device's font metrics and line wrapping
-  // don't hold either assumption steady enough for that math to stay
-  // safe. Positive gap in a flex column can't overlap by construction.
-  disabledActionBlock: {
-    gap: Spacing.one + Spacing.half,
   },
   container: {
     flex: 1,
