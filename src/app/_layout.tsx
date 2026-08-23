@@ -112,6 +112,7 @@ function RootNavigator() {
           <Stack.Screen name="clubs/[id]" />
           <Stack.Screen name="clubs/new" />
           <Stack.Screen name="favorites/index" />
+          <Stack.Screen name="blocked/index" />
           <Stack.Screen name="account-settings" />
           <Stack.Screen name="ranked/[matchId]" />
           <Stack.Screen name="ranked/history" />
