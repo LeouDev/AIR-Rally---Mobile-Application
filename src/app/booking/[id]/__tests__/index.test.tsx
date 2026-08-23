@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { StyleSheet } from 'react-native';
 
 import BookingStatusScreen from '@/app/booking/[id]/index';
 import type { BookingWithCourt } from '@/lib/bookings';
@@ -140,6 +141,21 @@ describe('BookingStatusScreen — a credit-final booking cannot be rescheduled e
         screen.getByText(/This booking used AIR\/Rally Credits, which makes it final/)
       ).toBeTruthy();
     });
+  });
+
+  it("matches the disabled cancel control's look — founder flagged them as mismatched stacked together", async () => {
+    // Enabled Reschedule stays `secondary` (a filled pill) elsewhere on
+    // this screen; only the disabled-due-to-credit pairing needs to
+    // match, since that's the only place the two ever render stacked.
+    mockGetBooking.mockResolvedValue(bookingFixture({ credit_amount_applied: 30000 }));
+    await render(<BookingStatusScreen />);
+
+    const cancelButton = await screen.findByLabelText('Cancel booking');
+    const rescheduleButton = await screen.findByLabelText('Reschedule');
+    const cancelBg = StyleSheet.flatten(cancelButton.props.style).backgroundColor;
+    const rescheduleBg = StyleSheet.flatten(rescheduleButton.props.style).backgroundColor;
+    expect(rescheduleBg).toBe(cancelBg);
+    expect(rescheduleBg).toBe('transparent');
   });
 
   it('still offers a real, enabled reschedule control for an ordinary confirmed booking', async () => {

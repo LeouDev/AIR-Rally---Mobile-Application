@@ -326,8 +326,16 @@ export default function BookingStatusScreen() {
               />
             ) : nonCancellableDueToCredit ? (
               // Same reasoning as the disabled Cancel control above: no
-              // caption, the card already explains it in full.
-              <Button title="Reschedule" variant="secondary" onPress={() => {}} disabled />
+              // caption, the card already explains it in full. Variant is
+              // `ghost` here — matching the disabled Cancel control above
+              // rather than this button's own enabled `secondary` look —
+              // per the founder's explicit call after the two looked
+              // mismatched stacked together disabled. Scoped to this
+              // branch only: the enabled Reschedule button a few lines up
+              // keeps `secondary`, since enabled and disabled render
+              // through entirely separate JSX and this change doesn't
+              // touch it.
+              <Button title="Reschedule" variant="ghost" onPress={() => {}} disabled />
             ) : null}
 
             <Button title="See my bookings" onPress={() => router.replace('/(tabs)/bookings')} />
