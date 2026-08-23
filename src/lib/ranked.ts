@@ -9,7 +9,6 @@ import type {
   RankedMatchPoint,
   RankedMatchStatus,
   RankedMatchType,
-  RankedMode,
   RankedOfficiatingMode,
   RankedPips,
   RankedTeam,
@@ -293,13 +292,12 @@ export function matchStatusLabel(match: Pick<RankedMatch, 'status'>): string {
  * Reads
  * ---------------------------------------------------------------------- */
 
-/** The signed-in player's standing for the open season in this mode, or null if they've never opened Ranked in it. */
-export async function getPlayerRank(userId: string, mode: RankedMode): Promise<PlayerRank | null> {
+/** The signed-in player's standing for the open season, or null if they've never opened Ranked. */
+export async function getPlayerRank(userId: string): Promise<PlayerRank | null> {
   const { data, error } = await supabase
     .from('player_ranks')
     .select('*')
     .eq('user_id', userId)
-    .eq('mode', mode)
     .order('season_id', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -307,19 +305,18 @@ export async function getPlayerRank(userId: string, mode: RankedMode): Promise<P
   return data;
 }
 
-/** Batched — one query for a whole lobby, not one per player card. Always for one mode. */
-export async function getPlayerRanks(userIds: string[], mode: RankedMode): Promise<Map<string, PlayerRank>> {
+/** Batched — one query for a whole lobby, not one per player card. */
+export async function getPlayerRanks(userIds: string[]): Promise<Map<string, PlayerRank>> {
   if (userIds.length === 0) return new Map();
-  const { data, error } = await supabase.from('player_ranks').select('*').in('user_id', userIds).eq('mode', mode);
+  const { data, error } = await supabase.from('player_ranks').select('*').in('user_id', userIds);
   if (error) throw error;
   return new Map((data ?? []).map((row) => [row.user_id, row]));
 }
 
-export async function listLeaderboard(mode: RankedMode, limit = 50): Promise<RankedLeaderboardRow[]> {
+export async function listLeaderboard(limit = 50): Promise<RankedLeaderboardRow[]> {
   const { data, error } = await supabase
     .from('ranked_leaderboard')
     .select('*')
-    .eq('mode', mode)
     .order('position', { ascending: true })
     .limit(limit);
   if (error) throw error;
@@ -327,12 +324,11 @@ export async function listLeaderboard(mode: RankedMode, limit = 50): Promise<Ran
 }
 
 /** One player's row on the leaderboard, wherever it falls — fetched separately so a "you are 48th" footer doesn't need the 47 rows above it. */
-export async function getLeaderboardEntry(userId: string, mode: RankedMode): Promise<RankedLeaderboardRow | null> {
+export async function getLeaderboardEntry(userId: string): Promise<RankedLeaderboardRow | null> {
   const { data, error } = await supabase
     .from('ranked_leaderboard')
     .select('*')
     .eq('user_id', userId)
-    .eq('mode', mode)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -391,13 +387,13 @@ export function opponentNames(players: readonly RankedMatchParticipant[], me: Pi
     .join(' & ');
 }
 
-async function attachParticipants(players: RankedMatchPlayer[], mode: RankedMode): Promise<RankedMatchParticipant[]> {
+async function attachParticipants(players: RankedMatchPlayer[]): Promise<RankedMatchParticipant[]> {
   const ids = players.map((p) => p.user_id);
   if (ids.length === 0) return [];
 
   const [profilesResult, ranks] = await Promise.all([
     supabase.from('public_profiles').select('*').in('id', ids),
-    getPlayerRanks(ids, mode),
+    getPlayerRanks(ids),
   ]);
   if (profilesResult.error) throw profilesResult.error;
 
@@ -420,7 +416,7 @@ export async function getMatch(matchId: string): Promise<RankedMatchDetail | nul
     .eq('match_id', matchId);
   if (playersError) throw playersError;
 
-  const players = await attachParticipants(playerRows ?? [], match.match_type);
+  const players = await attachParticipants(playerRows ?? []);
 
   let scorekeeper = players.find((p) => p.user_id === match.scorekeeper_id)?.profile ?? null;
   if (!scorekeeper && match.scorekeeper_id) {
@@ -497,14 +493,14 @@ export type RankedMatchSummary = {
 /**
  * Confirmed matches only — an unresolved dispute has moved nothing, so
  * showing it in a history of results would be a lie about the record.
- * Filtered to one mode.
+ * Singles and doubles share one rating now, so this is one unified
+ * history — no mode filter.
  */
-export async function listRecentMatches(userId: string, mode: RankedMode, limit = 10): Promise<RankedMatchSummary[]> {
+export async function listRecentMatches(userId: string, limit = 10): Promise<RankedMatchSummary[]> {
   const { data: mine, error } = await supabase
     .from('ranked_match_players')
     .select('*')
     .eq('user_id', userId)
-    .eq('mode', mode)
     .order('created_at', { ascending: false })
     .limit(limit * 2);
   if (error) throw error;
@@ -581,13 +577,13 @@ export async function listRefereeCandidates(eventId: string, excludeUserIds: str
  * this is the only write path for any Ranked table.
  * ---------------------------------------------------------------------- */
 
-export async function ensureMyPlayerRank(mode: RankedMode): Promise<void> {
-  const { error } = await supabase.rpc('ensure_my_player_rank', { p_mode: mode });
+export async function ensureMyPlayerRank(): Promise<void> {
+  const { error } = await supabase.rpc('ensure_my_player_rank');
   if (error) throwRanked(error);
 }
 
-export async function getPartySpread(userIds: string[], mode: RankedMode): Promise<number> {
-  const { data, error } = await supabase.rpc('ranked_party_spread', { p_user_ids: userIds, p_mode: mode });
+export async function getPartySpread(userIds: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc('ranked_party_spread', { p_user_ids: userIds });
   if (error) throwRanked(error);
   return data ?? 0;
 }

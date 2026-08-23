@@ -10,14 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { RankedMode } from '@/lib/database.types';
 import { listRecentMatches, type RankedMatchSummary } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
-
-const MODE_OPTIONS: { value: RankedMode; label: string }[] = [
-  { value: 'singles', label: 'Singles' },
-  { value: 'doubles', label: 'Doubles' },
-];
 
 function opponentNames(summary: RankedMatchSummary): string {
   const names = summary.opponents.map((p) => p.display_name ?? 'Player');
@@ -42,39 +36,32 @@ function formatMatchDate(iso: string | null): string {
  * The signed-in player's own confirmed ranked results — account-scoped,
  * unlike the public leaderboard. listRecentMatches() already filters to
  * status='confirmed' (an unresolved dispute never moved anything, so it
- * has no place in a results history) and to one mode at a time.
+ * has no place in a results history). Singles and doubles share one
+ * rating now, so this is one unified list — no mode toggle.
  */
 export default function RankedHistoryScreen() {
   const theme = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
 
-  const [mode, setMode] = useState<RankedMode>('singles');
   const [matches, setMatches] = useState<RankedMatchSummary[] | null>(null);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     if (!userId) return;
     try {
-      setMatches(await listRecentMatches(userId, mode, 20));
+      setMatches(await listRecentMatches(userId, 20));
       setError(false);
     } catch {
       setError(true);
     }
-  }, [userId, mode]);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load])
   );
-
-  const selectMode = (next: RankedMode) => {
-    if (next === mode) return;
-    setMode(next);
-    setMatches(null);
-    setError(false);
-  };
 
   return (
     <ThemedView style={styles.container}>
@@ -89,7 +76,6 @@ export default function RankedHistoryScreen() {
               <ThemedText type="small" themeColor="subtle">
                 Confirmed ranked results, most recent first.
               </ThemedText>
-              <ModeToggle mode={mode} onChange={selectMode} />
             </View>
           }
           ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}
@@ -121,36 +107,6 @@ export default function RankedHistoryScreen() {
         />
       </SafeAreaView>
     </ThemedView>
-  );
-}
-
-/** Singles/Doubles segmented toggle — matches the leaderboard screen's
- * toggle exactly (same visual language as booking-panel's
- * DurationSegmented: muted track, navy fill on the active segment). */
-function ModeToggle({ mode, onChange }: { mode: RankedMode; onChange: (mode: RankedMode) => void }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.segmented, { backgroundColor: theme.muted, borderColor: theme.input }]}>
-      {MODE_OPTIONS.map((option) => {
-        const active = option.value === mode;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.segment,
-              active && { backgroundColor: theme.navy },
-              pressed && { opacity: 0.85 },
-            ]}>
-            <ThemedText type="smallBold" style={{ color: active ? theme.navyForeground : theme.mutedForeground }}>
-              {option.label}
-            </ThemedText>
-          </Pressable>
-        );
-      })}
-    </View>
   );
 }
 
@@ -201,18 +157,6 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.three,
     marginBottom: Spacing.three,
-  },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    padding: 3,
-    alignSelf: 'flex-start',
-  },
-  segment: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Radius.pill,
   },
   skeletons: {
     gap: Spacing.three,

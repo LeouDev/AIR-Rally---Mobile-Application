@@ -467,8 +467,6 @@ export type RankedTier = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** 1–5, the star within a tier — 1-indexed, never 0. */
 export type RankedPips = 1 | 2 | 3 | 4 | 5;
 export type RankedMatchType = 'singles' | 'doubles';
-/** player_ranks.mode reuses this — a player's rating is tracked once per mode, independently. */
-export type RankedMode = RankedMatchType;
 export type RankedMatchWeightType = 'self_reported_rec' | 'club' | 'league' | 'tournament' | 'air_rally_ranked';
 export type RankedTeam = 'a' | 'b';
 export type RankedMatchStatus =
@@ -494,8 +492,6 @@ export type RankedSeason = {
 export type PlayerRank = {
   season_id: number;
   user_id: string;
-  /** Which of a player's two independent ratings this row is — singles and doubles never cross-pollinate. */
-  mode: RankedMode;
   /** DUPR-inspired AAR. Meaningful from day one, but hidden from the player until is_calibrated. Starts at 1000. */
   rating: number;
   /** Stateless — derived from `rating` every time it changes, never independently incremented. */
@@ -558,8 +554,10 @@ export type RankedMatchPlayer = {
   user_id: string;
   team: RankedTeam;
   is_host: boolean;
-  /** Denormalized from the match at creation time — which of the player's two ratings this row moves. */
-  mode: RankedMode | null;
+  /** Denormalized from the match's own match_type at creation time. A
+   * team-size record, same as the match's — every player shares one
+   * rating now, so this no longer selects between two of them. */
+  mode: RankedMatchType | null;
   ready: boolean;
   ready_at: string | null;
   /** Null means "hasn't answered", not the same as voting no. */
@@ -596,10 +594,9 @@ export type RankedMatchPoint = {
   recorded_at: string;
 };
 
-/** Calibrated players only. One leaderboard per mode; position is ranked within (season_id, mode). */
+/** Calibrated players only. One leaderboard per season; position is ranked within season_id. */
 export type RankedLeaderboardRow = {
   season_id: number;
-  mode: RankedMode;
   user_id: string;
   display_name: string | null;
   avatar_url: string | null;
@@ -823,14 +820,14 @@ export type Database = {
         Args: Record<string, never>;
         Returns: number | null;
       };
-      /** Idempotent. Creates the caller's standing for the open season, in the given mode, if they have none yet. */
+      /** Idempotent. Creates the caller's standing for the open season, if they have none yet. */
       ensure_my_player_rank: {
-        Args: { p_mode: RankedMode };
+        Args: Record<string, never>;
         Returns: undefined;
       };
-      /** Widest AAR gap among the calibrated players in a proposed party, for the given mode. Ranked parties must stay within 250 AAR of each other. */
+      /** Widest AAR gap among the calibrated players in a proposed party. Ranked parties must stay within 250 AAR of each other. */
       ranked_party_spread: {
-        Args: { p_user_ids: string[]; p_mode: RankedMode };
+        Args: { p_user_ids: string[] };
         Returns: number;
       };
       /** Returns the new match's id. The caller must be one of the players. */

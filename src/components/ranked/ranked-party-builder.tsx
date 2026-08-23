@@ -52,13 +52,13 @@ function slotsFor(matchType: RankedMatchType, host: PublicProfile): Slot[] {
  * Team assignment happens here, at setup — this is a challenge-your-
  * friends flow, not a public queue.
  *
- * Singles and doubles are independent ratings, so every fetched
- * `PlayerRank` — including the host's — is specific to the current
- * `matchType`. The parent screen owns the singles/doubles toggle and
- * remounts this component on change (`key={matchType}`), which is what
- * clears every non-host slot and the whole rank cache — the RN
- * equivalent of the web reference's switchType(), without an effect
- * that resets state synchronously on every prop change.
+ * `matchType` only picks a team size (2 slots vs. 4) — singles and
+ * doubles share one rating, so a fetched `PlayerRank` is never mode-
+ * specific. The parent screen still owns the singles/doubles toggle and
+ * remounts this component on change (`key={matchType}`), which clears
+ * every non-host slot for the new slot count — the RN equivalent of the
+ * web reference's switchType(), without an effect that resets state
+ * synchronously on every prop change.
  *
  * Does not navigate on success — `onCreated(matchId)` hands that back
  * to the caller, which has its own flow to finish first (see
@@ -95,9 +95,9 @@ export function RankedPartyBuilder({
     };
   }, []);
 
-  async function fetchRank(userId: string, mode: RankedMatchType) {
+  async function fetchRank(userId: string) {
     try {
-      const rank = await getPlayerRank(userId, mode);
+      const rank = await getPlayerRank(userId);
       if (rank) {
         setRanks((prev) => new Map(prev).set(userId, rank));
       } else {
@@ -114,14 +114,14 @@ export function RankedPartyBuilder({
   }
 
   // The one thing this mount still needs from the network: the host's
-  // own rank for this matchType. (The parent remounts this whole
-  // component on a matchType switch, so there is no reset to do here —
-  // every other piece of state above already starts fresh.)
+  // own rank. (The parent remounts this whole component on a matchType
+  // switch, so there is no reset to do here — every other piece of
+  // state above already starts fresh.)
   useEffect(() => {
     let cancelled = false;
     async function loadHostRank() {
       try {
-        const rank = await getPlayerRank(host.id, matchType);
+        const rank = await getPlayerRank(host.id);
         if (!cancelled && rank) setRanks((prev) => new Map(prev).set(host.id, rank));
       } catch {
         // The lookup failed — the eligibility preview just treats the
@@ -166,7 +166,7 @@ export function RankedPartyBuilder({
     setSlots((prev) => prev.map((s, i) => (i === openIndex ? { ...s, player } : s)));
     setQuery('');
     setResults([]);
-    void fetchRank(player.id, matchType);
+    void fetchRank(player.id);
   }
 
   function clearSlot(key: string) {

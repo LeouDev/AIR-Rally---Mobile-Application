@@ -26,24 +26,19 @@ export function RankCard() {
   const userId = session?.user.id ?? null;
 
   const [loading, setLoading] = useState(userId !== null);
-  const [singles, setSingles] = useState<PlayerRank | null>(null);
-  const [doubles, setDoubles] = useState<PlayerRank | null>(null);
+  const [rank, setRank] = useState<PlayerRank | null>(null);
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    Promise.all([getPlayerRank(userId, 'singles'), getPlayerRank(userId, 'doubles')])
-      .then(([s, d]) => {
-        if (cancelled) return;
-        setSingles(s);
-        setDoubles(d);
+    getPlayerRank(userId)
+      .then((r) => {
+        if (!cancelled) setRank(r);
       })
       .catch(() => {
         // A failed lookup reads the same as "no rank yet" — this card
         // never gets an error state of its own.
-        if (cancelled) return;
-        setSingles(null);
-        setDoubles(null);
+        if (!cancelled) setRank(null);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -59,22 +54,8 @@ export function RankCard() {
     return <Skeleton height={88} radius={Radius.xl} />;
   }
 
-  const primary = singles?.is_calibrated ? singles : doubles?.is_calibrated ? doubles : null;
-  // Only ever the *other* mode, and only when both are calibrated —
-  // otherwise there's nothing worth a second line.
-  const secondary = primary === singles && doubles?.is_calibrated ? doubles : null;
-  // A player_ranks row exists in BOTH modes the instant a player's first
-  // ranked match of EITHER mode is created — not just the mode they
-  // actually played — so `singles ?? doubles` always picked singles even
-  // for a doubles-only player, showing "0 of 10" forever while their real
-  // doubles progress sat unseen. calibration_matches is what actually
-  // distinguishes "touched" from "untouched"; pick whichever mode has more
-  // of it, falling back to either row when neither has been played yet.
-  const calibrating = !primary
-    ? ([singles, doubles].filter((r): r is PlayerRank => r !== null).sort(
-        (a, b) => b.calibration_matches - a.calibration_matches
-      )[0] ?? null)
-    : null;
+  const primary = rank?.is_calibrated ? rank : null;
+  const calibrating = !primary ? rank : null;
 
   if (!primary && !calibrating) {
     return (
@@ -147,20 +128,11 @@ export function RankCard() {
         <RankBadge tier={primary.tier} size={40} />
         <View style={styles.text}>
           <ThemedText type="caption" themeColor="mutedForeground">
-            {primary.mode === 'singles' ? 'Singles rank' : 'Doubles rank'}
+            AIR/Rally Rank
           </ThemedText>
           <ThemedText type="subtitle">{rankLabel(primary.tier, primary.pips)}</ThemedText>
         </View>
       </View>
-
-      {secondary ? (
-        <View style={styles.secondaryRow}>
-          <RankBadge tier={secondary.tier} size={20} />
-          <ThemedText type="caption" themeColor="mutedForeground">
-            Doubles · {rankLabel(secondary.tier, secondary.pips)}
-          </ThemedText>
-        </View>
-      ) : null}
 
       <View style={styles.actions}>
         <Pressable
@@ -219,11 +191,6 @@ const styles = StyleSheet.create({
   calibrationSegment: {
     flex: 1,
     borderRadius: 2,
-  },
-  secondaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
   },
   actions: {
     flexDirection: 'row',
