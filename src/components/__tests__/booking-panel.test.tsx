@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 
 import { BookingPanel } from '@/components/booking-panel';
 import type { AvailableSlot, Court, PublicProfile } from '@/lib/database.types';
@@ -360,5 +361,93 @@ describe('BookingPanel — credits disclosure', () => {
       expect(screen.getByText(/Includes .* QR Ph fee/)).toBeTruthy();
     });
     expect(screen.queryByText(/of your Credits will be applied/)).toBeNull();
+  });
+});
+
+/**
+ * A second confirmation before an irreversible commitment — same
+ * pattern as Block's confirm-before-write step. Gated on the SAME
+ * condition the inline disclosure card already reads, so a cash-only
+ * booking sees no new friction, and Cancel has to actually stop the
+ * booking rather than just close a sheet with the request already sent.
+ */
+describe('BookingPanel — confirmation before a Credit-final booking', () => {
+  it('books immediately, no dialog, when no credit is involved', async () => {
+    mockGetCreditBalance.mockResolvedValue(0);
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    await renderPanel();
+    await pickSlot('9:00 AM');
+
+    await reserve();
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockCreateCheckoutSession).toHaveBeenCalledTimes(1));
+    alertSpy.mockRestore();
+  });
+
+  it('asks for confirmation, and does NOT book yet, when credit is applied', async () => {
+    mockGetCreditBalance.mockResolvedValue(30000);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await renderPanel();
+    await pickSlot('9:00 AM');
+
+    await reserve();
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "This booking can't be cancelled",
+      expect.stringContaining('₱300.00 of your Credits will be applied'),
+      expect.any(Array)
+    );
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('restates the true remaining charge, not the full court price', async () => {
+    mockGetCreditBalance.mockResolvedValue(30000);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await renderPanel();
+    await pickSlot('9:00 AM');
+
+    await reserve();
+
+    const [, body] = alertSpy.mock.calls[0];
+    // ₱700 court, ₱300 credit → fee grossed up from the ₱400 remainder,
+    // same number the inline card shows — never the pre-credit ₱700.
+    expect(body).toContain("you'll pay ₱406.09 now");
+    alertSpy.mockRestore();
+  });
+
+  it('Cancel actually stops the booking — never sends the request the sheet was confirming', async () => {
+    mockGetCreditBalance.mockResolvedValue(30000);
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _body, buttons) => {
+      const cancelButton = buttons?.find((b) => b.text === 'Cancel');
+      cancelButton?.onPress?.();
+    });
+    await renderPanel();
+    await pickSlot('9:00 AM');
+
+    await reserve();
+
+    // Give any accidental async call a chance to land before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+    jest.restoreAllMocks();
+  });
+
+  it('only books after Confirm & Pay, not on the initial tap', async () => {
+    mockGetCreditBalance.mockResolvedValue(30000);
+    let confirmOnPress: (() => void) | undefined;
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _body, buttons) => {
+      confirmOnPress = buttons?.find((b) => b.text === 'Confirm & Pay')?.onPress as (() => void) | undefined;
+    });
+    await renderPanel();
+    await pickSlot('9:00 AM');
+    await reserve();
+
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+    confirmOnPress?.();
+
+    await waitFor(() => expect(mockCreateCheckoutSession).toHaveBeenCalledTimes(1));
+    jest.restoreAllMocks();
   });
 });

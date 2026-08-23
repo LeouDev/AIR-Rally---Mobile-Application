@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LayoutAnimation, Platform, StyleSheet, UIManager, View } from 'react-native';
+import { Alert, LayoutAnimation, Platform, StyleSheet, UIManager, View } from 'react-native';
 
 import { CourtStrip, DateStrip, DurationSegmented, SectionLabel, SlotGrid } from '@/components/booking-picker';
 import { PlayerPicker } from '@/components/player-picker';
@@ -306,12 +306,40 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
 
       <Button
         title={submitting ? 'Reserving…' : 'Reserve & pay'}
-        onPress={book}
+        onPress={confirmAndBook}
         disabled={!selectedSlot || submitting}
         loading={submitting}
       />
     </View>
   );
+
+  /**
+   * Same pattern as Block's confirm-before-write step: an interstitial
+   * before an irreversible action, Cancel/Confirm, nothing runs until
+   * the second tap. Gated on the SAME condition the inline disclosure
+   * card above already reads — preview.creditApplied, not a second
+   * derivation of it — so a cash-only booking sees no new friction at
+   * all, and this can never disagree with what the card on screen just
+   * told the player.
+   *
+   * Restates the card's numbers rather than repeating its exact
+   * sentence, so this reads as a confirmation of what was already
+   * disclosed, not a duplicate of it.
+   */
+  function confirmAndBook() {
+    if (preview.creditApplied <= 0) {
+      book();
+      return;
+    }
+    Alert.alert(
+      "This booking can't be cancelled",
+      `${formatCentavos(preview.creditApplied)} of your Credits will be applied, and you'll pay ${formatCentavos(charge.totalChargedAmount)} now. Once confirmed, this booking can't be cancelled or rescheduled.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm & Pay', style: 'destructive', onPress: book },
+      ]
+    );
+  }
 }
 
 const styles = StyleSheet.create({
