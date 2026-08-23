@@ -89,6 +89,15 @@ export default function ProfileScreen() {
     // No navigation here either — the root guard swaps stacks.
   };
 
+  // TEMPORARY — Sentry Metro-serializer symbolication verification.
+  // Never merges to main. Throws synchronously from an event handler so it
+  // reaches ErrorUtils.setGlobalHandler / Sentry's reactNativeErrorHandlersIntegration,
+  // the same capture path proven earlier tonight (SENTRY-PROBE-A). The Sentry
+  // event should name THIS file and THIS line, not a bytecode offset.
+  const handleSentrySymbolicationProbe = () => {
+    throw new Error('SENTRY-SYMBOLICATION-PROBE: profile.tsx handleSentrySymbolicationProbe');
+  };
+
   const handleChangePhoto = async () => {
     if (!userId || uploadingAvatar) return;
     const picked = await pickAvatarImage();
@@ -300,6 +309,12 @@ export default function ProfileScreen() {
           </View>
 
           <Button title="Sign out" variant="secondary" onPress={handleSignOut} loading={signingOut} />
+
+          <Button
+            title="⚠️ SENTRY TEST — DO NOT TAP"
+            variant="destructive"
+            onPress={handleSentrySymbolicationProbe}
+          />
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
