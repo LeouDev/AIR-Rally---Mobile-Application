@@ -13,6 +13,13 @@ import type { PlayerRank, PublicProfile, RankedMatchType, RankedTeam } from '@/l
 import { searchPublicProfiles } from '@/lib/follows';
 import { createRankedMatch, getPlayerRank, partyEligibilityDisplay, RankedError, rankLabel } from '@/lib/ranked';
 
+/** searchPublicProfiles() runs a leading-wildcard ILIKE, which can't use
+ * an index and forces a scan — firing it on every keystroke turns a
+ * short name into several overlapping full scans. This batches
+ * keystrokes into one search after typing pauses; requestSeq (below)
+ * still decides which response wins once it fires. */
+const SEARCH_DEBOUNCE_MS = 300;
+
 type Slot = {
   key: string;
   team: RankedTeam;
@@ -80,6 +87,13 @@ export function RankedPartyBuilder({
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const requestSeq = useRef(0);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
 
   async function fetchRank(userId: string, mode: RankedMatchType) {
     try {
@@ -121,13 +135,7 @@ export function RankedPartyBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleQueryChange(value: string) {
-    setQuery(value);
-    if (value.trim().length < 2) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
+  function runSearch(value: string) {
     const seq = ++requestSeq.current;
     setSearching(true);
     searchPublicProfiles(value, 8)
@@ -139,6 +147,17 @@ export function RankedPartyBuilder({
       .finally(() => {
         if (seq === requestSeq.current) setSearching(false);
       });
+  }
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (value.trim().length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    debounceTimer.current = setTimeout(() => runSearch(value), SEARCH_DEBOUNCE_MS);
   }
 
   function fillNextSlot(player: PublicProfile) {
