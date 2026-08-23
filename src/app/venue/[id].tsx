@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Linking,
   type NativeSyntheticEvent,
@@ -12,16 +12,20 @@ import {
   View,
 } from 'react-native';
 
+import { captureRef } from 'react-native-view-shot';
+
 import { BookingPanel } from '@/components/booking-panel';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VenueReviews } from '@/components/venue-reviews';
+import { VenueShareCard, venueShareMessage, venueShareUrl } from '@/components/venue-share-card';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addFavorite, listFavoriteVenueIds, removeFavorite } from '@/lib/favorites';
 import { condensedSchedule, directionsUrl, getVenueDetail, publicImageUrl, type VenueDetail } from '@/lib/venues';
+import { shareCard } from '@/lib/share';
 import { useSession } from '@/providers/session';
 
 export default function VenueDetailScreen() {
@@ -34,6 +38,7 @@ export default function VenueDetailScreen() {
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [galleryWidth, setGalleryWidth] = useState(0);
   const [galleryIndex, setGalleryIndex] = useState(0);
+  const shareCardRef = useRef<View>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -84,6 +89,23 @@ export default function VenueDetailScreen() {
     }
   };
 
+  /** Unlike the match-result and COURT/Side shares, this one carries a
+   * real URL: /courts/{id} is genuinely public and already unfurls with
+   * the venue's own photo. See venue-share-card.tsx. */
+  const shareVenue = async () => {
+    if (!venue) return;
+    const message = venueShareMessage(venue);
+    const url = venueShareUrl(venue.id);
+    try {
+      const uri = await captureRef(shareCardRef, { format: 'png', quality: 1, width: 1080, height: 1920 });
+      await shareCard({ fileUri: uri, message, url });
+    } catch {
+      // Capture failed — send the text and link alone rather than
+      // nothing. Still the useful half of the share.
+      await shareCard({ message, url });
+    }
+  };
+
   // Web renders every photo in a gallery — mirror that here instead of
   // only ever showing imagePaths[0] as a single static cover.
   const galleryImages = venue
@@ -112,8 +134,24 @@ export default function VenueDetailScreen() {
           headerTintColor: theme.primary,
           headerTitleStyle: { color: theme.foreground },
           headerStyle: { backgroundColor: theme.background },
+          headerRight: venue
+            ? () => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Share this court"
+                  onPress={shareVenue}
+                  hitSlop={8}>
+                  <Ionicons name="share-outline" size={22} color={theme.primary} />
+                </Pressable>
+              )
+            : undefined,
         }}
       />
+      {venue ? (
+        <View style={styles.shareCardOffscreen} pointerEvents="none">
+          <VenueShareCard venue={venue} viewRef={shareCardRef} />
+        </View>
+      ) : null}
       <ScrollView contentContainerStyle={styles.scroll}>
         {venue === undefined ? (
           <View style={styles.section}>
@@ -332,6 +370,13 @@ export default function VenueDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Mounted but off-canvas so captureRef always has a laid-out view to
+  // photograph — same technique as post-card.tsx's ShareCard.
+  shareCardOffscreen: {
+    position: 'absolute',
+    top: 0,
+    left: -2000,
+  },
   container: {
     flex: 1,
   },

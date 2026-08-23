@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Sharing from 'expo-sharing';
 import { useRef, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
@@ -25,6 +24,7 @@ import {
   type RankedDisputeReason,
   type RankedMatchDetail,
 } from '@/lib/ranked';
+import { shareCard } from '@/lib/share';
 
 /** The image attached when a confirmed result is shared externally (see
  * ConfirmedView's shareResult) — rendered off-screen and captured with
@@ -264,18 +264,19 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
     : 'AIR/Rally Ranked match result.';
 
   const shareResult = async () => {
-    // The branded card first — same capture-then-share technique as
-    // COURT/Side's post share cards. Falls back to the plain-text share
-    // below if capture or expo-sharing is unavailable.
+    // No `url` passed, deliberately: the web's /ranked/match/{id} sits
+    // behind requireSignedIn(), so a recipient tapping a link to it
+    // lands on a login wall rather than the result — worse than sending
+    // no link at all. When a publicly-viewable confirmed-match page
+    // exists, pass its URL here; shareCard() carries it from there.
     try {
       const uri = await captureRef(shareCardRef, { format: 'png', quality: 1, width: 1080, height: 1920 });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share to AIR/Rally', UTI: 'public.png' });
-        return;
-      }
+      await shareCard({ fileUri: uri, message: shareText });
+      return;
     } catch {
-      // Capture failed or sharing isn't available on this device — fall
-      // through to the plain-text share rather than doing nothing.
+      // Capture failed — fall through to the text alone rather than
+      // doing nothing. shareCard() swallows its own sheet failures, so
+      // reaching here means there was no image to attach.
     }
     try {
       await Share.share({ message: shareText });
