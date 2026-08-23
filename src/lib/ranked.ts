@@ -1,6 +1,7 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 
 import type {
+  PlayerMatchTotals,
   PlayerRank,
   PublicProfile,
   RankedLeaderboardRow,
@@ -327,6 +328,24 @@ export async function listLeaderboard(limit = 50): Promise<RankedLeaderboardRow[
 export async function getLeaderboardEntry(userId: string): Promise<RankedLeaderboardRow | null> {
   const { data, error } = await supabase
     .from('ranked_leaderboard')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * A player's wins/losses across EVERY confirmed match, casual results
+ * included — what "total wins whether it's a normal game or a ranked
+ * game" actually means. Deliberately not PlayerRank.wins/losses: those
+ * stay ranked-only because they're what the rating is computed from.
+ * Null when the player has no confirmed matches at all (the view has
+ * no row for them), which callers should read as zero, not as an error.
+ */
+export async function getPlayerMatchTotals(userId: string): Promise<PlayerMatchTotals | null> {
+  const { data, error } = await supabase
+    .from('player_match_totals')
     .select('*')
     .eq('user_id', userId)
     .maybeSingle();

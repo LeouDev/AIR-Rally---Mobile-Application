@@ -594,6 +594,20 @@ export type RankedMatchPoint = {
   recorded_at: string;
 };
 
+/**
+ * Every CONFIRMED match a player has been in, rated or not — the
+ * broader number behind "total wins including normal games". Distinct
+ * from PlayerRank.wins/losses, which stay ranked-only because they
+ * feed the rating: a casual result moves this and not that. Disputed
+ * matches never reach 'confirmed', so they're excluded automatically.
+ */
+export type PlayerMatchTotals = {
+  user_id: string;
+  total_matches: number;
+  wins: number;
+  losses: number;
+};
+
 /** Calibrated players only. One leaderboard per season; position is ranked within season_id. */
 export type RankedLeaderboardRow = {
   season_id: number;
@@ -752,6 +766,7 @@ export type Database = {
       ranked_match_players: TableDef<RankedMatchPlayer, never, never>;
       ranked_match_points: TableDef<RankedMatchPoint, never, never>;
       ranked_leaderboard: TableDef<RankedLeaderboardRow, never, never>;
+      player_match_totals: TableDef<PlayerMatchTotals, never, never>;
     };
     Views: Record<string, never>;
     Functions: {

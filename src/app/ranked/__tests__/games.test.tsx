@@ -148,6 +148,18 @@ describe('GamesScreen — stats card', () => {
     expect(screen.getByText('Volleyer II')).toBeTruthy();
   });
 
+  it('labels its win/loss figures as RANKED — Profile shows a different, casual-inclusive total', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ wins: 6, losses: 4 }));
+    await render(<GamesScreen />);
+
+    await screen.findByText('Ranked wins');
+    expect(screen.getByText('Ranked losses')).toBeTruthy();
+    // A bare "Wins" here would read as the same number Profile shows,
+    // disagreeing with itself.
+    expect(screen.queryByText('Wins')).toBeNull();
+    expect(screen.queryByText('Losses')).toBeNull();
+  });
+
   it('shows calibration progress instead, below 10 matches', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 3 }));
     await render(<GamesScreen />);

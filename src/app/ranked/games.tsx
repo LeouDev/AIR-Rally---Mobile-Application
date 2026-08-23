@@ -192,16 +192,21 @@ function GamesStatsCard({ rank }: { rank: PlayerRank | null }) {
         </View>
       </View>
 
+      {/* Explicitly "Ranked" — Profile shows a total-wins number that
+          counts casual results too, so an unlabelled "Wins" here would
+          read as the same figure disagreeing with itself. These three
+          are the ranked record specifically: they're what the rating
+          above them is computed from. */}
       <View style={[styles.statsRow, { borderTopColor: theme.hairline }]}>
         <View style={styles.statCell}>
           <ThemedText type="caption" themeColor="mutedForeground">
-            Wins
+            Ranked wins
           </ThemedText>
           <ThemedText type="subtitle">{rank.wins}</ThemedText>
         </View>
         <View style={styles.statCell}>
           <ThemedText type="caption" themeColor="mutedForeground">
-            Losses
+            Ranked losses
           </ThemedText>
           <ThemedText type="subtitle">{rank.losses}</ThemedText>
         </View>
