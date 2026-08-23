@@ -41,7 +41,8 @@ it('batches three fast keystrokes into a single search of the final value', asyn
   mockSearch.mockResolvedValue([ROBIN]);
   await render(<RankedPartyBuilder host={HOST} matchType="singles" onCreated={jest.fn()} />);
 
-  const input = screen.getByLabelText('Search players by name');
+  fireEvent.press(screen.getByLabelText('Search for opponent'));
+  const input = await screen.findByLabelText('Search players by name');
   fireEvent.changeText(input, 'R');
   fireEvent.changeText(input, 'Ro');
   fireEvent.changeText(input, 'Rob');

@@ -56,7 +56,8 @@ it("still lets requestSeq discard a stale response — debounce and the sequence
 
   await render(<RankedPartyBuilder host={HOST} matchType="singles" onCreated={jest.fn()} />);
 
-  fireEvent.changeText(screen.getByLabelText('Search players by name'), 'Ro');
+  fireEvent.press(screen.getByLabelText('Search for opponent'));
+  fireEvent.changeText(await screen.findByLabelText('Search players by name'), 'Ro');
   await waitFor(() => expect(mockSearch).toHaveBeenCalledWith('Ro', 8), { timeout: 3000 });
 
   fireEvent.changeText(screen.getByLabelText('Search players by name'), 'Ki');

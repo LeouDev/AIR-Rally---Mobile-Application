@@ -44,7 +44,8 @@ describe('RankedPartyBuilder — search debounce', () => {
     mockSearch.mockResolvedValue([ROBIN]);
     await render(<RankedPartyBuilder host={HOST} matchType="singles" onCreated={jest.fn()} />);
 
-    const input = screen.getByLabelText('Search players by name');
+    fireEvent.press(screen.getByLabelText('Search for opponent'));
+    const input = await screen.findByLabelText('Search players by name');
     fireEvent.changeText(input, 'Ro');
     fireEvent.changeText(input, 'R');
 
