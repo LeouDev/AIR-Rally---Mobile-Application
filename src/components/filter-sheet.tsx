@@ -10,6 +10,7 @@ import { TextField } from '@/components/ui/text-field';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { Amenity } from '@/lib/database.types';
+import { formatFilterDate, formatFilterTime, parseFilterDate, parseFilterTime } from '@/lib/filter-dates';
 import type { MarketplaceFilters, VenueSortOption } from '@/lib/venues';
 
 const COURT_TYPES: { value: MarketplaceFilters['indoorOutdoor'] | undefined; label: string }[] = [
@@ -94,6 +95,8 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
   const [maxPriceInput, setMaxPriceInput] = useState(filters.maxPrice?.toString() ?? '');
   const [dateInput, setDateInput] = useState(filters.availableOn ?? '');
   const [timeInput, setTimeInput] = useState(filters.availableAt ?? '');
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [timeError, setTimeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -102,6 +105,8 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
     setMaxPriceInput(filters.maxPrice?.toString() ?? '');
     setDateInput(filters.availableOn ?? '');
     setTimeInput(filters.availableAt ?? '');
+    setDateError(null);
+    setTimeError(null);
   }, [visible, filters]);
 
   const toggleAmenity = (id: string) => {
@@ -117,19 +122,52 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
     setMaxPriceInput('');
     setDateInput('');
     setTimeInput('');
+    setDateError(null);
+    setTimeError(null);
   };
 
+  /**
+   * Every branch below either applies the value or refuses out loud.
+   * None of them drops one and closes.
+   *
+   * That was the bug: an unparseable date was discarded here and the
+   * sheet dismissed itself, so the player watched the interaction
+   * succeed while the filter silently never existed — and
+   * countActiveFilters() then reported nothing active, corroborating
+   * the lie. Refusing is allowed; refusing quietly is not.
+   */
   const apply = () => {
     const min = minPriceInput ? Number(minPriceInput) : undefined;
     const max = maxPriceInput ? Number(maxPriceInput) : undefined;
-    const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(dateInput);
-    const timeOk = /^\d{2}:\d{2}$/.test(timeInput);
+
+    const typedDate = dateInput.trim();
+    const typedTime = timeInput.trim();
+    const parsedDate = parseFilterDate(typedDate);
+
+    if (typedDate && !parsedDate) {
+      setDateError('Use a date like 2026-08-24.');
+      return;
+    }
+    if (typedTime && !parsedDate) {
+      setDateError('Pick a date for this time.');
+      return;
+    }
+    const parsedTime = parsedDate ? parseFilterTime(typedTime, parsedDate) : null;
+    if (typedTime && !parsedTime) {
+      setTimeError('Use a 24-hour time like 18:30.');
+      return;
+    }
+
+    setDateError(null);
+    setTimeError(null);
     onApply({
       ...draft,
       minPrice: min !== undefined && Number.isFinite(min) ? min : undefined,
       maxPrice: max !== undefined && Number.isFinite(max) ? max : undefined,
-      availableOn: dateOk ? dateInput : undefined,
-      availableAt: dateOk && timeOk ? timeInput : undefined,
+      // Re-formatted from the parsed value rather than passed through as
+      // typed, so what gets applied is provably what was understood.
+      availableOn: parsedDate ? formatFilterDate(parsedDate) : undefined,
+      availableAt: parsedTime ? formatFilterTime(parsedTime) : undefined,
     });
     onClose();
   };
@@ -241,15 +279,28 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
                 <SectionLabel>Open on</SectionLabel>
                 <View style={styles.priceRow}>
                   <View style={styles.priceField}>
-                    <TextField label="Date" value={dateInput} onChangeText={setDateInput} placeholder="YYYY-MM-DD" />
+                    <TextField
+                      label="Date"
+                      value={dateInput}
+                      onChangeText={(value) => {
+                        setDateInput(value);
+                        setDateError(null);
+                      }}
+                      placeholder="YYYY-MM-DD"
+                      error={dateError}
+                    />
                   </View>
                   <View style={styles.priceField}>
                     <TextField
                       label="Time"
                       value={timeInput}
-                      onChangeText={setTimeInput}
+                      onChangeText={(value) => {
+                        setTimeInput(value);
+                        setTimeError(null);
+                      }}
                       placeholder="HH:MM"
-                      editable={/^\d{4}-\d{2}-\d{2}$/.test(dateInput)}
+                      error={timeError}
+                      editable={parseFilterDate(dateInput) !== null}
                     />
                   </View>
                 </View>
