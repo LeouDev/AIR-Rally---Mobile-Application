@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { Avatar } from '@/components/post-card';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -54,11 +55,7 @@ export function EventJoinRequests({
       </ThemedText>
       {requests.map((request) => (
         <View key={request.userId} style={[styles.row, { borderColor: theme.border }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
-            <ThemedText type="caption" style={{ color: theme.accentForeground }}>
-              {(request.profile?.display_name ?? '?').slice(0, 1).toUpperCase()}
-            </ThemedText>
-          </View>
+          <Avatar profile={request.profile} size={32} />
           <ThemedText type="small" style={styles.name} numberOfLines={1}>
             {request.profile?.display_name ?? 'A player'}
           </ThemedText>
@@ -96,13 +93,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     padding: Spacing.two,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   name: {
     flex: 1,

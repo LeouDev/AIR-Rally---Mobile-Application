@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { Avatar } from '@/components/post-card';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -17,10 +18,6 @@ import {
   voteOfficiating,
   type RankedMatchDetail,
 } from '@/lib/ranked';
-
-function initials(name: string | null): string {
-  return (name ?? '?').trim().slice(0, 2).toUpperCase();
-}
 
 type PickerView = 'mode' | 'referee' | 'scorekeeper';
 
@@ -115,11 +112,7 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
 
         <View style={[styles.card, { borderColor: theme.navy, backgroundColor: theme.card }]}>
           <View style={styles.proposedHeader}>
-            <View style={[styles.avatarLg, { backgroundColor: theme.navy }]}>
-              <ThemedText type="subtitle" style={{ color: theme.navyForeground }}>
-                {initials(scorekeeper?.display_name ?? null)}
-              </ThemedText>
-            </View>
+            <Avatar profile={scorekeeper} size={52} />
             <View style={styles.info}>
               <ThemedText type="subtitle" numberOfLines={1}>
                 {scorekeeper?.display_name ?? 'Scorekeeper'}
@@ -223,11 +216,7 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
                 i < match.players.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.hairline },
                 (pressed || busy) && styles.pressed,
               ]}>
-              <View style={[styles.avatarSm, { backgroundColor: theme.navy }]}>
-                <ThemedText type="caption" style={{ color: theme.navyForeground }}>
-                  {initials(p.profile?.display_name ?? null)}
-                </ThemedText>
-              </View>
+              <Avatar profile={p.profile} size={36} />
               <ThemedText type="smallBold">
                 {p.profile?.display_name ?? 'Player'}
                 {p.user_id === currentUserId ? ' (you)' : ''}
@@ -267,11 +256,7 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
                   (pressed || busy) && styles.pressed,
                 ]}>
                 <View style={styles.rowLeft}>
-                  <View style={[styles.avatarSm, { backgroundColor: theme.navy }]}>
-                    <ThemedText type="caption" style={{ color: theme.navyForeground }}>
-                      {initials(c.display_name)}
-                    </ThemedText>
-                  </View>
+                  <Avatar profile={c} size={36} />
                   <ThemedText type="smallBold">{c.display_name}</ThemedText>
                 </View>
                 <ThemedText type="caption" style={{ color: theme.rally, fontWeight: '700' }}>
@@ -314,9 +299,7 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
                 i < searchResults.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.hairline },
                 (pressed || busy) && styles.pressed,
               ]}>
-              <View style={[styles.avatarSm, { backgroundColor: theme.muted }]}>
-                <ThemedText type="caption">{initials(p.display_name)}</ThemedText>
-              </View>
+              <Avatar profile={p} size={36} />
               <ThemedText type="small">{p.display_name}</ThemedText>
             </Pressable>
           ))}
@@ -375,14 +358,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-  },
-  avatarLg: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   info: {
     flex: 1,
@@ -454,14 +429,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.three,
     flexShrink: 1,
-  },
-  avatarSm: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   loadingRow: {
     flexDirection: 'row',
