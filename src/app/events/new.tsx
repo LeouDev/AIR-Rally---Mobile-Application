@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,6 +36,10 @@ export default function NewOpenPlayScreen() {
   const theme = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
+  // Set when a booking card's own "Start Game" already knows which
+  // booking it means — falls back to the first available one below
+  // when absent (reached generically, e.g. from the Play tab).
+  const { bookingId: requestedBookingId } = useLocalSearchParams<{ bookingId?: string }>();
 
   const [bookings, setBookings] = useState<HostableBooking[] | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
@@ -58,11 +62,14 @@ export default function NewOpenPlayScreen() {
     listHostableBookings(userId)
       .then((rows) => {
         setBookings(rows);
+        const requested = requestedBookingId
+          ? rows.find((b) => b.bookingId === requestedBookingId && !b.existingEventId)
+          : undefined;
         const firstAvailable = rows.find((b) => !b.existingEventId);
-        setBookingId(firstAvailable?.bookingId ?? null);
+        setBookingId(requested?.bookingId ?? firstAvailable?.bookingId ?? null);
       })
       .catch(() => setBookings([]));
-  }, [userId]);
+  }, [userId, requestedBookingId]);
 
   useEffect(() => {
     if (!userId) return;
