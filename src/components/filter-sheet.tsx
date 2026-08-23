@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
+import { DateTimeField } from '@/components/ui/date-time-field';
 import { TextField } from '@/components/ui/text-field';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -103,10 +104,22 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
     setDraft(filters);
     setMinPriceInput(filters.minPrice?.toString() ?? '');
     setMaxPriceInput(filters.maxPrice?.toString() ?? '');
-    setDateInput(filters.availableOn ?? '');
-    setTimeInput(filters.availableAt ?? '');
-    setDateError(null);
-    setTimeError(null);
+    // A value arriving from anywhere other than this sheet — restored
+    // state, a deep link, a saved search — gets the same treatment as a
+    // typed one: understood, or refused out loud. Never shown as though
+    // it were in force. Silently blanking it here would be the original
+    // bug moved one layer up.
+    const incomingDate = filters.availableOn ?? '';
+    const incomingDateOk = incomingDate === '' || parseFilterDate(incomingDate) !== null;
+    setDateInput(incomingDateOk ? incomingDate : '');
+    setDateError(incomingDateOk ? null : `Couldn't read the date "${incomingDate}", so it isn't applied.`);
+
+    const incomingTime = filters.availableAt ?? '';
+    const anchor = parseFilterDate(incomingDate);
+    const incomingTimeOk =
+      incomingTime === '' || (anchor !== null && parseFilterTime(incomingTime, anchor) !== null);
+    setTimeInput(incomingDateOk && incomingTimeOk ? incomingTime : '');
+    setTimeError(incomingTimeOk ? null : `Couldn't read the time "${incomingTime}", so it isn't applied.`);
   }, [visible, filters]);
 
   const toggleAmenity = (id: string) => {
@@ -277,33 +290,113 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
 
               <View style={styles.block}>
                 <SectionLabel>Open on</SectionLabel>
-                <View style={styles.priceRow}>
-                  <View style={styles.priceField}>
-                    <TextField
-                      label="Date"
-                      value={dateInput}
-                      onChangeText={(value) => {
-                        setDateInput(value);
+                {/*
+                  A picker always displays SOMETHING, so rendering one for
+                  an unset filter would put today's date on screen beside
+                  a filter that isn't filtering by it — the same lie this
+                  whole change exists to remove, wearing a nicer control.
+                  No date chosen means no date shown.
+                */}
+                {dateInput.trim().length === 0 ? (
+                  <>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Choose a date"
+                      onPress={() => {
+                        setDateInput(formatFilterDate(new Date()));
                         setDateError(null);
                       }}
-                      placeholder="YYYY-MM-DD"
-                      error={dateError}
-                    />
-                  </View>
-                  <View style={styles.priceField}>
-                    <TextField
-                      label="Time"
-                      value={timeInput}
-                      onChangeText={(value) => {
-                        setTimeInput(value);
+                      style={({ pressed }) => [
+                        styles.openOnEmpty,
+                        { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+                      ]}>
+                      <ThemedText type="small">Any date</ThemedText>
+                      <ThemedText type="caption" themeColor="primary">
+                        Choose a date
+                      </ThemedText>
+                    </Pressable>
+                    {/* An unreadable incoming value has no field to attach
+                        itself to once cleared, so it is reported here — the
+                        alternative is dropping it in silence, which is the
+                        bug. */}
+                    {dateError ? (
+                      <ThemedText type="caption" themeColor="destructive">
+                        {dateError}
+                      </ThemedText>
+                    ) : null}
+                    {timeError ? (
+                      <ThemedText type="caption" themeColor="destructive">
+                        {timeError}
+                      </ThemedText>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.priceRow}>
+                      <View style={styles.priceField}>
+                        <DateTimeField
+                          label="Date"
+                          mode="date"
+                          value={dateInput}
+                          onChangeText={(value) => {
+                            setDateInput(value);
+                            setDateError(null);
+                          }}
+                          error={dateError}
+                        />
+                      </View>
+                      <View style={styles.priceField}>
+                        {timeInput.trim().length === 0 ? (
+                          <View style={styles.wrapperGap}>
+                            <ThemedText type="smallBold">Time</ThemedText>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Choose a time"
+                              onPress={() => {
+                                setTimeInput(formatFilterTime(new Date()));
+                                setTimeError(null);
+                              }}
+                              style={({ pressed }) => [
+                                styles.openOnEmpty,
+                                { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+                              ]}>
+                              <ThemedText type="small" themeColor="primary">
+                                Any time
+                              </ThemedText>
+                            </Pressable>
+                          </View>
+                        ) : (
+                          <DateTimeField
+                            label="Time"
+                            mode="time"
+                            value={timeInput}
+                            onChangeText={(value) => {
+                              setTimeInput(value);
+                              setTimeError(null);
+                            }}
+                            error={timeError}
+                            relativeTo={dateInput}
+                          />
+                        )}
+                      </View>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear date and time"
+                      onPress={() => {
+                        setDateInput('');
+                        setTimeInput('');
+                        setDateError(null);
                         setTimeError(null);
                       }}
-                      placeholder="HH:MM"
-                      error={timeError}
-                      editable={parseFilterDate(dateInput) !== null}
-                    />
-                  </View>
-                </View>
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.openOnClear, { opacity: pressed ? 0.6 : 1 }]}>
+                      <ThemedText type="caption" themeColor="primary">
+                        Clear date and time
+                      </ThemedText>
+                    </Pressable>
+                  </>
+                )}
                 <ThemedText type="caption" themeColor="mutedForeground">
                   Shows venues open then — check the court page for live availability.
                 </ThemedText>
@@ -342,6 +435,23 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
 }
 
 const styles = StyleSheet.create({
+  openOnEmpty: {
+    minHeight: 48,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  openOnClear: {
+    alignSelf: 'flex-start',
+    paddingVertical: Spacing.one,
+  },
+  wrapperGap: {
+    gap: Spacing.one + Spacing.half,
+  },
   container: {
     flex: 1,
   },

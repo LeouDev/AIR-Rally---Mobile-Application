@@ -80,6 +80,16 @@ describe('FilterSheet — "Open on" cannot silently drop a date', () => {
     }
   });
 
+  it('tells the player when an incoming date could not be read', async () => {
+    const { props } = renderSheet({ filters: { availableOn: '8/24/2026' } });
+    await render(<FilterSheet {...props} />);
+
+    // Not blanked in silence — the sheet says the value exists and is
+    // not in force. Matching on the offending value rather than the
+    // wording, so a copy edit doesn't fail the test.
+    expect(screen.getByText(/8\/24\/2026/)).toBeTruthy();
+  });
+
   it('applies a date it did show the player', async () => {
     const { onApply, props } = renderSheet({ filters: { availableOn: '2026-08-24' } });
     await render(<FilterSheet {...props} />);
