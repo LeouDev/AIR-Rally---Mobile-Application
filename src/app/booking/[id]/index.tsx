@@ -311,9 +311,9 @@ export default function BookingStatusScreen() {
               // says which, in the same caption style TextField uses for
               // an inline error, and reuses the rationale that was
               // already spelled out above the price breakdown.
-              <View>
+              <View style={styles.disabledActionBlock}>
                 <Button title="Cancel booking" variant="ghost" onPress={() => {}} disabled />
-                <ThemedText type="caption" themeColor="mutedForeground" style={styles.disabledActionNote}>
+                <ThemedText type="caption" themeColor="mutedForeground">
                   Can&apos;t be cancelled — paid with AIR/Rally Credits.
                 </ThemedText>
               </View>
@@ -334,9 +334,9 @@ export default function BookingStatusScreen() {
               // reschedule is under the hood), so offering an enabled
               // button here would be a request the customer can tap that
               // is guaranteed to fail with no explanation on screen.
-              <View>
+              <View style={styles.disabledActionBlock}>
                 <Button title="Reschedule" variant="secondary" onPress={() => {}} disabled />
-                <ThemedText type="caption" themeColor="mutedForeground" style={styles.disabledActionNote}>
+                <ThemedText type="caption" themeColor="mutedForeground">
                   Can&apos;t be rescheduled — paid with AIR/Rally Credits.
                 </ThemedText>
               </View>
@@ -365,8 +365,15 @@ const styles = StyleSheet.create({
   policyNote: {
     marginTop: Spacing.one,
   },
-  disabledActionNote: {
-    marginTop: -Spacing.one,
+  // Gap-based spacing, not a negative margin pulling the caption up
+  // toward the button — that was the founder's device screenshot: text
+  // visibly overlapping the button's own chrome. A negative margin
+  // assumes zero natural spacing between the two children AND a fixed
+  // caption height; a real device's font metrics and line wrapping
+  // don't hold either assumption steady enough for that math to stay
+  // safe. Positive gap in a flex column can't overlap by construction.
+  disabledActionBlock: {
+    gap: Spacing.one + Spacing.half,
   },
   container: {
     flex: 1,
