@@ -86,6 +86,15 @@ export default function BookingStatusScreen() {
         booking.credit_amount_applied === 0 &&
         new Date(booking.start_time).getTime() > Date.now()));
 
+  // Narrower than !cancellable on purpose: a past or already-cancelled
+  // booking isn't cancellable either, but blaming credits there would be
+  // wrong. This is specifically the case that used to render nothing at
+  // all — a confirmed, still-upcoming booking that credits made final —
+  // where "absent" reads as "broken", not "not applicable".
+  // Reuses maybeReschedulable's own condition (confirmed + still
+  // upcoming) rather than recomputing Date.now() a second time.
+  const nonCancellableDueToCredit = maybeReschedulable && booking!.credit_amount_applied > 0;
+
   // A pending PayMongo booking's checkout page stays reachable: the
   // session's public URL is its id sans the "cs_" prefix (observed to
   // hold for every session this project has created; revisit if PayMongo
@@ -216,6 +225,13 @@ export default function BookingStatusScreen() {
                 />
               ) : null}
               <Row label="Total" value={formatCentavos(Math.max(totalCharged, 0))} bold />
+              {maybeReschedulable ? (
+                <ThemedText type="caption" themeColor="mutedForeground" style={styles.policyNote}>
+                  {booking.credit_amount_applied > 0
+                    ? "This booking used AIR/Rally Credits, which makes it final — it can't be cancelled and the Credits are not returned."
+                    : 'Cancelling at least 48 hours ahead earns AIR/Rally Credits for what you paid; closer than that, no compensation is due.'}
+                </ThemedText>
+              ) : null}
             </View>
 
             {creditOutcome ? (
@@ -289,9 +305,18 @@ export default function BookingStatusScreen() {
                   onPress={() => setConfirmingCancel(true)}
                 />
               )
+            ) : nonCancellableDueToCredit ? (
+              // Disabled, not absent — a missing control and a denied
+              // one look identical until a customer wonders which. No
+              // caption here: the card directly above already explains
+              // why in full ("used AIR/Rally Credits, which makes it
+              // final..."), and a disabled control immediately beneath
+              // that sentence doesn't need to restate it. Founder caught
+              // the same explanation appearing three times on one screen.
+              <Button title="Cancel booking" variant="ghost" onPress={() => {}} disabled />
             ) : null}
 
-            {maybeReschedulable ? (
+            {maybeReschedulable && !nonCancellableDueToCredit ? (
               <Button
                 title="Reschedule"
                 variant="secondary"
@@ -299,6 +324,18 @@ export default function BookingStatusScreen() {
                   router.push({ pathname: '/booking/[id]/reschedule', params: { id: booking.id } })
                 }
               />
+            ) : nonCancellableDueToCredit ? (
+              // Same reasoning as the disabled Cancel control above: no
+              // caption, the card already explains it in full. Variant is
+              // `ghost` here — matching the disabled Cancel control above
+              // rather than this button's own enabled `secondary` look —
+              // per the founder's explicit call after the two looked
+              // mismatched stacked together disabled. Scoped to this
+              // branch only: the enabled Reschedule button a few lines up
+              // keeps `secondary`, since enabled and disabled render
+              // through entirely separate JSX and this change doesn't
+              // touch it.
+              <Button title="Reschedule" variant="ghost" onPress={() => {}} disabled />
             ) : null}
 
             <Button title="See my bookings" onPress={() => router.replace('/(tabs)/bookings')} />
@@ -321,6 +358,9 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
 }
 
 const styles = StyleSheet.create({
+  policyNote: {
+    marginTop: Spacing.one,
+  },
   container: {
     flex: 1,
   },

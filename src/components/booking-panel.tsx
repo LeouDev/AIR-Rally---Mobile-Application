@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LayoutAnimation, Platform, StyleSheet, UIManager, View } from 'react-native';
+import { Alert, LayoutAnimation, Platform, StyleSheet, UIManager, View } from 'react-native';
 
 import { CourtStrip, DateStrip, DurationSegmented, SectionLabel, SlotGrid } from '@/components/booking-picker';
 import { PlayerPicker } from '@/components/player-picker';
@@ -11,8 +11,8 @@ import { useToast } from '@/components/ui/toast';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { AvailableSlot, PublicProfile } from '@/lib/database.types';
+import { previewBookingWithCredits } from '@/lib/booking-credit-preview';
 import {
-  calculateBookingCharge,
   DURATION_OPTIONS_MINUTES,
   formatCentavos,
   formatSlotTime,
@@ -20,6 +20,7 @@ import {
   upcomingDates,
 } from '@/lib/bookings';
 import { createCheckoutSession } from '@/lib/checkout';
+import { getCreditBalance } from '@/lib/credits';
 import { createOpenPlayForBooking } from '@/lib/events';
 import type { VenueDetail } from '@/lib/venues';
 import { useSession } from '@/providers/session';
@@ -53,6 +54,37 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
   const { session } = useSession();
   const { show } = useToast();
   const dates = useRef(upcomingDates(venue.timezone, VISIBLE_DAYS)).current;
+
+  // Read up front, before any tap — the checkout response arrives only
+  // after the server has already debited the wallet, so showing THAT
+  // number would be a receipt, not a warning. Disclosure has to precede
+  // the commitment, which means knowing the balance before it.
+  const [creditBalance, setCreditBalance] = useState(0);
+  useEffect(() => {
+    const userId = session?.user.id;
+    // No reset-to-zero branch here: this screen sits behind the auth
+    // guard in the root layout, so a mount with no session is not a
+    // real transition to defend against, and the initial state above is
+    // already 0 — a synchronous setState here would only be restating
+    // the value React already holds.
+    if (!userId) return;
+    let cancelled = false;
+    getCreditBalance(userId)
+      .then((balance) => {
+        if (!cancelled) setCreditBalance(balance);
+      })
+      .catch(() => {
+        // A read failure must never overstate the disclosure — showing
+        // "credits will be applied" for a balance the request couldn't
+        // confirm would be worse than showing none. Silence here is
+        // conservative, not careless: the server's own split still runs
+        // as normal at checkout regardless of what this preview knows.
+        if (!cancelled) setCreditBalance(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id]);
 
   const [courtId, setCourtId] = useState(venue.courts[0]?.id ?? null);
   const [localDate, setLocalDate] = useState(dates[0]?.localDate ?? '');
@@ -180,12 +212,16 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
 
   const hours = duration / 60;
   const estimate = court.hourly_price * hours;
-  // What card/QR Ph will actually charge, fee included — never the raw
-  // court price. See lib/bookings.ts#calculateBookingCharge: PayMongo's
-  // rate applies to the total charged, not the court price, so showing
-  // the pre-fee number here would under-report what "Reserve & pay"
-  // actually commits to.
-  const charge = calculateBookingCharge(Math.round(estimate * 100));
+  // What card/QR Ph will actually charge, fee included, AFTER any
+  // AIR/Rally Credits are applied — never the raw court price, and never
+  // the pre-credit total either. The processing fee is grossed up from
+  // what's left after credit, not the full price (see
+  // booking-credit-preview.ts), so a partial-credit booking's fee is
+  // smaller than the full-price fee would suggest. Showing the pre-credit
+  // number here is exactly the bug this file exists to fix: a player
+  // with a balance sees a price that doesn't match what they're charged.
+  const preview = previewBookingWithCredits(Math.round(estimate * 100), creditBalance);
+  const charge = preview.charge;
 
   const pickSlot = (slot: AvailableSlot, selected: boolean) => {
     animateNext();
@@ -228,9 +264,26 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
               {formatSlotTime(selectedSlot.slot_start, venue.timezone)} –{' '}
               {formatSlotTime(selectedSlot.slot_end, venue.timezone)}
             </ThemedText>
-            <ThemedText type="caption">
-              Includes {formatCentavos(charge.processingFeeAmount)} QR Ph fee · waived if paid with credits
-            </ThemedText>
+            {preview.creditApplied > 0 ? (
+              // Disclosed BEFORE the tap, not after: the checkout
+              // response only arrives once the server has already
+              // debited the wallet, so showing that number there would
+              // be a receipt, not a warning. This is the warning.
+              <>
+                <ThemedText type="caption">
+                  {formatCentavos(preview.creditApplied)} of your Credits will be applied
+                </ThemedText>
+                <ThemedText type="caption" themeColor="destructive">
+                  {preview.fullyCoveredByCredit
+                    ? "Fully covered — no payment needed. Bookings paid with Credits can't be cancelled."
+                    : `You'll pay ${formatCentavos(charge.totalChargedAmount)} now. Bookings paid with Credits can't be cancelled.`}
+                </ThemedText>
+              </>
+            ) : (
+              <ThemedText type="caption">
+                Includes {formatCentavos(charge.processingFeeAmount)} QR Ph fee · waived if paid with credits
+              </ThemedText>
+            )}
           </View>
           <ThemedText type="heading">{formatCentavos(charge.totalChargedAmount)}</ThemedText>
         </View>
@@ -253,12 +306,40 @@ export function BookingPanel({ venue }: { venue: VenueDetail }) {
 
       <Button
         title={submitting ? 'Reserving…' : 'Reserve & pay'}
-        onPress={book}
+        onPress={confirmAndBook}
         disabled={!selectedSlot || submitting}
         loading={submitting}
       />
     </View>
   );
+
+  /**
+   * Same pattern as Block's confirm-before-write step: an interstitial
+   * before an irreversible action, Cancel/Confirm, nothing runs until
+   * the second tap. Gated on the SAME condition the inline disclosure
+   * card above already reads — preview.creditApplied, not a second
+   * derivation of it — so a cash-only booking sees no new friction at
+   * all, and this can never disagree with what the card on screen just
+   * told the player.
+   *
+   * Restates the card's numbers rather than repeating its exact
+   * sentence, so this reads as a confirmation of what was already
+   * disclosed, not a duplicate of it.
+   */
+  function confirmAndBook() {
+    if (preview.creditApplied <= 0) {
+      book();
+      return;
+    }
+    Alert.alert(
+      "This booking can't be cancelled",
+      `${formatCentavos(preview.creditApplied)} of your Credits will be applied, and you'll pay ${formatCentavos(charge.totalChargedAmount)} now. Once confirmed, this booking can't be cancelled or rescheduled.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm & Pay', style: 'destructive', onPress: book },
+      ]
+    );
+  }
 }
 
 const styles = StyleSheet.create({

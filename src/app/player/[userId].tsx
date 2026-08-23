@@ -4,6 +4,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, PostCard } from '@/components/post-card';
+import { ReportAction } from '@/components/report-action';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -121,7 +122,26 @@ export default function PublicProfileScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: profile?.display_name ?? 'Profile', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: profile?.display_name ?? 'Profile',
+          headerBackButtonDisplayMode: 'minimal',
+          // Absent on your own profile — reporting yourself is noise in
+          // the moderation queue.
+          headerRight:
+            profile && !isOwnProfile
+              ? () => (
+                  <ReportAction
+                    targetType="user"
+                    targetId={profile.id}
+                    targetLabel="player"
+                    blockTarget={{ userId: profile.id, displayName: profile.display_name ?? 'This player' }}
+                  />
+                )
+              : undefined,
+        }}
+      />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         {profile === undefined && error ? (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>

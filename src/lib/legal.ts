@@ -3,4 +3,4 @@
  * User Agreement version is currently required at signup. Bump this
  * alongside the web's own constant whenever the actual terms change.
  */
-export const CURRENT_AGREEMENT_VERSION = '2026-08-17';
+export const CURRENT_AGREEMENT_VERSION = '2026-08-23';

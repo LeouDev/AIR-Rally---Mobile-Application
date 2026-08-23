@@ -285,6 +285,12 @@ export default function ProfileScreen() {
                 onPress={() => router.push('/favorites')}
               />
               <ShortcutCard
+                icon="ban-outline"
+                title="Blocked players"
+                subtitle="Manage who you've blocked."
+                onPress={() => router.push('/blocked')}
+              />
+              <ShortcutCard
                 icon="search-outline"
                 title="Find a court"
                 subtitle="Browse venues and book your next rally."

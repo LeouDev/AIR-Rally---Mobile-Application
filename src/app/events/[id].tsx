@@ -4,6 +4,8 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EventJoinRequests } from '@/components/events/event-join-requests';
+import { Avatar } from '@/components/post-card';
+import { ReportAction } from '@/components/report-action';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -114,7 +116,30 @@ export default function EventDetailScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: 'Game', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Game',
+          headerBackButtonDisplayMode: 'minimal',
+          headerRight: event
+            ? () => (
+                <ReportAction
+                  targetType="event"
+                  targetId={event.id}
+                  targetLabel="game"
+                  blockTarget={
+                    // Never on your own game — you can't block yourself,
+                    // and the creator not resolving (a deleted account)
+                    // leaves nothing to name in the confirmation copy.
+                    !isOrganiser && event.creator
+                      ? { userId: event.creator_id, displayName: event.creator.display_name ?? 'This player' }
+                      : undefined
+                  }
+                />
+              )
+            : undefined,
+        }}
+      />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <ScrollView contentContainerStyle={styles.scroll}>
           {event === undefined ? (
@@ -181,11 +206,7 @@ export default function EventDetailScreen() {
                   <View style={styles.chipRow}>
                     {event.attendees.map((player) => (
                       <View key={player.id} style={[styles.playerChip, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                        <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
-                          <ThemedText type="caption" style={{ color: theme.accentForeground }}>
-                            {(player.display_name ?? '?').slice(0, 1).toUpperCase()}
-                          </ThemedText>
-                        </View>
+                        <Avatar profile={player} size={24} />
                         <ThemedText type="small">{player.display_name}</ThemedText>
                       </View>
                     ))}
@@ -288,13 +309,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.half,
     borderRadius: Radius.pill,
     borderWidth: 1,
-  },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   center: {
     textAlign: 'center',

@@ -1,15 +1,12 @@
 import { StyleSheet, View } from 'react-native';
 
+import { Avatar } from '@/components/post-card';
 import { PipRow } from '@/components/ranked/pip-row';
 import { RankBadge } from '@/components/ranked/rank-badge';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { RankedMatchParticipant } from '@/lib/ranked';
-
-function initials(name: string | null): string {
-  return (name ?? '?').trim().slice(0, 2).toUpperCase();
-}
 
 /**
  * One player in a team roster, on the navy lobby surface. `trailing` is
@@ -44,11 +41,7 @@ export function PlayerRow({
 
   return (
     <View style={[styles.row, showDivider && styles.divider]}>
-      <View style={[styles.avatar, { backgroundColor: theme.rally }]}>
-        <ThemedText type="caption" style={{ color: theme.rallyForeground }}>
-          {initials(name)}
-        </ThemedText>
-      </View>
+      <Avatar profile={player.profile} size={40} on="navy" />
       {placed ? <RankBadge tier={player.rank!.tier} on="navy" size={40} /> : null}
       <View style={styles.info}>
         <ThemedText type="smallBold" numberOfLines={1} style={{ color: theme.navyForeground }}>
@@ -85,14 +78,6 @@ const styles = StyleSheet.create({
   divider: {
     borderBottomWidth: 2,
     borderBottomColor: 'rgba(246, 241, 232, 0.15)',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   info: {
     flex: 1,

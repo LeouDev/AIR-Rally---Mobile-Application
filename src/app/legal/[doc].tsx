@@ -31,7 +31,7 @@ export default function LegalDocumentScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           <ThemedText type="heading">{document.title}</ThemedText>
           <ThemedText type="small" themeColor="mutedForeground">
-            {document === TERMS ? `Version ${CURRENT_AGREEMENT_VERSION} · ` : ''}Last updated 17 August 2026
+            {document === TERMS ? `Version ${CURRENT_AGREEMENT_VERSION} · ` : ''}Last updated 23 August 2026
           </ThemedText>
 
           {document.intro.map((paragraph, i) => (

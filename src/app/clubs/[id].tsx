@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/post-card';
+import { ReportAction } from '@/components/report-action';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Badge } from '@/components/ui/badge';
@@ -96,7 +97,35 @@ export default function ClubDetailScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: club?.name ?? 'Club', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: club?.name ?? 'Club',
+          headerBackButtonDisplayMode: 'minimal',
+          headerRight: club
+            ? () => {
+                // The owner's identity comes from the members list this
+                // screen already loads for the roster — no separate
+                // fetch. Undefined (Report-only) until members has
+                // loaded, and permanently undefined if you ARE the
+                // owner, same as never offering Block on your own post.
+                const owner = members?.find((m) => m.role === 'owner');
+                return (
+                  <ReportAction
+                    targetType="club"
+                    targetId={club.id}
+                    targetLabel="club"
+                    blockTarget={
+                      owner && owner.user_id !== userId
+                        ? { userId: owner.user_id, displayName: owner.profile?.display_name ?? 'This player' }
+                        : undefined
+                    }
+                  />
+                );
+              }
+            : undefined,
+        }}
+      />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         {club === undefined && error ? (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>

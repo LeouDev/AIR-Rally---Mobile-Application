@@ -4,6 +4,7 @@ import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, PostCard } from '@/components/post-card';
+import { ReportAction } from '@/components/report-action';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -196,7 +197,18 @@ export default function PostDetailScreen() {
                         <ThemedText type="caption" themeColor="destructive" onPress={() => removeComment(item.id)}>
                           Delete
                         </ThemedText>
-                      ) : null}
+                      ) : (
+                        // Each row owns its own ReportAction — a closed
+                        // native Modal per row is effectively free, and
+                        // it's the same trigger every other report
+                        // surface uses rather than a one-off text link.
+                        <ReportAction
+                          targetType="comment"
+                          targetId={item.id}
+                          targetLabel="comment"
+                          blockTarget={{ userId: item.user_id, displayName: item.author?.display_name ?? 'This player' }}
+                        />
+                      )}
                     </View>
                   </View>
                 </View>
