@@ -202,7 +202,12 @@ export default function PostDetailScreen() {
                         // native Modal per row is effectively free, and
                         // it's the same trigger every other report
                         // surface uses rather than a one-off text link.
-                        <ReportAction targetType="comment" targetId={item.id} targetLabel="comment" />
+                        <ReportAction
+                          targetType="comment"
+                          targetId={item.id}
+                          targetLabel="comment"
+                          blockTarget={{ userId: item.user_id, displayName: item.author?.display_name ?? 'This player' }}
+                        />
                       )}
                     </View>
                   </View>

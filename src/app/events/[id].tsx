@@ -121,7 +121,23 @@ export default function EventDetailScreen() {
           headerShown: true,
           title: 'Game',
           headerBackButtonDisplayMode: 'minimal',
-          headerRight: event ? () => <ReportAction targetType="event" targetId={event.id} targetLabel="game" /> : undefined,
+          headerRight: event
+            ? () => (
+                <ReportAction
+                  targetType="event"
+                  targetId={event.id}
+                  targetLabel="game"
+                  blockTarget={
+                    // Never on your own game — you can't block yourself,
+                    // and the creator not resolving (a deleted account)
+                    // leaves nothing to name in the confirmation copy.
+                    !isOrganiser && event.creator
+                      ? { userId: event.creator_id, displayName: event.creator.display_name ?? 'This player' }
+                      : undefined
+                  }
+                />
+              )
+            : undefined,
         }}
       />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>

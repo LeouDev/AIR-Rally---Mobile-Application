@@ -131,7 +131,14 @@ export default function PublicProfileScreen() {
           // the moderation queue.
           headerRight:
             profile && !isOwnProfile
-              ? () => <ReportAction targetType="user" targetId={profile.id} targetLabel="player" />
+              ? () => (
+                  <ReportAction
+                    targetType="user"
+                    targetId={profile.id}
+                    targetLabel="player"
+                    blockTarget={{ userId: profile.id, displayName: profile.display_name ?? 'This player' }}
+                  />
+                )
               : undefined,
         }}
       />

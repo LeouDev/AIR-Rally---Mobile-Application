@@ -387,7 +387,12 @@ export function PostCard({
           // ReportAction owns its own trigger, menu and sheet — no local
           // `reporting` state to hold here anymore.
           <View style={[styles.action, styles.deleteAction]}>
-            <ReportAction targetType="post" targetId={post.id} targetLabel="post" />
+            <ReportAction
+              targetType="post"
+              targetId={post.id}
+              targetLabel="post"
+              blockTarget={{ userId: post.user_id, displayName: post.author?.display_name ?? 'This player' }}
+            />
           </View>
         )}
       </View>
