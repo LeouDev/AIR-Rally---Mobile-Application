@@ -151,7 +151,22 @@ function renderContent(content: string) {
   );
 }
 
-export function Avatar({ profile, size = 36 }: { profile: PublicProfile | null; size?: number }) {
+/**
+ * `on` picks the initials-fallback palette for the surface underneath.
+ * 'navy' is for the fixed-dark Ranked match surfaces, where the default
+ * accent fill (a pale cream in light mode) would read as a hole punched
+ * in the card. The photo path is identical either way — only the
+ * no-photo fallback needs to know where it is being drawn.
+ */
+export function Avatar({
+  profile,
+  size = 36,
+  on = 'surface',
+}: {
+  profile: PublicProfile | null;
+  size?: number;
+  on?: 'surface' | 'navy';
+}) {
   const theme = useTheme();
   const [imageFailed, setImageFailed] = useState(false);
   const initials = (profile?.display_name ?? '?')
@@ -172,13 +187,16 @@ export function Avatar({ profile, size = 36 }: { profile: PublicProfile | null; 
     );
   }
 
+  const fallbackBg = on === 'navy' ? theme.rally : theme.accent;
+  const fallbackFg = on === 'navy' ? theme.rallyForeground : theme.accentForeground;
+
   return (
     <View
       style={[
         styles.avatar,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.accent },
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: fallbackBg },
       ]}>
-      <ThemedText type="caption" style={{ color: theme.accentForeground }}>
+      <ThemedText type="caption" style={{ color: fallbackFg }}>
         {initials || '?'}
       </ThemedText>
     </View>

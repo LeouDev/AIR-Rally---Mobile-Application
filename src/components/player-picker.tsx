@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { Avatar } from '@/components/post-card';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -98,11 +99,7 @@ export function PlayerPicker({
               accessibilityRole="button"
               onPress={() => add(player)}
               style={({ pressed }) => [styles.resultRow, pressed && { opacity: 0.7 }]}>
-              <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
-                <ThemedText type="caption" style={{ color: theme.accentForeground }}>
-                  {(player.display_name ?? '?').slice(0, 1).toUpperCase()}
-                </ThemedText>
-              </View>
+              <Avatar profile={player} size={28} />
               <ThemedText type="small" numberOfLines={1} style={styles.resultName}>
                 {player.display_name}
               </ThemedText>
@@ -187,13 +184,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.two,
-  },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   resultName: {
     flexShrink: 1,
