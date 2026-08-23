@@ -316,6 +316,33 @@ export type Report = {
   updated_at: string;
 };
 
+/**
+ * Blocking. Kept in lockstep with the web repo's
+ * supabase/migrations/20260810000084_user_blocks.sql — the database is
+ * the boundary. Rosters (event_attendees) and public_profiles are
+ * deliberately NOT filtered by a block: a block must never hide who a
+ * player will physically meet at a court, and search stays honest about
+ * who exists. Feed content (posts/likes/comments/reshares/mentions) IS
+ * filtered at the RLS layer itself, so it's invisible on a direct
+ * profile visit too, not just in the algorithmic feed. A block SEVERS
+ * any existing follow between the two people, both directions, rather
+ * than merely hiding it.
+ */
+export type UserBlock = {
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+};
+
+/** list_my_blocks()'s row shape — the unblock screen's only sanctioned
+ * way to read your own block list with display data joined in. */
+export type BlockedUser = {
+  blocked_id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  created_at: string;
+};
+
 export type Post = {
   id: string;
   user_id: string;
@@ -653,6 +680,11 @@ export type Database = {
         never
       >;
 
+      /* Insert-only / delete-only from a client — RLS on user_blocks
+         scopes both to blocker_id = auth.uid(). No client update path;
+         a block is either in force or removed, never edited. */
+      user_blocks: TableDef<UserBlock, { blocker_id: string; blocked_id: string }, never>;
+
       clubs: TableDef<
         Club,
         {
@@ -760,6 +792,20 @@ export type Database = {
           p_cursor_id?: string;
         };
         Returns: (Post & { effective_at: string; resharer_id: string | null })[];
+      };
+      /** SECURITY DEFINER — sees across user_blocks' own RLS (which
+       * only ever shows a caller their OWN outgoing blocks) to answer
+       * bidirectionally. Refuses to answer for a pair neither of whose
+       * members is the caller (returns false), so it can't be used to
+       * map a stranger's block graph. */
+      is_blocked_pair: {
+        Args: { p_user_a: string; p_user_b: string };
+        Returns: boolean;
+      };
+      /** The block-management screen's data source. */
+      list_my_blocks: {
+        Args: Record<string, never>;
+        Returns: BlockedUser[];
       };
       invite_event_players: {
         Args: { p_event_id: string; p_user_ids: string[] };
