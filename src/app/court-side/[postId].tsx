@@ -4,6 +4,7 @@ import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, PostCard } from '@/components/post-card';
+import { ReportSheet } from '@/components/report-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,9 @@ export default function PostDetailScreen() {
   const [following, setFollowing] = useState(false);
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
+  /** Which comment is being reported — one sheet for the list rather
+   * than one per row, so a long thread doesn't mount N modals. */
+  const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!postId) return;
@@ -196,7 +200,16 @@ export default function PostDetailScreen() {
                         <ThemedText type="caption" themeColor="destructive" onPress={() => removeComment(item.id)}>
                           Delete
                         </ThemedText>
-                      ) : null}
+                      ) : (
+                        <ThemedText
+                          type="caption"
+                          themeColor="mutedForeground"
+                          accessibilityRole="button"
+                          accessibilityLabel="Report comment"
+                          onPress={() => setReportingCommentId(item.id)}>
+                          Report
+                        </ThemedText>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -224,6 +237,14 @@ export default function PostDetailScreen() {
               }
             />
           )}
+
+          <ReportSheet
+            visible={reportingCommentId !== null}
+            onClose={() => setReportingCommentId(null)}
+            targetType="comment"
+            targetId={reportingCommentId ?? ''}
+            targetLabel="comment"
+          />
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>

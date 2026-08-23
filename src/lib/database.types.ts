@@ -281,6 +281,41 @@ export type Follow = {
  * `following` is posts/reshares by people you follow, plus your own. */
 export type CourtSideFeedScope = 'for_you' | 'following';
 
+/**
+ * Trust & safety. Kept in lockstep with the CHECK constraints in the web
+ * repo's supabase/migrations/20260810000049_reports_support_rate_limits.sql
+ * — the database is the boundary; these exist so the sheet can say what
+ * is wrong without a round trip, not instead of the constraint.
+ */
+export type ReportTargetType = 'post' | 'comment' | 'club' | 'event' | 'user';
+
+export type ReportReason =
+  | 'spam'
+  | 'harassment'
+  | 'hate_speech'
+  | 'sexual_content'
+  | 'violence'
+  | 'misinformation'
+  | 'impersonation'
+  | 'other';
+
+export type ReportStatus = 'open' | 'reviewed' | 'dismissed';
+
+export type Report = {
+  id: string;
+  reporter_id: string;
+  target_type: ReportTargetType;
+  target_id: string;
+  reason: ReportReason;
+  details: string | null;
+  status: ReportStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Post = {
   id: string;
   user_id: string;
@@ -603,6 +638,20 @@ export type Database = {
       post_reshares: TableDef<PostReshare, Pick<PostReshare, 'post_id' | 'user_id'>, never>;
       post_comments: TableDef<PostComment, { post_id: string; user_id: string; content: string }, never>;
       post_mentions: TableDef<PostMention, Pick<PostMention, 'post_id' | 'user_id'>, never>;
+
+      /* Insert-only from a client. Resolution columns are the moderation
+         queue's, and RLS gives no client an update path to them. */
+      reports: TableDef<
+        Report,
+        {
+          reporter_id: string;
+          target_type: ReportTargetType;
+          target_id: string;
+          reason: ReportReason;
+          details?: string | null;
+        },
+        never
+      >;
 
       clubs: TableDef<
         Club,

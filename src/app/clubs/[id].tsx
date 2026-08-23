@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/post-card';
+import { ReportAction } from '@/components/report-action';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Badge } from '@/components/ui/badge';
@@ -96,7 +97,14 @@ export default function ClubDetailScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: club?.name ?? 'Club', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: club?.name ?? 'Club',
+          headerBackButtonDisplayMode: 'minimal',
+          headerRight: club ? () => <ReportAction targetType="club" targetId={club.id} targetLabel="club" /> : undefined,
+        }}
+      />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         {club === undefined && error ? (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
