@@ -8,7 +8,7 @@ import { captureRef } from 'react-native-view-shot';
 
 import { monoFont, ShareCardFrame } from '@/components/share-card-frame';
 import { Button } from '@/components/ui/button';
-import { ReportSheet } from '@/components/report-sheet';
+import { ReportAction } from '@/components/report-action';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -241,7 +241,6 @@ export function PostCard({
 }: PostCardProps) {
   const theme = useTheme();
   const isOwn = post.user_id === currentUserId;
-  const [reporting, setReporting] = useState(false);
   const shareCardRef = useRef<View>(null);
 
   const handleExternalShare = async () => {
@@ -381,28 +380,17 @@ export function PostCard({
             </ThemedText>
           </Pressable>
         ) : (
-          /* Never on your own post — reporting yourself is noise in the
-             moderation queue. Sits in the same trailing slot Delete
-             occupies for an author, so the row has one meaning: the
-             thing you can do about THIS post that isn't engagement. */
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Report post"
-            onPress={() => setReporting(true)}
-            style={[styles.action, styles.deleteAction]}
-            hitSlop={6}>
-            <Ionicons name="flag-outline" size={16} color={theme.mutedForeground} />
-          </Pressable>
+          // Never on your own post — reporting yourself is noise in the
+          // moderation queue. Sits in the same trailing slot Delete
+          // occupies for an author, so the row has one meaning: the
+          // thing you can do about THIS post that isn't engagement.
+          // ReportAction owns its own trigger, menu and sheet — no local
+          // `reporting` state to hold here anymore.
+          <View style={[styles.action, styles.deleteAction]}>
+            <ReportAction targetType="post" targetId={post.id} targetLabel="post" />
+          </View>
         )}
       </View>
-
-      <ReportSheet
-        visible={reporting}
-        onClose={() => setReporting(false)}
-        targetType="post"
-        targetId={post.id}
-        targetLabel="post"
-      />
     </View>
   );
 }
