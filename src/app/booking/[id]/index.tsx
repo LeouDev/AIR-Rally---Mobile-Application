@@ -86,6 +86,15 @@ export default function BookingStatusScreen() {
         booking.credit_amount_applied === 0 &&
         new Date(booking.start_time).getTime() > Date.now()));
 
+  // Narrower than !cancellable on purpose: a past or already-cancelled
+  // booking isn't cancellable either, but blaming credits there would be
+  // wrong. This is specifically the case that used to render nothing at
+  // all — a confirmed, still-upcoming booking that credits made final —
+  // where "absent" reads as "broken", not "not applicable".
+  // Reuses maybeReschedulable's own condition (confirmed + still
+  // upcoming) rather than recomputing Date.now() a second time.
+  const nonCancellableDueToCredit = maybeReschedulable && booking!.credit_amount_applied > 0;
+
   // A pending PayMongo booking's checkout page stays reachable: the
   // session's public URL is its id sans the "cs_" prefix (observed to
   // hold for every session this project has created; revisit if PayMongo
@@ -216,6 +225,13 @@ export default function BookingStatusScreen() {
                 />
               ) : null}
               <Row label="Total" value={formatCentavos(Math.max(totalCharged, 0))} bold />
+              {maybeReschedulable ? (
+                <ThemedText type="caption" themeColor="mutedForeground" style={styles.policyNote}>
+                  {booking.credit_amount_applied > 0
+                    ? "This booking used AIR/Rally Credits, which makes it final — it can't be cancelled and the Credits are not returned."
+                    : 'Cancelling at least 48 hours ahead earns AIR/Rally Credits for what you paid; closer than that, no compensation is due.'}
+                </ThemedText>
+              ) : null}
             </View>
 
             {creditOutcome ? (
@@ -289,6 +305,18 @@ export default function BookingStatusScreen() {
                   onPress={() => setConfirmingCancel(true)}
                 />
               )
+            ) : nonCancellableDueToCredit ? (
+              // Disabled, not absent. A missing control and a denied one
+              // look identical until a customer wonders which — this
+              // says which, in the same caption style TextField uses for
+              // an inline error, and reuses the rationale that was
+              // already spelled out above the price breakdown.
+              <View>
+                <Button title="Cancel booking" variant="ghost" onPress={() => {}} disabled />
+                <ThemedText type="caption" themeColor="mutedForeground" style={styles.disabledCancelNote}>
+                  Can&apos;t be cancelled — paid with AIR/Rally Credits.
+                </ThemedText>
+              </View>
             ) : null}
 
             {maybeReschedulable ? (
@@ -321,6 +349,12 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
 }
 
 const styles = StyleSheet.create({
+  policyNote: {
+    marginTop: Spacing.one,
+  },
+  disabledCancelNote: {
+    marginTop: -Spacing.one,
+  },
   container: {
     flex: 1,
   },

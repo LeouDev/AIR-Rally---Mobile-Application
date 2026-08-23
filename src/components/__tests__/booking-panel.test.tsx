@@ -6,6 +6,7 @@ import type { AvailableSlot, Court, PublicProfile } from '@/lib/database.types';
 import { createOpenPlayForBooking } from '@/lib/events';
 import { getAvailableSlots } from '@/lib/bookings';
 import { createCheckoutSession } from '@/lib/checkout';
+import { getCreditBalance } from '@/lib/credits';
 import { searchPublicProfiles } from '@/lib/follows';
 import type { VenueDetail } from '@/lib/venues';
 
@@ -26,6 +27,7 @@ import type { VenueDetail } from '@/lib/venues';
  */
 
 jest.mock('@/lib/checkout', () => ({ createCheckoutSession: jest.fn() }));
+jest.mock('@/lib/credits', () => ({ getCreditBalance: jest.fn() }));
 jest.mock('@/lib/events', () => ({ createOpenPlayForBooking: jest.fn() }));
 jest.mock('@/lib/follows', () => ({ searchPublicProfiles: jest.fn() }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
@@ -60,6 +62,7 @@ const mockGetAvailableSlots = getAvailableSlots as jest.MockedFunction<typeof ge
 const mockCreateCheckoutSession = createCheckoutSession as jest.MockedFunction<typeof createCheckoutSession>;
 const mockCreateOpenPlay = createOpenPlayForBooking as jest.MockedFunction<typeof createOpenPlayForBooking>;
 const mockSearchProfiles = searchPublicProfiles as jest.MockedFunction<typeof searchPublicProfiles>;
+const mockGetCreditBalance = getCreditBalance as jest.MockedFunction<typeof getCreditBalance>;
 
 const BOOKING_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
@@ -145,6 +148,7 @@ beforeEach(() => {
   });
   mockCreateOpenPlay.mockResolvedValue({ eventId: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', invited: 0 });
   mockSearchProfiles.mockResolvedValue([ROBIN, SAM]);
+  mockGetCreditBalance.mockResolvedValue(0);
 });
 
 /** Renders and waits for the first slot grid to resolve. */
@@ -282,5 +286,79 @@ describe('BookingPanel — invited player roster', () => {
       expect.stringContaining("couldn't invite your players"),
       'error'
     );
+  });
+});
+
+/**
+ * Regression cover for the credits disclosure.
+ *
+ * The bug this guards: the summary card showed the FULL court price —
+ * the number before any AIR/Rally Credits were applied — regardless of
+ * the player's actual balance. Someone with credit looked at ₱700, was
+ * charged something else entirely, and nothing on the screen they
+ * committed money on said their credit was about to be spent or that
+ * doing so would make the booking permanently non-cancellable.
+ *
+ * Also regression cover for where the disclosure has to live: the
+ * checkout response carries creditApplied, but by the time it arrives
+ * the server has already debited the wallet (see checkoutSession.ts —
+ * credit is applied before the PayMongo session is created). Reading it
+ * from THAT response would be a receipt, not a warning. These assert the
+ * balance is read and disclosed before Reserve & pay is ever pressed.
+ */
+describe('BookingPanel — credits disclosure', () => {
+  it('shows no credits disclosure and the plain fee note when the wallet is empty', async () => {
+    mockGetCreditBalance.mockResolvedValue(0);
+    await renderPanel();
+    await pickSlot('9:00 AM');
+
+    expect(screen.queryByText(/of your Credits will be applied/)).toBeNull();
+    expect(screen.queryByText(/can't be cancelled/)).toBeNull();
+    expect(screen.getByText(/Includes .* QR Ph fee/)).toBeTruthy();
+  });
+
+  it('discloses the exact amount of credit and the true remaining charge, before any tap', async () => {
+    // ₱300 of credit against a ₱700 (60-minute, ₱700/hr) court.
+    mockGetCreditBalance.mockResolvedValue(30000);
+    await renderPanel();
+    await pickSlot('9:00 AM');
+
+    await waitFor(() => {
+      expect(screen.getByText('₱300.00 of your Credits will be applied')).toBeTruthy();
+    });
+    // The fee is grossed up from the ₱400 REMAINDER, not the ₱700 full
+    // price — ₱400 / (1 - 0.015) ≈ ₱406.09. Showing ₱700, or a fee
+    // computed on ₱700, would both be wrong numbers next to the tap
+    // that spends real money.
+    expect(screen.getByText("You'll pay ₱406.09 now. Bookings paid with Credits can't be cancelled.")).toBeTruthy();
+    expect(screen.getByText('₱406.09')).toBeTruthy();
+  });
+
+  it('discloses full coverage and asks for no payment when credit covers the whole court price', async () => {
+    mockGetCreditBalance.mockResolvedValue(100000);
+    await renderPanel();
+    await pickSlot('9:00 AM');
+
+    await waitFor(() => {
+      expect(screen.getByText('₱700.00 of your Credits will be applied')).toBeTruthy();
+    });
+    expect(
+      screen.getByText("Fully covered — no payment needed. Bookings paid with Credits can't be cancelled.")
+    ).toBeTruthy();
+    expect(screen.getByText('₱0.00')).toBeTruthy();
+  });
+
+  it('never discloses a credit warning when the balance read fails', async () => {
+    // A read failure must not overstate what's about to happen — showing
+    // "credits will be applied" for a balance the app couldn't confirm
+    // would itself be a false disclosure.
+    mockGetCreditBalance.mockRejectedValue(new Error('network down'));
+    await renderPanel();
+    await pickSlot('9:00 AM');
+
+    await waitFor(() => {
+      expect(screen.getByText(/Includes .* QR Ph fee/)).toBeTruthy();
+    });
+    expect(screen.queryByText(/of your Credits will be applied/)).toBeNull();
   });
 });
