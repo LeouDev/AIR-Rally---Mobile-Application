@@ -106,3 +106,45 @@ describe('BookingStatusScreen — a credit-final booking is denied, not absent',
     expect(screen.queryByLabelText('Cancel booking')).toBeNull();
   });
 });
+
+/**
+ * The same defect, one door over. complete_reschedule() cancels the
+ * original booking through a raw UPDATE that never reaches
+ * cancelBooking() — a confirmed→cancelled transition the server now
+ * refuses when Credits were applied, mirroring the cancel rule. The
+ * client's own `maybeReschedulable` never checked credit_amount_applied
+ * at all, so without this the Reschedule button would sit there enabled,
+ * offering a request the server is about to start rejecting, with
+ * nothing on screen explaining why it failed.
+ */
+describe('BookingStatusScreen — a credit-final booking cannot be rescheduled either', () => {
+  it('shows a disabled reschedule control naming the reason, not an enabled one that will fail', async () => {
+    mockGetBooking.mockResolvedValue(bookingFixture({ credit_amount_applied: 30000 }));
+    await render(<BookingStatusScreen />);
+
+    const rescheduleButton = await screen.findByLabelText('Reschedule');
+    expect(rescheduleButton.props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText("Can't be rescheduled — paid with AIR/Rally Credits.")).toBeTruthy();
+  });
+
+  it('still offers a real, enabled reschedule control for an ordinary confirmed booking', async () => {
+    mockGetBooking.mockResolvedValue(bookingFixture({ credit_amount_applied: 0 }));
+    await render(<BookingStatusScreen />);
+
+    const rescheduleButton = await screen.findByLabelText('Reschedule');
+    expect(rescheduleButton.props.accessibilityState.disabled).toBeFalsy();
+  });
+
+  it('offers no reschedule control at all for a booking that already happened, credit or not', async () => {
+    const past = bookingFixture({
+      credit_amount_applied: 30000,
+      start_time: '2020-01-01T01:00:00.000Z',
+      end_time: '2020-01-01T02:00:00.000Z',
+    });
+    mockGetBooking.mockResolvedValue(past);
+    await render(<BookingStatusScreen />);
+
+    await screen.findByText('BGC Smash Pickleball · Rooftop Court');
+    expect(screen.queryByLabelText('Reschedule')).toBeNull();
+  });
+});

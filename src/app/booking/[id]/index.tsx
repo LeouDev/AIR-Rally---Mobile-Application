@@ -313,13 +313,13 @@ export default function BookingStatusScreen() {
               // already spelled out above the price breakdown.
               <View>
                 <Button title="Cancel booking" variant="ghost" onPress={() => {}} disabled />
-                <ThemedText type="caption" themeColor="mutedForeground" style={styles.disabledCancelNote}>
+                <ThemedText type="caption" themeColor="mutedForeground" style={styles.disabledActionNote}>
                   Can&apos;t be cancelled — paid with AIR/Rally Credits.
                 </ThemedText>
               </View>
             ) : null}
 
-            {maybeReschedulable ? (
+            {maybeReschedulable && !nonCancellableDueToCredit ? (
               <Button
                 title="Reschedule"
                 variant="secondary"
@@ -327,6 +327,19 @@ export default function BookingStatusScreen() {
                   router.push({ pathname: '/booking/[id]/reschedule', params: { id: booking.id } })
                 }
               />
+            ) : nonCancellableDueToCredit ? (
+              // Same reasoning as the disabled Cancel control just above:
+              // the server now refuses this exact request (a Credit-paid
+              // confirmed→cancelled transition, which is what a
+              // reschedule is under the hood), so offering an enabled
+              // button here would be a request the customer can tap that
+              // is guaranteed to fail with no explanation on screen.
+              <View>
+                <Button title="Reschedule" variant="secondary" onPress={() => {}} disabled />
+                <ThemedText type="caption" themeColor="mutedForeground" style={styles.disabledActionNote}>
+                  Can&apos;t be rescheduled — paid with AIR/Rally Credits.
+                </ThemedText>
+              </View>
             ) : null}
 
             <Button title="See my bookings" onPress={() => router.replace('/(tabs)/bookings')} />
@@ -352,7 +365,7 @@ const styles = StyleSheet.create({
   policyNote: {
     marginTop: Spacing.one,
   },
-  disabledCancelNote: {
+  disabledActionNote: {
     marginTop: -Spacing.one,
   },
   container: {
