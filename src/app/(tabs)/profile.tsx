@@ -313,6 +313,12 @@ export default function ProfileScreen() {
                 onPress={() => router.push('/(tabs)')}
               />
               <ShortcutCard
+                icon="help-buoy-outline"
+                title="Get help"
+                subtitle="Message support and track your requests."
+                onPress={() => router.push('/support')}
+              />
+              <ShortcutCard
                 icon="settings-outline"
                 title="Account settings"
                 subtitle="Name, photo, and contact details."

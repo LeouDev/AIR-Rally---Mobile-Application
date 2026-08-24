@@ -301,6 +301,33 @@ export type ReportReason =
 
 export type ReportStatus = 'open' | 'reviewed' | 'dismissed';
 
+/**
+ * Support requests. Same migration as reports above
+ * (20260810000049_reports_support_rate_limits.sql), plus resolution_note
+ * from 20260810000088. Category is NOT NULL with a CHECK, so a client
+ * cannot omit it — the web's form asks for it and so must this one.
+ */
+export type SupportCategory = 'booking' | 'payment' | 'account' | 'venue' | 'safety' | 'bug' | 'other';
+
+export type SupportStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+export type SupportRequest = {
+  id: string;
+  user_id: string;
+  category: SupportCategory;
+  subject: string;
+  message: string;
+  status: SupportStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  /** The single admin reply. Required once status reaches resolved or
+   * closed (support_resolution_complete), cleared again on reopen — so
+   * "has a reply" and "is closed" always agree. */
+  resolution_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Report = {
   id: string;
   reporter_id: string;
@@ -687,6 +714,20 @@ export type Database = {
           target_id: string;
           reason: ReportReason;
           details?: string | null;
+        },
+        never
+      >;
+
+      /* Insert-only from a client, same posture as reports: status and
+         the resolution columns belong to the admin queue, and RLS gives
+         no client an update path to them. */
+      support_requests: TableDef<
+        SupportRequest,
+        {
+          user_id: string;
+          category: SupportCategory;
+          subject: string;
+          message: string;
         },
         never
       >;

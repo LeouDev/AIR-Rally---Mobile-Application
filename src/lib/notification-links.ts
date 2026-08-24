@@ -53,6 +53,13 @@ export function resolveNotificationTarget(url: string | null | undefined, type?:
   // renders, so that's the honest destination.
   if (effectiveUrl === '/ranked' || effectiveUrl.startsWith('/ranked?')) return '/(tabs)/profile';
 
+  // Support replies (support_request_resolved, stamped '/support' by
+  // notify_on_support_resolution in 20260810000088). Before this app had
+  // a support screen these fell through to the Alerts tab — the screen
+  // the user was already on — so tapping the notification appeared to do
+  // nothing at all while actually navigating successfully.
+  if (effectiveUrl.startsWith('/support')) return '/support';
+
   if (effectiveUrl.startsWith('/profile')) return '/(tabs)/profile';
   // COURT/Side shipped after this fallback did (see git history) — a bare
   // /court-side link now has a real screen (src/app/court-side/index.tsx)
