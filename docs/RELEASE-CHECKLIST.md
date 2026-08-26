@@ -6,6 +6,26 @@ This exists because the state below was held across several parallel working ses
 
 ---
 
+## RESOLVED — App Review approved, hold lifted 2026-08-26
+
+**Build 9 (`1.0.0+9`) was approved by Apple and auto-released to the App Store the same minute** (`releaseType: AFTER_APPROVAL`, no manual gate — nobody had to press anything). Confirmed live by loading the App Store listing directly: developer name, description, and feature list all match this app. The freeze condition below ("nothing publishes... until that resolves, either outcome") was met by approval, so the hold is lifted.
+
+Per the AI CTO, five OTAs have published against the current runtime since approval: a copy fix, the nine-commit August 24 batch, the three-piece doorway/team-identity/settlement release, the Play tab doorway, and a Facebook-button hide (in flight as of this writing) — reported, not independently itemized here.
+
+The three items originally held below are kept as a record of what the freeze covered. Their status was **not reverified as part of this update** — check the migration/branch directly rather than assuming any of them shipped just because the hold lifted:
+
+1. **Single unified rating** — migration `supabase/migrations/20260810000085_unify_player_rating.sql`. Designed and verified on staging, **applied nowhere** as of when this was written. Collapses per-mode ratings into one. DUPR math proven unchanged — all 12 engine outputs byte-identical before/after. Client work is roughly 17 files across mobile and web, **not started** as of when this was written.
+
+   **CRITICAL: database and clients must ship in one coordinated window.** An old client against the new schema errors outright — verified, not predicted: `column "mode" does not exist`.
+
+2. **Ranked-from-Open-Play** — branch `feature/ranked-from-game` @ `ed9a98d`. Founder-verified on device (published live, reverted after per the standing gate). JS-only, OTA-shippable now that the hold has lifted. Adds the mobile path from an Open Play game into a Ranked match — web already had this, mobile had nothing.
+
+3. **Player-search debounce** — fix written, tests in progress, uncommitted as of when this was written. Addresses founder-reported tap lag on the ranked screens. Root cause is pre-existing, not something this fix introduced: a leading-wildcard `ILIKE` with no debounce, measured at 1.4s cold.
+
+   The real fix underneath the debounce is a trigram index for `searchPublicProfiles` — tracked in §8's post-launch board. Debouncing hides the symptom; the index is what actually fixes the query. Worth keeping visible precisely because it's the kind of item that gets lost once the symptom stops being felt.
+
+---
+
 ## 1. Five changes must ship in the same binary
 
 These all move the OTA runtime version, so **none of them can ship over the air**. An `eas update` carrying any of them silently does not apply, because the update no longer matches the binary's fingerprint.
@@ -62,7 +82,34 @@ Web goes first deliberately. During App Store review a Manila owner sees correct
 
   **The drift check cannot tell you whether all migrations are applied**, and must not be read as if it can. It compares live object *definitions*, so a migration that changes a definition under an unchanged name is invisible to it — production currently reports four findings while 076 and 079 are also unapplied and unseen. "Drift check green" means "no detected difference", not "production is up to date". Answering the second question directly is what the deferred migration ledger is for, and is exactly what this sweep structurally cannot do.
 - [x] **Sentry capture and delivery verified end to end.** See §6 for the evidence chain.
-- [ ] **Source-map upload confirmed on a RELEASE build** — the first real crash arrives readable, not minified. Deliberately a separate line from the one above: the probes ran on a local *debug* build, where Metro serves source maps and `DebugSymbolicator` handles symbolication, so a readable trace there proves nothing about release. The slugs fixed the build *failure*; whether the upload *succeeds* with the real token is a different observation and only a release build can make it.
+- [x] **Source-map upload — FULLY CLOSED, confirmed inside the actual shipped build, not just a local approximation.** Build 5 (`1.0.0`, `CFBundleVersion=5`, the RC already on TestFlight) never had working source maps and can't get them retroactively — see the recovery attempt below. Everything after build 5 is fixed.
+
+  **What was wrong, found by opening the shipped `.ipa` directly rather than reasoning from the log:** `@sentry/react-native`'s iOS plugin (`withSentryIOS.js`) has exactly one mechanism for JS source maps — it patches the Xcode **"Bundle React Native code and images"** script phase to wrap `react-native-xcode.sh` with `sentry-xcode.sh`. The RC's decoded build log lists all 58 phases that actually executed; that phase is not among them, in any form — EAS's `EAGER_BUNDLE` phase runs Metro up front outside Xcode and writes the bundle to the exact path the Xcode phase's dependency-analysis expects as output, so Xcode treats the phase as already-satisfied and silently skips it. No log line, no failure, just absence. Separately and more fundamentally: the extracted `main.jsbundle` was real Hermes bytecode with zero debug-ID markers anywhere (`sentry-dbid-<uuid>`, `//# debugId=`, `//# sourceMappingURL=`, any `.map` reference) — because this repo had **no `metro.config.js` at all**, so the debug-ID-injecting Metro serializer was never wired in regardless of which build phase ran. Two independent gaps, not one; fixing only the first would have shipped a build believed symbolicated and wasn't.
+
+  **Recovery attempt for build 5 specifically (recorded as a dead end, not left unresolved):** acceptance criteria written before running anything (`scratch/sourcemap-acceptance-criteria.md` — worth keeping as the reference for what "pre-registering before you see the result" looks like). Attempted to reproduce the shipped bundle locally at commit `3aacba5` via `expo export:embed --eager --bytecode`. Two disqualifying results before reaching a byte comparison: module count mismatch (shipped: 1869 modules; local: 2028) and the output wasn't Hermes bytecode at all — `--bytecode` produced plain minified JS text. Both consistent with a reproduction environment that isn't EAS's, not with the shipped code differing. **Conclusion: not recoverable** — build 5's source maps are accepted as permanently lost, superseded by the fix below.
+
+  **The fix: `metro.config.js` wiring `@sentry/react-native`'s Metro serializer (`getSentryExpoConfig`).** Verified in three independent stages, each stronger than the last:
+
+  1. **Fingerprint-safe.** Isolated worktree, fingerprint measured before and after adding it: identical both times, and confirmed as a genuine non-input (not a coincidental hash match) — the raw fingerprint JSON's only "metro" hits are unrelated dependency names. Clear to land pre-launch.
+  2. **Works over the air, on real hardware.** Published live to the production channel alongside a deliberate crash trigger (`src/app/(tabs)/profile.tsx:98`, `handleSentrySymbolicationProbe`), tapped once on the founder's actual device. The resulting Sentry event, `SENTRY-SYMBOLICATION-PROBE`, resolved to real source (`profile.tsx:230:64`, real surrounding TypeScript) — not a bytecode offset. (Top frame was a different Pressable's `style` callback rather than line 98 itself, with 9 collapsed frames beneath — doesn't affect the close; see git history for the full frame-order writeup if the "why" ever matters.) Reverted after: `eas update:republish --group 9cf7977c-ed1f-45a7-adcb-a3de832089a3`, `runtimeVersion` confirmed matching.
+  3. **Works inside a real Xcode-archived build.** Build 9 (`1.0.0+9`, EAS build `48c6afa0-4222-4025-aa7b-31b47debf593`), decoded xcodebuild log, not inferred: the **"Bundle React Native code and images"** phase — the one that silently never ran for the RC — executed for real this time, `sentry-cli react-native xcode` → `expo export:embed` → hermesc, the classic path. Hermes bundle produced with `-output-source-map`, composed, uploaded: `Bundle ID 3a3b8fc9-5de2-5214-b09b-268c7bda0950`, **debug id `fc20446e-2436-47a2-b5f3-3d069f26613e`** tagged on both `main.jsbundle` and `main.jsbundle.map`, `Release: com.airrally.app@1.0.0+9`, `Dist: 9`, `Uploaded files to Sentry` / `File upload complete`. dSYM upload also succeeded (22 files found, 1 missing uploaded). `ARCHIVE SUCCEEDED`, fingerprint `f4f64031fada4599a686f9e730a099c7cc319f1b` matching.
+
+     Working theory for why the phase ran this time when it didn't for the RC — not fully certain, but consistent with direct observation: adding `metro.config.js` changes Metro's own config/cache signature, likely invalidating whatever let `EAGER_BUNDLE` pre-satisfy the phase's dependency-analysis check before. Whatever the exact mechanism, the phase executing for real is the fact that matters, and it's now observed directly.
+
+  Build 6 ships with working crash reporting **and** working, uploaded source maps — verified end to end, not assumed at any stage.
+
+- [x] **Does adding `metro.config.js` move the fingerprint?** Measured, not assumed: isolated scratch worktree pinned to `3aacba5`, fingerprint taken *before* adding the standard minimal wiring (`getSentryExpoConfig(__dirname)`) and again *after*, both in the same unchanged environment.
+
+  ```
+  before: 2e2051fa61473ed164318cd69a13f435066c2076
+  after:  2e2051fa61473ed164318cd69a13f435066c2076
+  ```
+
+  Identical, and confirmed as a real non-input rather than a coincidental hash match — the raw fingerprint JSON's only "metro" hits anywhere are `metro-runtime` and `metro-source-map` (unrelated dependency-graph noise); `metro.config.js` itself is never read as a fingerprint source. Consistent with everything else measured tonight: the fingerprint tracks native-runtime-contract inputs (`app.json`, `eas.json`, `package.json` scripts/deps, config plugins, icon assets, autolinking) — `metro.config.js` only affects how JS gets bundled, the same category as `src/`, which also never moves it. **Clear to land pre-launch**, not next-cycle debt.
+
+  > ⚠️ **Worktree gotcha, found while measuring this:** the worktree's baseline fingerprint (`2e2051fa...`) does **not** match the RC's real value (`f4f64031...`) — not a sign of drift, but an artifact of the worktree itself. A `node_modules` symlink reached through a deeply-relative worktree path (e.g. `../../../../../../../Users/.../node_modules/...`) hashes differently than the same files reached directly — every `node_modules`-derived fingerprint source differs, along with `expoAutolinkingIos`/`rncoreAutolinkingIos` (CocoaPods podspec resolution appears to embed the resolved path). Path-dependent, not content-dependent. This is almost certainly also the real explanation for the failed rebundle's 159-module gap above — a second instance of a deeply-nested worktree path producing a misleading number, not evidence of real drift.
+  >
+  > **The rule that follows:** absolute fingerprints are not comparable across different worktree locations. A before/after delta measured inside one unchanged environment is still valid — that's what both measurements above rely on. Anyone pinning a worktree for a fingerprint check should expect the absolute number to disagree with the real repo and should not read that disagreement as drift.
 
 ### Gates this repo does not own
 
@@ -115,6 +162,8 @@ These gate **submit**, not **build**, and the last two can only be completed by 
 
 ## 5. Before the first OTA update to production
 
+> ⚠️ **Build 6 does not start a new OTA baseline.** Confirmed by measuring the fully merged tree (`ux/founder-review` + `chore/sentry-metro-config`) before it was ever built: fingerprint reads `f4f64031fada4599a686f9e730a099c7cc319f1b`, identical to build 5's. None of tonight's work added a new native dependency — `@expo/ui` (the SwiftUI date picker's native module) was already present in build 5's own fingerprint sources, just never called from any screen until `ux/founder-review` wired it up. Practical consequence: **a single OTA update reaches both build 5 and build 6 installs** — there is no fingerprint boundary between them. Whoever ships the first post-launch update should know this rather than discover it.
+
 **This is now a live plan, not a contingency.** COURT/Side "Following" was deliberately cut from the release candidate and will ship as the first production OTA update, because it is confined to `src/` and therefore cannot move the fingerprint (see §1). The deciding argument was reversibility: a wrong *sequence* shipped in a binary is permanent, and the same mistake shipped by update is one `republish` away — and sequencing is our most demonstrated failure mode.
 
 Everything below was optional while OTA was hypothetical. None of it is now.
@@ -131,7 +180,24 @@ Everything below was optional while OTA was hypothetical. None of it is now.
   **Alerts and log filters match either** — the transient window is exactly when a deploy goes wrong. **Automated tests pin to `PGRST202`** — a test asserting `42883` never passes outside the seconds right after a schema change. **Direct SQL tooling is always `42883`** — it never goes through PostgREST's cache.
 - [ ] **Mobile's Following wiring, Web's COURT/Side client work and QA's COURT/Side end-to-end leg all complete.** These stopped being RC gates and became pre-OTA gates; they did not stop being gates.
 
-- [ ] **Publish / install / rollback exercised end to end.** Open since Cycle 1 and never run. An untested rollback procedure is a document, not a rollback procedure.
+- [x] **Publish / install / rollback exercised end to end.** Open since Cycle 1, now run for real: on the founder's physical iPhone, against the actual RC build on TestFlight — not a simulator, not an inference from the manifest.
+
+  Fingerprint checked first, as the precondition that decides whether the test means anything: current tree measured at `f4f64031fada4599a686f9e730a099c7cc319f1b`, an exact match to the RC. The freeze held across the entire session.
+
+  Sequence: a single-line, unmissable cosmetic change (`src/app/(tabs)/index.tsx`, home title `"Find a court"` → `"Find a court (OTA TEST)"`) published to the **production** channel, confirmed on-device after force-quit/reopen, then a second update published reverting the title, confirmed gone after a second force-quit/reopen. Both directions observed on hardware, not assumed from a successful `Published!`.
+
+  ```
+  cosmetic change   group 40de3078-1f4a-4dfd-8443-8beeb47dfa53
+  KNOWN-GOOD BASELINE (original title, "Find a court")
+                    group 9cf7977c-ed1f-45a7-adcb-a3de832089a3
+                    runtimeVersion f4f64031fada4599a686f9e730a099c7cc319f1b
+  ```
+
+  **`9cf7977c-ed1f-45a7-adcb-a3de832089a3` is the group to reach for if production ever needs an emergency rollback** — `eas update:republish --channel production --group 9cf7977c-ed1f-45a7-adcb-a3de832089a3`. It didn't exist before this test: production's channel had never been published to, so there was no prior group for a true `update:republish` to target. This is now that group. Recorded here rather than left in a chat log so whoever is awake at 2am doesn't have to reconstruct which one was safe.
+
+  > ⚠️ **Standing gate, added after this almost went wrong on the very next publish:** before ANY `eas update` publish, verify the publish response's `runtimeVersion` matches the runtime version of the binary being targeted. A mismatch means the update is inert — it will not apply, ever, to that binary — and "nothing happened" on the device will be misread as a failure of whatever was actually being tested, not as what it is: a wrong publish environment. This bit the metro.config.js verification publish directly: it was fired from a worktree with a symlinked `node_modules`, came back with `runtimeVersion: 2e2051fa...` instead of `f4f64031...`, and was caught only by reading the publish response before telling anyone to check their phone — not by anything in the publish path itself asking the question. Documenting the gotcha earlier didn't prevent it; only checking the response did. Make this a gate, not a habit: **read `runtimeVersion` off every publish response and compare it before reporting a publish as ready to test.**
+
+  > **Inert entry, harmless, left as-is:** group `3ef15064-b436-4297-ba97-69ec90091e31` also sits on the production channel's history, published from that contaminated worktree before the fix above — `runtimeVersion 2e2051fa61473ed164318cd69a13f435066c2076`, a value no real device has ever fingerprinted to. `expo-updates` filters by runtime version, so it can never be served to anything; it was superseded on the channel before any device could reach it. Not removed — doing so would be a needless extra operation against production to fix a non-problem. Noted here so nobody finds it in `eas update:list` later and wonders what it was.
 
 - [ ] **Fingerprint inputs frozen since the RC commit.** Checkable, not remembered — diff these seven paths against the RC commit and require an empty result:
 
@@ -145,6 +211,8 @@ Everything below was optional while OTA was hypothetical. None of it is now.
   > ⚠️ **`expo prebuild` rewrites `package.json` scripts, and those are fingerprint input.** It changed `"ios": "expo start --ios"` to `"expo run:ios"` during local build work here. Anyone who runs a local build inside the freeze window and commits the result breaks the Following update **off a diff that looks like nothing**. This is now the single most likely way the two-stage plan fails, precisely because it looks harmless.
   >
   > It has already been misdiagnosed once: this exact change was filed as evidence of shared-tree collisions between sessions, because that was the more comfortable explanation.
+  >
+  > **Traced to source: commit `844f37a`** (the `check-build-env.js` commit) — self-caught, not found by anyone else. It made this exact rewrite while adding an unrelated guard script, before the trap above had been written down. Confirmed via `git log`/`git show` that the rewritten state predates every fingerprint measured or reported since, including the RC's own (`f4f64031`) — so there is no inconsistency between what was reported and what was built, only a mistake that happened earlier than its own warning. **Deliberately not reverted during the freeze**: doing so now would move the fingerprint away from the RC's actual built state and break the Following-update verification the freeze exists to protect. Fix in the next native-build cycle, not this one.
 
 - [ ] **Understand that an environment-value change cannot ship over the air.** `eas.json` is fingerprint input *including its `env` block*. The Sentry DSN lives there. Anyone fixing a wrong env value and reaching for `eas update` will find it silently not applying — that needs a new binary.
 
@@ -185,8 +253,8 @@ Written down as unverified rather than quietly passed.
 
   Still render-phase only, by design: the local AsyncStorage reports and the branded error screen. A global handler has no fallback UI to render into.
 
-  **Source-map upload remains open** — see §3. Do not read this row as covering it.
-  *Environment:* verified on a local debug build against the production Sentry project. *Retires:* already retired, except source maps.
+  **Source-map upload — split outcome, see §3.** Build 5 (the RC on TestFlight) never had working source maps and can't get them retroactively. But `metro.config.js` is now confirmed working for *updates*: a live OTA-published crash on the founder's device produced a Sentry event resolving to real source, not a bytecode offset. Not yet confirmed inside a real native-compiled build.
+  *Environment:* verified on a local debug build (capture/delivery) and on the founder's production-channel device (source-map symbolication for updates). *Retires:* fully retired except confirming `metro.config.js` survives a real Xcode archive — see §3.
 - **`expo-notifications` registration error on every launch** — `Error reading persisted server registration info: FunctionCallException: getRegistrationInfoAsync has failed`. Simulator push registration is the boring explanation and no physical device has been available to compare.
   *Environment:* iOS Simulator only; unobserved on hardware. *Retires when:* someone launches on a physical device — **if it appears there it becomes a real finding**, not an accepted one.
 
@@ -229,6 +297,8 @@ The MAU ceiling is the one worth planning for. The entire OTA strategy — finge
 - **The environment banner needs to stop being a fixed-offset overlay.** It has collided twice — pinned to the top it sat inside the navigation header; pinned to the bottom it sat on the sign-up screen's consent row, partially covering the agreement version string. A fixed offset has no safe edge, because there is no offset that is empty on every screen, so a third position relocates the problem rather than removing it.
 
   The fix is a slim full-width strip that **reserves layout space**, which cannot overlap by construction. It costs a few points of vertical space on non-production builds only — the right place to spend it. Deliberately not done before the RC: it is P3, invisible to users, and it needs the safe-area handling done properly (a strip consuming `insets.top` must also stop child screens re-applying it) rather than rushed.
+
+  *Environment:* non-production builds only — it renders nothing in production. *Retires when:* the banner reserves layout space instead of overlaying.
 - **`/api/mobile/reschedule` says "not found" when it means "already happened".** QA isolated the real variable rather than reporting the symptom: the message doesn't track `status`, it tracks whether `start_time` has passed.
 
   | State | Message |
@@ -242,7 +312,8 @@ The MAU ceiling is the one worth planning for. The entire OTA strategy — finge
 
   *Environment:* both. *Retires when:* the eligibility check separates the time filter from the existence test, and "already started or ended" gets its own message the way cancelled already has one.
 
-  *Environment:* non-production builds only — it renders nothing in production. *Retires when:* the banner reserves layout space instead of overlaying.
+- **`searchPublicProfiles` needs a trigram index.** Founder-reported tap lag on the ranked screens traced to a leading-wildcard `ILIKE` query with no index behind it — measured at 1.4s cold. A debounce (written, tests in progress, held pending App Review per the note above) hides the symptom; it doesn't fix the query. Worth keeping visible on its own rather than letting it disappear once the debounce makes the lag stop being felt.
+  *Environment:* both. *Retires when:* a trigram (`pg_trgm`) index backs the search column and the query no longer does a full scan.
 
 ## 9. What mobile testing cannot tell you
 
