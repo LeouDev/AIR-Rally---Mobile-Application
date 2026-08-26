@@ -70,6 +70,10 @@ function matchFixture(overrides: Partial<RankedMatch> = {}): RankedMatch {
     venue_id: null,
     match_type: 'singles',
     match_weight_type: 'air_rally_ranked',
+    team_a_name: null,
+    team_a_club_id: null,
+    team_b_name: null,
+    team_b_club_id: null,
     rated: true,
     status: 'confirmed',
     officiating_mode: null,
@@ -130,6 +134,8 @@ const MATCH_SUMMARY: RankedMatchSummary = {
   opponents: [{ id: 'opp-1', display_name: 'Robin', avatar_url: null }],
   partner: null,
   won: true,
+  teamAClub: null,
+  teamBClub: null,
 };
 
 beforeEach(() => {

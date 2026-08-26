@@ -27,6 +27,10 @@ function matchFixture(overrides: Partial<RankedMatch> = {}): RankedMatch {
     venue_id: null,
     match_type: 'singles',
     match_weight_type: 'air_rally_ranked',
+    team_a_name: null,
+    team_a_club_id: null,
+    team_b_name: null,
+    team_b_club_id: null,
     rated: true,
     status: 'confirmed',
     officiating_mode: null,
@@ -85,7 +89,7 @@ function participant(overrides: Partial<RankedMatchParticipant> = {}): RankedMat
 
 function detail(match: RankedMatch, me: RankedMatchParticipant): RankedMatchDetail {
   const opponent = participant({ user_id: 'opp', team: 'b', is_host: false, profile: { id: 'opp', display_name: 'Robin', avatar_url: null } });
-  return { ...match, players: [me, opponent], scorekeeper: null };
+  return { ...match, players: [me, opponent], scorekeeper: null, team_a_club: null, team_b_club: null };
 }
 
 describe('ResultPhase — ConfirmedView rating-impact messaging', () => {

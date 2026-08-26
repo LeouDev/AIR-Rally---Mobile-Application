@@ -93,6 +93,10 @@ function matchFixture(overrides: Partial<RankedMatch> = {}): RankedMatch {
     venue_id: null,
     match_type: 'singles',
     match_weight_type: 'air_rally_ranked',
+    team_a_name: null,
+    team_a_club_id: null,
+    team_b_name: null,
+    team_b_club_id: null,
     rated: true,
     status: 'lobby',
     officiating_mode: null,
@@ -125,7 +129,7 @@ it('tells a still-calibrating player this counts, before it resolves whether the
   const opp = participant({ user_id: 'opp', team: 'b', is_host: false });
 
   await render(
-    <LobbyPhase match={{ ...matchFixture(), players: [me, opp], scorekeeper: null }} currentUserId="me" />
+    <LobbyPhase match={{ ...matchFixture(), players: [me, opp], scorekeeper: null, team_a_club: null, team_b_club: null }} currentUserId="me" />
   );
 
   await screen.findByText(/calibration/);
@@ -137,7 +141,7 @@ it('warns a calibrated player their rating will not move once bookedness resolve
   const opp = participant({ user_id: 'opp', team: 'b', is_host: false });
 
   await render(
-    <LobbyPhase match={{ ...matchFixture(), players: [me, opp], scorekeeper: null }} currentUserId="me" />
+    <LobbyPhase match={{ ...matchFixture(), players: [me, opp], scorekeeper: null, team_a_club: null, team_b_club: null }} currentUserId="me" />
   );
 
   await screen.findByText(/won't move/);
@@ -150,7 +154,7 @@ it('labels a casual match CASUAL for the viewer, regardless of their own calibra
   const opp = participant({ user_id: 'opp', team: 'b', is_host: false });
 
   await render(
-    <LobbyPhase match={{ ...matchFixture({ rated: false }), players: [me, opp], scorekeeper: null }} currentUserId="me" />
+    <LobbyPhase match={{ ...matchFixture({ rated: false }), players: [me, opp], scorekeeper: null, team_a_club: null, team_b_club: null }} currentUserId="me" />
   );
 
   await screen.findByText('CASUAL');

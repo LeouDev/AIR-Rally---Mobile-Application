@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { PlayerRow } from '@/components/ranked/match/player-row';
+import { TeamIdentitySheet } from '@/components/ranked/team-identity-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { useToast } from '@/components/ui/toast';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import type { RankedTeam } from '@/lib/database.types';
 import {
   cancelMatch,
   isMatchBooked,
@@ -15,6 +17,7 @@ import {
   RATING_STARTING_VALUE,
   readyTally,
   setReady,
+  teamIdentityLabel,
   type RankedMatchDetail,
 } from '@/lib/ranked';
 
@@ -32,6 +35,7 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
   // joined via a link and never saw the doorway screen needs to see
   // this too, not just whoever created the match.
   const [booked, setBooked] = useState<boolean | undefined>(undefined);
+  const [editingTeam, setEditingTeam] = useState<RankedTeam | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +62,30 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
     teamB.map((p) => p.rank?.rating ?? RATING_STARTING_VALUE)
   );
   const stakes = rankedStakes({ rated: match.rated, booked, isCalibrated: me?.rank?.is_calibrated ?? false });
+
+  // The identity-setting affordance is doubles-only and lobby-only (086's
+  // own constraints, enforced server-side — this just doesn't offer it
+  // outside that window), and only to a player actually on that team.
+  const canEditTeams = match.match_type === 'doubles' && match.status === 'lobby' && me !== undefined;
+  const firstNames = (team: typeof teamA) => team.map((p) => p.profile?.display_name?.split(' ')[0] ?? '—').join(' · ');
+  const teamALabel = teamIdentityLabel({
+    matchType: match.match_type,
+    teamName: match.team_a_name,
+    club: match.team_a_club,
+    playerNames: firstNames(teamA),
+  });
+  const teamBLabel = teamIdentityLabel({
+    matchType: match.match_type,
+    teamName: match.team_b_name,
+    club: match.team_b_club,
+    playerNames: firstNames(teamB),
+  });
+  const editingIdentity =
+    editingTeam === 'a'
+      ? { name: match.team_a_name, club: match.team_a_club }
+      : editingTeam === 'b'
+        ? { name: match.team_b_name, club: match.team_b_club }
+        : null;
 
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
@@ -104,9 +132,18 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
       </View>
 
       <View style={styles.body}>
-        <ThemedText type="caption" style={[styles.sectionLabel, { color: theme.navyForeground }]}>
-          TEAM A
-        </ThemedText>
+        <View style={styles.sectionLabelRow}>
+          <ThemedText type="caption" style={[styles.sectionLabel, { color: theme.navyForeground }]}>
+            TEAM A{match.match_type === 'doubles' && teamALabel.kind !== 'players' ? ` · ${teamALabel.label}` : ''}
+          </ThemedText>
+          {canEditTeams && me?.team === 'a' ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Edit Team A identity" onPress={() => setEditingTeam('a')} hitSlop={8}>
+              <ThemedText type="caption" style={{ color: theme.rally }}>
+                {teamALabel.kind === 'players' ? 'Name your team' : 'Edit'}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
         {teamA.map((p, i) => (
           <PlayerRow
             key={p.user_id}
@@ -126,9 +163,18 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
           <View style={[styles.vsLine, { backgroundColor: theme.navyForeground, opacity: 0.25 }]} />
         </View>
 
-        <ThemedText type="caption" style={[styles.sectionLabel, { color: theme.navyForeground }]}>
-          TEAM B
-        </ThemedText>
+        <View style={styles.sectionLabelRow}>
+          <ThemedText type="caption" style={[styles.sectionLabel, { color: theme.navyForeground }]}>
+            TEAM B{match.match_type === 'doubles' && teamBLabel.kind !== 'players' ? ` · ${teamBLabel.label}` : ''}
+          </ThemedText>
+          {canEditTeams && me?.team === 'b' ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Edit Team B identity" onPress={() => setEditingTeam('b')} hitSlop={8}>
+              <ThemedText type="caption" style={{ color: theme.rally }}>
+                {teamBLabel.kind === 'players' ? 'Name your team' : 'Edit'}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
         {teamB.map((p, i) => (
           <PlayerRow
             key={p.user_id}
@@ -191,6 +237,16 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
           </ThemedText>
         </Pressable>
       </View>
+
+      <TeamIdentitySheet
+        visible={editingTeam !== null}
+        onClose={() => setEditingTeam(null)}
+        matchId={match.id}
+        team={editingTeam ?? 'a'}
+        userId={currentUserId}
+        currentName={editingIdentity?.name ?? null}
+        currentClub={editingIdentity?.club ?? null}
+      />
     </View>
   );
 }
@@ -222,12 +278,18 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: Spacing.four,
   },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
   sectionLabel: {
     paddingTop: Spacing.three,
     paddingBottom: Spacing.one,
     opacity: 0.6,
     fontWeight: '700',
     letterSpacing: 1,
+    flexShrink: 1,
   },
   stakesRow: {
     paddingHorizontal: Spacing.four,

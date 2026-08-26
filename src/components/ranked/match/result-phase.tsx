@@ -21,11 +21,26 @@ import {
   RankedError,
   ratingImpact,
   respondToResult,
+  teamIdentityLabel,
   tierInfo,
   type RankedDisputeReason,
   type RankedMatchDetail,
 } from '@/lib/ranked';
 import { shareCard } from '@/lib/share';
+
+/** Doubles shows the team's chosen identity, singles the player's name —
+ * the founder's own rule, keyed on match type inside teamIdentityLabel()
+ * itself. Shared by both result views below since neither owns its own
+ * copy of "who's on which team." */
+function teamLabels(match: RankedMatchDetail) {
+  const teamA = match.players.filter((p) => p.team === 'a');
+  const teamB = match.players.filter((p) => p.team === 'b');
+  const firstNames = (team: typeof teamA) => team.map((p) => p.profile?.display_name?.split(' ')[0] ?? '—').join(' · ');
+  return {
+    a: teamIdentityLabel({ matchType: match.match_type, teamName: match.team_a_name, club: match.team_a_club, playerNames: firstNames(teamA) }).label,
+    b: teamIdentityLabel({ matchType: match.match_type, teamName: match.team_b_name, club: match.team_b_club, playerNames: firstNames(teamB) }).label,
+  };
+}
 
 /** The image attached when a confirmed result is shared externally (see
  * ConfirmedView's shareResult) — rendered off-screen and captured with
@@ -123,6 +138,8 @@ function AwaitingConfirmationView({ match, currentUserId }: { match: RankedMatch
   const me = match.players.find((p) => p.user_id === currentUserId);
   const submitter = match.scorekeeper?.display_name ?? 'the scorekeeper';
   const tally = confirmationTally(match.players);
+  const labels = teamLabels(match);
+  const winnerLabel = match.winning_team === 'a' ? labels.a : match.winning_team === 'b' ? labels.b : null;
 
   const respond = async (accept: boolean, reasonText?: string) => {
     if (busy) return;
@@ -168,7 +185,7 @@ function AwaitingConfirmationView({ match, currentUserId }: { match: RankedMatch
           </ThemedText>
         </View>
         <ThemedText type="caption" themeColor="mutedForeground" style={styles.uppercase}>
-          Team {match.winning_team?.toUpperCase()} wins · {match.match_type}
+          {winnerLabel ?? `Team ${match.winning_team?.toUpperCase()}`} wins · {match.match_type}
         </ThemedText>
       </View>
 
@@ -257,6 +274,8 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
   const promoted = result?.promoted ?? false;
   const demoted = result?.demoted ?? false;
   const impactful = promoted || demoted;
+  const labels = teamLabels(match);
+  const winnerLabel = match.winning_team === 'a' ? labels.a : match.winning_team === 'b' ? labels.b : null;
 
   const shareText = me
     ? `I just ${won ? 'won' : 'played'} ${myScore}–${theirScore} on AIR/Rally Ranked${
@@ -309,6 +328,11 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
               ]}>
               {match.score_a}
             </ThemedText>
+            {match.match_type === 'doubles' ? (
+              <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
+                {labels.a}
+              </ThemedText>
+            ) : null}
           </View>
           <View style={[styles.finalScoreDivider, { backgroundColor: theme.navyForeground }]} />
           <View style={styles.finalScoreCol}>
@@ -324,6 +348,11 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
               ]}>
               {match.score_b}
             </ThemedText>
+            {match.match_type === 'doubles' ? (
+              <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
+                {labels.b}
+              </ThemedText>
+            ) : null}
           </View>
         </View>
         <View style={[styles.winnerRow, styles.navyHairline]}>
@@ -331,7 +360,7 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
             WINNER
           </ThemedText>
           <ThemedText type="subtitle" style={{ color: theme.rally }}>
-            Team {match.winning_team?.toUpperCase()}
+            {winnerLabel ?? `Team ${match.winning_team?.toUpperCase()}`}
           </ThemedText>
         </View>
       </View>
