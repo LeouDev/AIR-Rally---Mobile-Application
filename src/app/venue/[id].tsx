@@ -6,6 +6,7 @@ import {
   Linking,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,7 +26,7 @@ import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addFavorite, listFavoriteVenueIds, removeFavorite } from '@/lib/favorites';
 import { condensedSchedule, directionsUrl, getVenueDetail, publicImageUrl, type VenueDetail } from '@/lib/venues';
-import { shareCard } from '@/lib/share';
+import { instagramStoriesAvailable, shareCard, shareToInstagramStory } from '@/lib/share';
 import { useSession } from '@/providers/session';
 
 export default function VenueDetailScreen() {
@@ -106,6 +107,26 @@ export default function VenueDetailScreen() {
     }
   };
 
+  // A separate affordance rather than folding Instagram into the Share
+  // Sheet button above: Stories needs the raw image handed directly to
+  // Instagram's own composer, not routed through the OS share sheet where
+  // Instagram may or may not appear reliably as a destination. iOS only —
+  // the config plugin only declared the instagram-stories query scheme for
+  // iOS, matching Phase 1's "iOS ships first" precedent for this feature.
+  // Silently absent rather than a dead button when no Meta App ID is
+  // configured — see instagramStoriesAvailable() in lib/share.ts.
+  const shareVenueToInstagramStory = async () => {
+    if (!venue) return;
+    const url = venueShareUrl(venue.id);
+    try {
+      const uri = await captureRef(shareCardRef, { format: 'png', quality: 1, width: 1080, height: 1920 });
+      await shareToInstagramStory({ fileUri: uri, url });
+    } catch {
+      // Capture failed — nothing sensible to hand Instagram without an
+      // image; unlike shareCard() there's no meaningful text-only Story.
+    }
+  };
+
   // Web renders every photo in a gallery — mirror that here instead of
   // only ever showing imagePaths[0] as a single static cover.
   const galleryImages = venue
@@ -136,13 +157,24 @@ export default function VenueDetailScreen() {
           headerStyle: { backgroundColor: theme.background },
           headerRight: venue
             ? () => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Share this court"
-                  onPress={shareVenue}
-                  hitSlop={8}>
-                  <Ionicons name="share-outline" size={22} color={theme.primary} />
-                </Pressable>
+                <View style={styles.headerActions}>
+                  {Platform.OS === 'ios' && instagramStoriesAvailable() ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Share to Instagram Story"
+                      onPress={shareVenueToInstagramStory}
+                      hitSlop={8}>
+                      <Ionicons name="logo-instagram" size={22} color={theme.primary} />
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Share this court"
+                    onPress={shareVenue}
+                    hitSlop={8}>
+                    <Ionicons name="share-outline" size={22} color={theme.primary} />
+                  </Pressable>
+                </View>
               )
             : undefined,
         }}
@@ -370,6 +402,11 @@ export default function VenueDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
   // Mounted but off-canvas so captureRef always has a laid-out view to
   // photograph — same technique as post-card.tsx's ShareCard.
   shareCardOffscreen: {

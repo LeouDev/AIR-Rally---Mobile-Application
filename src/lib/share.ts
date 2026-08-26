@@ -1,5 +1,14 @@
 import * as Sharing from 'expo-sharing';
 import { Platform, Share } from 'react-native';
+// This dependency exists solely for shareToInstagramStory() below — its
+// shareSingle()/Social.InstagramStories is the only way to pre-load
+// Instagram's Story composer, and RN core has no equivalent. It is NOT
+// what shareCard() uses, on either platform: iOS already gets the
+// combined image+text+link payload from RN core's own Share.share()
+// (see the block comment below), and the Android gap described there is
+// still unfixed — installing this package didn't close it. Don't read
+// its presence as "Android sharing is covered now."
+import RNShare, { Social } from 'react-native-share';
 
 /**
  * Sharing a captured ShareCardFrame image, with the object's own URL and
@@ -19,20 +28,27 @@ import { Platform, Share } from 'react-native';
  * recipient gets the branded image and the tappable link in one payload,
  * no extra dependency.
  *
- * ANDROID CANNOT, and this is the gap `react-native-share` is meant to
- * close in the next native build:
+ * ANDROID CANNOT, and this remains an open gap — installing
+ * `react-native-share` (below, for Instagram Stories) did NOT close it,
+ * because nothing in this file calls it from the Android branch:
  *   - RN's Share.js drops `url` before it reaches native — it forwards
  *     only `{ title, message }`.
  *   - ShareModule.kt hardcodes `setTypeAndNormalize("text/plain")` and
  *     sets only EXTRA_SUBJECT/EXTRA_TEXT. No EXTRA_STREAM, so no image
  *     can travel that path at all.
  * Android natively supports ACTION_SEND carrying EXTRA_STREAM and
- * EXTRA_TEXT together; neither installed library exposes it. So Android
- * keeps the branded image via expo-sharing and loses the link — the
- * founder's call, on the grounds that the card is what makes a share
- * worth making and iOS is the launch platform. When react-native-share
- * lands, THIS is the branch to replace: give Android the same
- * image+text+link payload the iOS branch above already sends.
+ * EXTRA_TEXT together; neither installed library exposes it from this
+ * function. So Android keeps the branded image via expo-sharing and loses
+ * the link — the founder's call, on the grounds that the card is what
+ * makes a share worth making and iOS is the launch platform.
+ * `react-native-share`'s generic `RNShare.open({ url, message })` COULD
+ * carry both on Android too (unlike RN core's Share.js, it doesn't drop
+ * `url`), so it's a viable fix later — but that's unbuilt work, not
+ * something installing the dependency already gives you. TODO: when
+ * someone picks this up, replace the Android branch below with
+ * `RNShare.open({ url: fileUri, message: messageWithUrl })` and verify on
+ * a real Android device/emulator — untested on this machine, so it
+ * wasn't done as part of adding the dependency.
  */
 export async function shareCard({
   fileUri,
@@ -87,5 +103,50 @@ export async function shareCard({
     await Share.share({ message: messageWithUrl });
   } catch {
     // Share sheet dismissed or unavailable — not an error.
+  }
+}
+
+/** The Meta App ID Instagram Stories requires — mandatory since a January
+ * 2023 policy change; omitting it makes Instagram show the user "The app
+ * you shared from doesn't currently support sharing to Stories." Same
+ * no-op-when-unconfigured shape as EXPO_PUBLIC_SENTRY_DSN (src/lib/sentry.ts):
+ * a build without one degrades to "the button doesn't appear" rather than
+ * a broken tap. Unset as of this writing — needs a real Meta Developer
+ * app (free, self-serve) registered before this does anything. */
+const META_APP_ID = process.env.EXPO_PUBLIC_META_APP_ID;
+
+export function instagramStoriesAvailable(): boolean {
+  return Boolean(META_APP_ID);
+}
+
+export type ShareResult = { status: 'success' } | { status: 'unavailable' } | { status: 'error'; message: string };
+
+/**
+ * Hands a branded card straight to Instagram's Stories composer, pre-
+ * loaded on the canvas — instagram-stories://share plus the iOS pasteboard,
+ * wrapped by react-native-share's shareSingle(). This only pre-fills the
+ * composer: Instagram still requires the user to tap through and post it
+ * themselves, the same as every other destination in this app. There is
+ * no auto-publish path anywhere in this mechanism.
+ *
+ * linkUrl becomes the Story's swipe-up/link sticker when Instagram
+ * attaches one — the same object URL shareCard() sends everywhere else,
+ * so a Story built from this card can still lead back to the app.
+ */
+export async function shareToInstagramStory({ fileUri, url }: { fileUri: string; url?: string }): Promise<ShareResult> {
+  if (!META_APP_ID) return { status: 'unavailable' };
+  try {
+    await RNShare.shareSingle({
+      social: Social.InstagramStories,
+      appId: META_APP_ID,
+      backgroundImage: fileUri,
+      linkUrl: url,
+    });
+    return { status: 'success' };
+  } catch (error) {
+    // A cancelled/dismissed composer also rejects here — react-native-share
+    // doesn't distinguish "user backed out" from a real failure, so this
+    // reads as best-effort rather than a hard error surfaced to the user.
+    return { status: 'error', message: error instanceof Error ? error.message : 'Could not open Instagram.' };
   }
 }

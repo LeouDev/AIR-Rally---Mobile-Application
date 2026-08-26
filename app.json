@@ -10,6 +10,9 @@
     "ios": {
       "icon": "./assets/images/app-icon.png",
       "bundleIdentifier": "com.airrally.app",
+      "associatedDomains": [
+        "applinks:air-rally.com"
+      ],
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -116,6 +119,15 @@
         {
           "organization": "air-rally",
           "project": "air-rally"
+        }
+      ],
+      "expo-build-properties",
+      [
+        "react-native-share",
+        {
+          "ios": [
+            "instagram-stories"
+          ]
         }
       ]
     ],
