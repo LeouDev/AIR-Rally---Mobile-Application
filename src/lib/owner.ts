@@ -1,4 +1,4 @@
-import type { Booking, BookingRefund, BookingStatus, OwnedVenue } from '@/lib/database.types';
+import type { Booking, BookingRefund, BookingStatus, OwnedVenue, SettlementStatus } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 
 /** The signed-in owner's venues at ANY status — their own RLS, not the
@@ -589,4 +589,68 @@ export async function getOwnerAnalytics(ownerId: string): Promise<OwnerAnalytics
       cancellationRate: totalBookings === 0 ? 0 : cancelledCount / totalBookings,
     },
   };
+}
+
+export type OwnerSettlementSummary = {
+  currency: string;
+  /** status = pending: booking confirmed, court time not yet delivered. */
+  pending: number;
+  /** status = payable: court time delivered, entitlement earned, not yet paid out. */
+  available: number;
+  /** status = settled: an admin has attested the PayMongo transfer covering
+   * this row as completed. Lifetime total, all payouts ever attested — NOT
+   * the same figure as any one payslip email, which is one payout batch's
+   * NET (after the 5% commission and the ₱10 transfer fee) for one week.
+   * Same underlying rows, two different, both-correct numbers — never
+   * reconcile them by adjusting either one, only by tracing both back to
+   * booking_settlements. */
+  paid: number;
+  pendingCount: number;
+  availableCount: number;
+  paidCount: number;
+};
+
+/**
+ * Mobile mirror of the web's getOwnerSettlementSummary() (lib/services/
+ * settlements.ts) — same shape deliberately: one query, aggregated in JS
+ * over the owner's own rows rather than in SQL, no stored balance anywhere
+ * to drift out of sync with the ledger. RLS scopes booking_settlements to
+ * venues this caller owns (or everything for an admin), so — same as
+ * listMyVenues() above — no owner-id filter is added here; that would
+ * imply the security came from this code rather than from RLS.
+ *
+ * `reversed` and `on_hold` rows are deliberately excluded from every
+ * total: neither is money the owner should expect, so showing a bucket
+ * that isn't in any sum would be worse than not showing it at all.
+ */
+export async function getOwnerSettlementSummary(): Promise<OwnerSettlementSummary> {
+  const { data, error } = await supabase.from('booking_settlements').select('venue_amount, settlement_status, currency');
+  if (error) throw error;
+
+  const summary: OwnerSettlementSummary = {
+    currency: 'PHP',
+    pending: 0,
+    available: 0,
+    paid: 0,
+    pendingCount: 0,
+    availableCount: 0,
+    paidCount: 0,
+  };
+
+  for (const row of data ?? []) {
+    summary.currency = row.currency ?? summary.currency;
+    const status: SettlementStatus = row.settlement_status;
+    if (status === 'pending') {
+      summary.pending += row.venue_amount;
+      summary.pendingCount += 1;
+    } else if (status === 'payable') {
+      summary.available += row.venue_amount;
+      summary.availableCount += 1;
+    } else if (status === 'settled') {
+      summary.paid += row.venue_amount;
+      summary.paidCount += 1;
+    }
+  }
+
+  return summary;
 }

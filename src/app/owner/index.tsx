@@ -1,6 +1,6 @@
-import { Stack } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -10,7 +10,15 @@ import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatBookingWindow, formatCentavos } from '@/lib/bookings';
 import type { BookingStatus, OwnedVenue } from '@/lib/database.types';
-import { getOwnerAnalytics, getOwnerEarnings, listMyVenues, type OwnerAnalytics, type OwnerEarnings } from '@/lib/owner';
+import {
+  getOwnerAnalytics,
+  getOwnerEarnings,
+  getOwnerSettlementSummary,
+  listMyVenues,
+  type OwnerAnalytics,
+  type OwnerEarnings,
+  type OwnerSettlementSummary,
+} from '@/lib/owner';
 import { useSession } from '@/providers/session';
 
 type BadgeTone = 'neutral' | 'success' | 'warning' | 'destructive' | 'accent';
@@ -65,11 +73,33 @@ function formatHour(hour: number): string {
 export default function OwnerScreen() {
   const theme = useTheme();
   const { session } = useSession();
+  const { highlight } = useLocalSearchParams<{ highlight?: string }>();
   const [venues, setVenues] = useState<OwnedVenue[] | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
   const [earnings, setEarnings] = useState<OwnerEarnings | null>(null);
   const [analytics, setAnalytics] = useState<OwnerAnalytics | null>(null);
+  const [settlements, setSettlements] = useState<OwnerSettlementSummary | null>(null);
   const [error, setError] = useState(false);
+
+  // A payout-sent notification links here wanting the owner to land on the
+  // Paid figure it just told them about, not just the generic screen — see
+  // notification-links.ts. settlementsY tracks the Settlements block's own
+  // offset (captured on layout) so the scroll can fire once, as soon as
+  // both the target's position and the highlight request are known,
+  // regardless of which resolves first.
+  const scrollRef = useRef<ScrollView>(null);
+  const settlementsY = useRef<number | null>(null);
+  const scrolledToHighlight = useRef(false);
+  const onSettlementsLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      settlementsY.current = event.nativeEvent.layout.y;
+      if (highlight === 'settlements' && !scrolledToHighlight.current) {
+        scrolledToHighlight.current = true;
+        scrollRef.current?.scrollTo({ y: Math.max(settlementsY.current - Spacing.four, 0), animated: true });
+      }
+    },
+    [highlight]
+  );
 
   useEffect(() => {
     listMyVenues()
@@ -87,6 +117,13 @@ export default function OwnerScreen() {
     if (!session?.user.id) return;
     getOwnerAnalytics(session.user.id)
       .then(setAnalytics)
+      .catch(() => {});
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+    getOwnerSettlementSummary()
+      .then(setSettlements)
       .catch(() => {});
   }, [session?.user.id]);
 
@@ -121,7 +158,7 @@ export default function OwnerScreen() {
           headerStyle: { backgroundColor: theme.background },
         }}
       />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
         {venues === null ? (
           <View style={styles.stack}>
             <Skeleton height={44} radius={Radius.pill} />
@@ -254,12 +291,37 @@ export default function OwnerScreen() {
               </View>
             ) : earnings ? (
               <>
-                {/* "See your Earnings page on air-rally.com" points at the web
-                    because mobile has no settlement view yet — the Available ->
-                    Paid state lives only in the web's SettlementPanel. When a
-                    mobile settlement view ships, this sentence becomes wrong in a
-                    new way: it will send an owner to a browser for something the
-                    app now shows. Update it then. */}
+                {settlements ? (
+                  <View style={styles.block} onLayout={onSettlementsLayout}>
+                    <ThemedText type="subtitle">Settlements</ThemedText>
+                    <View style={styles.revenueRow}>
+                      <SettlementCard
+                        label="Pending"
+                        hint="Court time not yet played"
+                        amount={settlements.pending}
+                        tone="warning"
+                      />
+                      <SettlementCard
+                        label="Available"
+                        hint="Earned, not yet paid out"
+                        amount={settlements.available}
+                        tone="success"
+                      />
+                      <SettlementCard
+                        label="Paid (all time)"
+                        hint="Gross settled — see your payslip email for the net after fees"
+                        amount={settlements.paid}
+                        tone="success"
+                      />
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* This warning distinguishes "customer paid AIR/Rally" from
+                    "AIR/Rally settled with you" — a real, separate claim from
+                    the Settlements block above, which is why it stays even
+                    though mobile now has a settlement view. Don't collapse
+                    the two into one number; they answer different questions. */}
                 <View style={[styles.warningCard, { backgroundColor: theme.warningSoft, borderColor: theme.warning }]}>
                   <ThemedText type="small" style={{ color: theme.warningSoftForeground }}>
                     <ThemedText type="smallBold" style={{ color: theme.warningSoftForeground }}>
@@ -267,8 +329,8 @@ export default function OwnerScreen() {
                     </ThemedText>{' '}
                     A booking showing as &quot;Paid&quot; means the customer&apos;s payment succeeded — it does not mean
                     AIR/Rally has settled or transferred any amount to you. Payouts are sent weekly, on
-                    Wednesdays, covering court time from the Sunday–Saturday week before — see your Earnings
-                    page on air-rally.com for what&apos;s actually been paid. The same applies to any
+                    Wednesdays, covering court time from the Sunday–Saturday week before — see Settlements
+                    above for what&apos;s actually been paid. The same applies to any
                     refund figure below: it reflects what PayMongo&apos;s own refund response reported, not a
                     confirmed debit from your bank account.
                   </ThemedText>
@@ -341,6 +403,33 @@ function RevenueCard({
         type="caption"
         themeColor={period.changePct === null ? 'mutedForeground' : period.changePct >= 0 ? 'success' : 'destructive'}>
         {formatPct(period.changePct)}
+      </ThemedText>
+    </View>
+  );
+}
+
+function SettlementCard({
+  label,
+  hint,
+  amount,
+  tone,
+}: {
+  label: string;
+  hint: string;
+  amount: number;
+  tone: 'warning' | 'success';
+}) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.revenueCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <ThemedText type="caption" themeColor="mutedForeground">
+        {label}
+      </ThemedText>
+      <ThemedText type="smallBold" themeColor={tone}>
+        {formatCentavos(amount)}
+      </ThemedText>
+      <ThemedText type="caption" themeColor="mutedForeground" numberOfLines={2}>
+        {hint}
       </ThemedText>
     </View>
   );

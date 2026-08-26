@@ -23,6 +23,13 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget('/list-your-court/bookings')).toBe('/owner');
   });
 
+  it('sends a payout-sent link to the owner dashboard scrolled to Settlements', () => {
+    expect(resolveNotificationTarget('/list-your-court/earnings')).toEqual({
+      pathname: '/owner',
+      params: { highlight: 'settlements' },
+    });
+  });
+
   it('sends credit and profile links to Profile', () => {
     expect(resolveNotificationTarget('/profile/credits')).toBe('/(tabs)/profile');
   });

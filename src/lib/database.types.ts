@@ -224,6 +224,22 @@ export type BookingRefund = {
   created_at: string;
 };
 
+/** What a venue is owed for one booking, independent of how the customer
+ * paid — mirrors the web repo's src/lib/supabase/types.ts. Every row is
+ * written by database triggers/the admin-only attest_payout_settled() RPC;
+ * no client role has INSERT/UPDATE/DELETE, so this is read-only here. */
+export type SettlementStatus = 'pending' | 'payable' | 'settled' | 'reversed' | 'on_hold';
+
+export type BookingSettlement = {
+  id: string;
+  booking_id: string;
+  venue_id: string;
+  currency: string;
+  venue_amount: number;
+  settlement_status: SettlementStatus;
+  created_at: string;
+};
+
 // --- Audit-findings additions: reviews, favorites, credits history,
 // follows, COURT/Side posts, Clubs, Open Play events. Mirrors the web
 // repo's src/lib/supabase/types.ts field-for-field for each of these. ---
@@ -676,6 +692,8 @@ export type Database = {
       user_credit_wallets: TableDef<UserCreditWallet, never, never>;
       venues: TableDef<OwnedVenue, never, never>;
       booking_refunds: TableDef<BookingRefund, never, never>;
+      // No client role has write access — see BookingSettlement's own comment.
+      booking_settlements: TableDef<BookingSettlement, never, never>;
 
       favorites: TableDef<Favorite, Pick<Favorite, 'user_id' | 'venue_id'>, never>;
       reviews: TableDef<

@@ -33,6 +33,14 @@ export function resolveNotificationTarget(url: string | null | undefined, type?:
     return { pathname: '/booking/[id]', params: { id: bookingMatch[1] } };
   }
   if (effectiveUrl.startsWith('/bookings')) return '/(tabs)/bookings';
+  // 'payout_sent' (20260810000095_notify_owner_on_payout_settled.sql)
+  // stamps '/list-your-court/earnings' specifically — checked before the
+  // generic /list-your-court prefix below so a payslip notification lands
+  // scrolled to the Settlements block that shows the change it just
+  // announced, not just the top of the screen.
+  if (effectiveUrl.startsWith('/list-your-court/earnings')) {
+    return { pathname: '/owner', params: { highlight: 'settlements' } };
+  }
   if (effectiveUrl.startsWith('/list-your-court')) return '/owner';
 
   const eventMatch = effectiveUrl.match(/^\/events\/([0-9a-f-]{36})/i);
