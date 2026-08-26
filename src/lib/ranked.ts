@@ -398,6 +398,37 @@ export function myMatchResult(
   return { me, won: match.winning_team === me.team, myScore, theirScore, justPlaced, promoted, demoted };
 }
 
+export type RatingImpact =
+  | { kind: 'applied' }
+  | { kind: 'none'; reason: 'casual' | 'frozen' };
+
+/**
+ * Whether THIS result screen should show a rank/tier/AAR-delta block at
+ * all, and why not when it shouldn't. Two cases produce the identical
+ * symptom — rating_delta is null on this player's row — for different
+ * reasons, and they read differently to the player:
+ *
+ *   'casual' — the whole match was rated: false. Nobody's rating moved;
+ *   this isn't personal, it's what the game type meant from the start.
+ *
+ *   'frozen' — the match WAS rated, but 20260810000100 skipped this
+ *   participant specifically because they were already calibrated and
+ *   the match had no booking behind it. Their opponent, if still
+ *   calibrating, may have a real delta on the SAME match — this is
+ *   personal, not a property of the game.
+ *
+ * Conflating the two would tell a frozen player "this was casual," which
+ * is false — they played a ranked match, it just didn't move them.
+ */
+export function ratingImpact(
+  match: Pick<RankedMatch, 'rated'>,
+  me: Pick<RankedMatchPlayer, 'rating_delta'>
+): RatingImpact {
+  if (!match.rated) return { kind: 'none', reason: 'casual' };
+  if (me.rating_delta === null) return { kind: 'none', reason: 'frozen' };
+  return { kind: 'applied' };
+}
+
 /** Display names of everyone on the opposing team, "&"-joined for doubles. */
 export function opponentNames(players: readonly RankedMatchParticipant[], me: Pick<RankedMatchParticipant, 'team'>): string {
   return players
@@ -613,6 +644,10 @@ export type CreateRankedMatchInput = {
   teamB: string[];
   eventId?: string | null;
   courtId?: string | null;
+  /** Defaults true, matching create_ranked_match()'s own default — an
+   * omitted value here behaves exactly like every call site before this
+   * field existed. */
+  rated?: boolean;
 };
 
 /** Returns the new match's id. The caller must be one of the players. */
@@ -623,9 +658,82 @@ export async function createRankedMatch(input: CreateRankedMatchInput): Promise<
     p_team_b: input.teamB,
     p_event_id: input.eventId ?? null,
     p_court_id: input.courtId ?? null,
+    p_rated: input.rated ?? true,
   });
   if (error) throwRanked(error);
   return data as string;
+}
+
+/**
+ * Whether a match's booking is real, exactly as apply_ranked_result()
+ * itself will check at confirmation time — calls the server's own
+ * ranked_match_is_booked() rather than re-deriving "booked" client-side
+ * from event_id/court_id, which the migration that introduced this
+ * explicitly says is spoofable (a player can attach any court's uuid).
+ * The server is the one source of truth for whether this match will
+ * freeze a calibrated player.
+ */
+export async function isMatchBooked(matchId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('ranked_match_is_booked', { p_match_id: matchId });
+  if (error) throw error;
+  return data ?? false;
+}
+
+export type RankedStakes = {
+  headline: string;
+  detail: string;
+  tone: 'neutral' | 'info' | 'warning';
+};
+
+/**
+ * What this match means for the CURRENT PLAYER's rating, worded for
+ * exactly their situation — not the match's, since 20260810000100's
+ * freeze is decided per participant. In a mixed doubles lobby one
+ * player can be frozen while their partner still calibrates normally;
+ * a single match-level message would be wrong for one of them half the
+ * time. Shown before the match starts (the doorway, and the lobby for
+ * anyone who joined via a link and never saw the doorway) so nobody
+ * discovers what a match did to their rating only after playing it.
+ *
+ * `booked` is undefined while still loading (e.g. the lobby's
+ * isMatchBooked() call hasn't resolved yet) — callers should treat that
+ * as "don't know yet" rather than guessing either way.
+ */
+export function rankedStakes({
+  rated,
+  booked,
+  isCalibrated,
+}: {
+  rated: boolean;
+  booked: boolean | undefined;
+  isCalibrated: boolean;
+}): RankedStakes {
+  if (!rated) {
+    return {
+      headline: 'Casual',
+      detail: 'Wins and losses are recorded, but nothing here affects your rating.',
+      tone: 'neutral',
+    };
+  }
+  if (!isCalibrated) {
+    return {
+      headline: 'Ranked',
+      detail: 'Counts toward your 10 calibration matches — no booking needed for this part.',
+      tone: 'info',
+    };
+  }
+  if (booked === false) {
+    return {
+      headline: 'Ranked',
+      detail: "Recorded, but your rating won't move — this isn't at a booked court. Book a court to keep climbing.",
+      tone: 'warning',
+    };
+  }
+  return {
+    headline: 'Ranked',
+    detail: 'Counts toward your AIR/Rally rating.',
+    tone: 'neutral',
+  };
 }
 
 export async function setReady(matchId: string, ready: boolean): Promise<void> {

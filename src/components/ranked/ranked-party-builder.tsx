@@ -69,12 +69,20 @@ export function RankedPartyBuilder({
   matchType,
   eventId,
   courtId,
+  rated = true,
   onCreated,
 }: {
   host: PublicProfile;
   matchType: RankedMatchType;
   eventId?: string;
   courtId?: string;
+  /** create_ranked_match() itself skips the party-spread cap entirely
+   * for an unrated match — casual play is exactly where a strong and
+   * weak player deliberately pair up. Mirrored here rather than left to
+   * the server alone, since this screen's own eligibility gate would
+   * otherwise block a valid casual party for a rule that no longer
+   * applies to it. */
+  rated?: boolean;
   onCreated: (matchId: string) => void;
 }) {
   const theme = useTheme();
@@ -198,7 +206,19 @@ export function RankedPartyBuilder({
 
   const filledPlayers = slots.filter((s) => s.player).map((s) => s.player!);
   const allFilled = slots.every((s) => s.player);
-  const eligibility = partyEligibilityDisplay(filledPlayers.map((p) => ranks.get(p.id) ?? null));
+  // Casual skips the spread cap entirely, same as the server — see the
+  // `rated` prop's own comment.
+  const eligibility = rated
+    ? partyEligibilityDisplay(filledPlayers.map((p) => ranks.get(p.id) ?? null))
+    : {
+        eligible: true,
+        spread: 0,
+        allowedLowestRating: null,
+        allowedHighestRating: null,
+        allowedLowestTierName: null,
+        allowedHighestTierName: null,
+        maxSpread: 0,
+      };
 
   async function submit() {
     if (!allFilled || !eligibility.eligible || submitting) return;
@@ -206,7 +226,7 @@ export function RankedPartyBuilder({
     try {
       const teamA = slots.filter((s) => s.team === 'a').map((s) => s.player!.id);
       const teamB = slots.filter((s) => s.team === 'b').map((s) => s.player!.id);
-      const matchId = await createRankedMatch({ matchType, teamA, teamB, eventId, courtId });
+      const matchId = await createRankedMatch({ matchType, teamA, teamB, eventId, courtId, rated });
       onCreated(matchId);
     } catch (e) {
       show(e instanceof RankedError ? e.message : "We couldn't start that match.", 'error');
@@ -378,7 +398,12 @@ export function RankedPartyBuilder({
       ) : null}
 
       <Button
-        title={submitting ? 'Starting match…' : 'Find ranked match'}
+        // Uniform across both modes — founder's call: the Casual/Ranked
+        // toggle above already says which one, and a button whose text
+        // has to stay in sync with a toggle above it is a button that
+        // can fall out of sync. It already did once, caught only on a
+        // running screen. This removes the class of bug, not just today's.
+        title={submitting ? 'Starting match…' : 'Find match'}
         onPress={submit}
         disabled={!allFilled || !eligibility.eligible || submitting}
         loading={submitting}

@@ -59,13 +59,7 @@ export function RankCard() {
 
   if (!primary && !calibrating) {
     return (
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push('/ranked/leaderboard')}
-        style={({ pressed }) => [
-          styles.card,
-          { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
-        ]}>
+      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <View style={styles.row}>
           <View style={[styles.icon, { backgroundColor: theme.accent }]}>
             <Ionicons name="trophy-outline" size={20} color={theme.accentForeground} />
@@ -73,27 +67,32 @@ export function RankCard() {
           <View style={styles.text}>
             <ThemedText type="smallBold">Try AIR/Rally Ranked</ThemedText>
             <ThemedText type="caption" themeColor="mutedForeground">
-              A competitive singles/doubles ladder — start a ranked match from Open Play.
+              A competitive singles/doubles ladder — no booking needed for your first 10 matches.
             </ThemedText>
           </View>
         </View>
-        <ThemedText type="smallBold" themeColor="primary" style={styles.cta}>
-          See the leaderboard →
-        </ThemedText>
-      </Pressable>
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/ranked/play')}
+            style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
+            <ThemedText type="smallBold">Play a game</ThemedText>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/ranked/leaderboard')}
+            style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
+            <ThemedText type="smallBold">Leaderboard</ThemedText>
+          </Pressable>
+        </View>
+      </View>
     );
   }
 
   if (calibrating) {
     const calibration = calibrationState(calibrating);
     return (
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push('/ranked/leaderboard')}
-        style={({ pressed }) => [
-          styles.card,
-          { backgroundColor: theme.navy, borderColor: theme.navy, opacity: pressed ? 0.85 : 1 },
-        ]}>
+      <View style={[styles.card, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
         <ThemedText type="caption" style={[styles.eyebrow, { color: theme.primary }]}>
           Calibrating
         </ThemedText>
@@ -114,7 +113,18 @@ export function RankCard() {
         <ThemedText type="caption" style={{ color: `${theme.navyForeground}CC` }}>
           Your tier stays hidden until match {calibration.total}. Results still count — they place you.
         </ThemedText>
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/ranked/play')}
+          style={({ pressed }) => [
+            styles.actionButton,
+            { borderColor: theme.primary, opacity: pressed ? 0.85 : 1 },
+          ]}>
+          <ThemedText type="smallBold" style={{ color: theme.primary }}>
+            Play a game
+          </ThemedText>
+        </Pressable>
+      </View>
     );
   }
 
@@ -137,9 +147,15 @@ export function RankCard() {
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
+          onPress={() => router.push('/ranked/play')}
+          style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
+          <ThemedText type="smallBold">Play a game</ThemedText>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
           onPress={() => router.push('/ranked/leaderboard')}
           style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
-          <ThemedText type="smallBold">View leaderboard</ThemedText>
+          <ThemedText type="smallBold">Leaderboard</ThemedText>
         </Pressable>
         <Pressable
           accessibilityRole="button"

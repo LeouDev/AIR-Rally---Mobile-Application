@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { PlayerRow } from '@/components/ranked/match/player-row';
@@ -8,7 +8,9 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   cancelMatch,
+  isMatchBooked,
   matchBalance,
+  rankedStakes,
   RankedError,
   RATING_STARTING_VALUE,
   readyTally,
@@ -25,6 +27,27 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
   const theme = useTheme();
   const { show } = useToast();
   const [busy, setBusy] = useState(false);
+  // undefined while loading — rankedStakes() treats that as "don't know
+  // yet" rather than guessing. Re-fetched per match id: someone who
+  // joined via a link and never saw the doorway screen needs to see
+  // this too, not just whoever created the match.
+  const [booked, setBooked] = useState<boolean | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    isMatchBooked(match.id)
+      .then((result) => {
+        if (!cancelled) setBooked(result);
+      })
+      .catch(() => {
+        // Leave it undefined — rankedStakes() reads that as "don't
+        // know yet" and stays silent on the one thing it can't confirm
+        // (the unbooked-and-calibrated warning) rather than guessing.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [match.id]);
 
   const me = match.players.find((p) => p.user_id === currentUserId);
   const teamA = match.players.filter((p) => p.team === 'a');
@@ -34,6 +57,7 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
     teamA.map((p) => p.rank?.rating ?? RATING_STARTING_VALUE),
     teamB.map((p) => p.rank?.rating ?? RATING_STARTING_VALUE)
   );
+  const stakes = rankedStakes({ rated: match.rated, booked, isCalibrated: me?.rank?.is_calibrated ?? false });
 
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
@@ -62,6 +86,20 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
         </ThemedText>
         <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
           {match.match_type.toUpperCase()} · TO {match.target_score}
+        </ThemedText>
+      </View>
+
+      {/* Whoever is looking at this — not only whoever tapped "start" —
+          sees what THIS match means for THEIR OWN rating before it's
+          played. The freeze (20260810000100) is decided per participant,
+          so a teammate's own copy can legitimately read differently from
+          theirs on the same match. */}
+      <View style={[styles.stakesRow, styles.hairline]}>
+        <ThemedText type="caption" style={[styles.stakesHeadline, { color: theme.rally }]}>
+          {stakes.headline.toUpperCase()}
+        </ThemedText>
+        <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.75 }}>
+          {stakes.detail}
         </ThemedText>
       </View>
 
@@ -188,6 +226,15 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
     paddingBottom: Spacing.one,
     opacity: 0.6,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  stakesRow: {
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two + Spacing.half,
+    gap: 2,
+  },
+  stakesHeadline: {
     fontWeight: '700',
     letterSpacing: 1,
   },

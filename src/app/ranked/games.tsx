@@ -20,6 +20,7 @@ import {
   getPlayerRank,
   listRecentMatches,
   rankLabel,
+  ratingImpact,
   type RankedMatchSummary,
 } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
@@ -225,6 +226,10 @@ function GamesStatsCard({ rank }: { rank: PlayerRank | null }) {
 
 function HistoryRow({ summary }: { summary: RankedMatchSummary }) {
   const theme = useTheme();
+  // Same distinction as the result screen: a whole casual match reads
+  // differently from an otherwise-rated match this player was
+  // individually frozen in — see ratingImpact()'s own comment.
+  const impact = ratingImpact(summary.match, summary.me);
   return (
     <Pressable
       accessibilityRole="button"
@@ -237,7 +242,12 @@ function HistoryRow({ summary }: { summary: RankedMatchSummary }) {
         <ThemedText type="smallBold" numberOfLines={1} style={styles.cardTitle}>
           vs {opponentNames(summary)}
         </ThemedText>
-        <Badge label={summary.won ? 'Won' : 'Lost'} tone={summary.won ? 'success' : 'destructive'} />
+        <View style={styles.badgeRow}>
+          {impact.kind === 'none' ? (
+            <Badge label={impact.reason === 'casual' ? 'Casual' : 'No rating impact'} tone="neutral" />
+          ) : null}
+          <Badge label={summary.won ? 'Won' : 'Lost'} tone={summary.won ? 'success' : 'destructive'} />
+        </View>
       </View>
       {summary.partner ? (
         <ThemedText type="small" themeColor="subtle">
@@ -291,6 +301,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: Spacing.one,
   },
   cardTitle: {
     flexShrink: 1,
