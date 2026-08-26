@@ -145,13 +145,29 @@ export default function PlayScreen() {
           }}
           ListHeaderComponent={
             <View style={styles.header}>
+              {/* Two genuinely different things, not two views of one, so
+                  they get two actions rather than a toggle: Open Play is
+                  strangers joining a court someone booked; the doorway is
+                  people you already know, right now. The doorway leads
+                  because it works for every player, while Open Play only
+                  works for someone holding a booking. */}
               <View style={styles.headerRow}>
-                <ThemedText type="title">Open Play</ThemedText>
+                <ThemedText type="title">Play</ThemedText>
               </View>
               <ThemedText type="small" themeColor="subtle">
-                Games with open spots. One player books the court — everyone sorts out the split between themselves.
+                Ranked or casual, with people you already know. No booking needed.
               </ThemedText>
-              <Button title="Start a game" onPress={() => router.push('/events/new')} />
+              <Button title="Start a game" onPress={() => router.push('/ranked/play')} />
+
+              <View style={[styles.sectionDivider, { borderTopColor: theme.border }]}>
+                <ThemedText type="subtitle">Open Play</ThemedText>
+                <ThemedText type="small" themeColor="subtle">
+                  Games with open spots for anyone to join. One player books the court — everyone sorts out the split
+                  between themselves.
+                </ThemedText>
+                <Button title="Host on your booking" variant="outline" onPress={() => router.push('/events/new')} />
+              </View>
+
               {error ? (
                 <ThemedText type="small" themeColor="destructive">
                   Couldn&apos;t load games. Pull to retry.
@@ -167,9 +183,14 @@ export default function PlayScreen() {
               </View>
             ) : (
               <View style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <ThemedText type="subtitle">No games coming up</ThemedText>
+                <ThemedText type="subtitle">No open games right now</ThemedText>
+                {/* Deliberately not "book a court" as the only way out —
+                    that's addressed to someone who has one to book, which
+                    today is nobody, and after launch is every player in a
+                    city with no listed venue. Point at what they can do. */}
                 <ThemedText type="small" themeColor="subtle">
-                  Book a court and add your playmates — your game shows up here for others to join.
+                  Open Play needs someone to have booked a court. You don&apos;t need one to play — use Start a game
+                  above and bring your own players.
                 </ThemedText>
               </View>
             )
@@ -198,6 +219,12 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.two,
     marginBottom: Spacing.two,
+  },
+  sectionDivider: {
+    borderTopWidth: 1,
+    paddingTop: Spacing.four,
+    marginTop: Spacing.two,
+    gap: Spacing.two,
   },
   headerRow: {
     flexDirection: 'row',

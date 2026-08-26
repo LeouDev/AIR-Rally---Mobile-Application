@@ -148,9 +148,15 @@ export default function NewOpenPlayScreen() {
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <ThemedText type="subtitle">You need a court first</ThemedText>
               <ThemedText type="small" themeColor="subtle">
-                Open Play runs on a court you&apos;ve booked. Book one, then come back and invite your playmates.
+                Open Play runs on a court you&apos;ve booked, so other players can join it. Book one, then come back and
+                invite your playmates.
               </ThemedText>
-              <Button title="Find a court" onPress={() => router.push('/(tabs)')} />
+              {/* The way out, not just the way back. Someone reading this
+                  has no booking — offering only "find a court" is a dead
+                  end for a player with no venue near them. Playing needs
+                  no booking; only Open Play does. */}
+              <Button title="Start a game without a court" onPress={() => router.push('/ranked/play')} />
+              <Button title="Find a court" variant="outline" onPress={() => router.push('/(tabs)')} />
             </View>
           ) : available.length === 0 ? (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
