@@ -1,6 +1,6 @@
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, PostCard } from '@/components/post-card';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import { followUser, isFollowing, unfollowUser } from '@/lib/follows';
 import { formatRelativeTime } from '@/lib/relative-time';
@@ -32,6 +33,7 @@ import { useSession } from '@/providers/session';
 
 export default function PostDetailScreen() {
   const theme = useTheme();
+  const { ref: listRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<FlatList>();
   const { postId } = useLocalSearchParams<{ postId: string }>();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
@@ -151,7 +153,11 @@ export default function PostDetailScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'Post', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        {/* Plain View: the KeyboardAvoidingView here had no
+            keyboardVerticalOffset against a nav header, so it
+            under-compensated. useKeyboardAwareScroll on the list below
+            uses insets, which need no offset. */}
+        <View style={styles.flex}>
           {post === undefined ? (
             <View style={styles.block}>
               <Skeleton height={140} radius={Radius.xl} />
@@ -162,10 +168,11 @@ export default function PostDetailScreen() {
             </View>
           ) : (
             <FlatList
+              ref={listRef}
+              {...keyboardProps}
               data={comments ?? []}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.list}
-              keyboardShouldPersistTaps="handled"
               ListHeaderComponent={
                 <View style={styles.headerBlock}>
                   <PostCard
@@ -222,6 +229,7 @@ export default function PostDetailScreen() {
                 userId ? (
                   <View style={[styles.composer, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <TextInput
+                      onFocus={scrollFocusedIntoView}
                       value={draft}
                       onChangeText={setDraft}
                       placeholder="Add a comment…"
@@ -236,7 +244,7 @@ export default function PostDetailScreen() {
               }
             />
           )}
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     </ThemedView>
   );

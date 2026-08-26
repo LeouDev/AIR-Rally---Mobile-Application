@@ -9,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import type { PlayerRank, PublicProfile, RankedMatchType } from '@/lib/database.types';
 import { getPublicProfile } from '@/lib/follows';
@@ -38,6 +39,7 @@ export default function PlayRankedScreen() {
   const theme = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
+  const { ref: scrollRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<ScrollView>();
 
   const [mode, setMode] = useState<GameMode>('ranked');
   const [matchType, setMatchType] = useState<RankedMatchType>('singles');
@@ -67,7 +69,7 @@ export default function PlayRankedScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'Play a game', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} {...keyboardProps}>
           {host === undefined || myRank === undefined ? (
             <Skeleton height={280} radius={Radius.xl} />
           ) : host === null ? (
@@ -113,6 +115,7 @@ export default function PlayRankedScreen() {
                 host={host}
                 matchType={matchType}
                 rated={mode === 'ranked'}
+                onSearchFocus={scrollFocusedIntoView}
                 onCreated={(matchId) => router.replace({ pathname: '/ranked/[matchId]', params: { matchId } })}
               />
             </>

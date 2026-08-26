@@ -71,11 +71,18 @@ export function RankedPartyBuilder({
   courtId,
   rated = true,
   onCreated,
+  onSearchFocus,
 }: {
   host: PublicProfile;
   matchType: RankedMatchType;
   eventId?: string;
   courtId?: string;
+  /** Fired when a slot's search field takes focus. The host screen owns
+   * the scroll container, so it's the only thing that can bring this
+   * field above the keyboard — and moving focus BETWEEN slots while the
+   * keyboard is already up fires no keyboard event at all, so nothing
+   * else would notice. See useKeyboardAwareScroll. */
+  onSearchFocus?: () => void;
   /** create_ranked_match() itself skips the party-spread cap entirely
    * for an unrated match — casual play is exactly where a strong and
    * weak player deliberately pair up. Mirrored here rather than left to
@@ -277,6 +284,7 @@ export function RankedPartyBuilder({
                       placeholder={`Search for ${slot.roleLabel.toLowerCase()}`}
                       placeholderTextColor={theme.placeholder}
                       accessibilityLabel="Search players by name"
+                      onFocus={onSearchFocus}
                       style={[styles.inlineSearchInput, { color: theme.cardForeground }]}
                     />
                     {searching ? <ActivityIndicator size="small" color={theme.mutedForeground} /> : null}

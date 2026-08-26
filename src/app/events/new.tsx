@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
@@ -12,6 +12,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TextField } from '@/components/ui/text-field';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import type { PublicProfile, RankedMatchType } from '@/lib/database.types';
 import { formatShare } from '@/lib/event-split';
@@ -67,6 +68,7 @@ export default function NewOpenPlayScreen() {
   const [hostProfile, setHostProfile] = useState<PublicProfile | null>(null);
   const [partyEventId, setPartyEventId] = useState<string | null>(null);
   const [startingMatch, setStartingMatch] = useState(false);
+  const { ref: scrollRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<ScrollView>();
 
   useEffect(() => {
     if (!userId) return;
@@ -133,8 +135,11 @@ export default function NewOpenPlayScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'Start a game', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* Was wrapped in KeyboardAvoidingView with no keyboardVerticalOffset,
+            which under-compensates by the nav header height. Replaced rather
+            than supplemented — two mechanisms competing for the same problem
+            is how the next person loses an afternoon. */}
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} {...keyboardProps}>
           <ThemedText type="small" themeColor="subtle">
             Start a match on a court you&apos;ve booked. You pay the venue; splitting it is between you and them.
           </ThemedText>
@@ -289,6 +294,7 @@ export default function NewOpenPlayScreen() {
                         eventId={partyEventId}
                         courtId={selected.courtId}
                         rated={mode === 'ranked'}
+                        onSearchFocus={scrollFocusedIntoView}
                         onCreated={handleMatchCreated}
                       />
                     ) : (
@@ -307,7 +313,6 @@ export default function NewOpenPlayScreen() {
             </>
           )}
         </ScrollView>
-        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -318,9 +323,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
-    flex: 1,
-  },
-  flex: {
     flex: 1,
   },
   scroll: {

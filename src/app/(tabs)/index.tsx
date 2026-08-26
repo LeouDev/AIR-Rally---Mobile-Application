@@ -2,8 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -19,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { VenueCard } from '@/components/venue-card';
 import { Wordmark } from '@/components/wordmark';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import type { Amenity } from '@/lib/database.types';
 import { addFavorite, listFavoriteVenueIds, removeFavorite } from '@/lib/favorites';
@@ -44,6 +43,7 @@ function countActiveFilters(filters: MarketplaceFilters): number {
 
 export default function ExploreScreen() {
   const theme = useTheme();
+  const { ref: listRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<FlatList>();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
 
@@ -135,10 +135,9 @@ export default function ExploreScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.flex}>
-          <FlatList
+        <FlatList
+          ref={listRef}
+          {...keyboardProps}
             data={venues ?? []}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
@@ -150,7 +149,6 @@ export default function ExploreScreen() {
             )}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             contentContainerStyle={styles.list}
-            keyboardShouldPersistTaps="handled"
             ListHeaderComponent={
               <View style={styles.header}>
                 <Wordmark size={22} />
@@ -163,6 +161,7 @@ export default function ExploreScreen() {
                     ]}>
                     <Ionicons name="search" size={18} color={theme.mutedForeground} />
                     <TextInput
+                      onFocus={scrollFocusedIntoView}
                       value={search}
                       onChangeText={setSearch}
                       placeholder="Venue, court, city, or barangay"
@@ -227,7 +226,7 @@ export default function ExploreScreen() {
               )
             }
           />
-        </KeyboardAvoidingView>
+
       </SafeAreaView>
 
       <FilterSheet

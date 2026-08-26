@@ -1,6 +1,6 @@
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, PostCard } from '@/components/post-card';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import { getClubForViewer, type ClubWithViewerState } from '@/lib/clubs';
 import { getPublicProfile } from '@/lib/follows';
@@ -24,6 +25,7 @@ import { useSession } from '@/providers/session';
  * rather than trusting an empty feed to explain itself. */
 export default function MyClubScreen() {
   const theme = useTheme();
+  const { ref: listRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<FlatList>();
   const { clubId } = useLocalSearchParams<{ clubId: string }>();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
@@ -107,7 +109,8 @@ export default function MyClubScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'My Club', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        {/* See [postId].tsx — same swap, same reason. */}
+        <View style={styles.flex}>
           {club === undefined ? (
             <View style={styles.block}>
               <Skeleton height={100} radius={Radius.xl} />
@@ -125,10 +128,11 @@ export default function MyClubScreen() {
             </View>
           ) : (
             <FlatList
+              ref={listRef}
+              {...keyboardProps}
               data={posts ?? []}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.list}
-              keyboardShouldPersistTaps="handled"
               ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}
               ListHeaderComponent={
                 <View style={styles.header}>
@@ -146,6 +150,7 @@ export default function MyClubScreen() {
                     <View style={styles.composerRow}>
                       <Avatar profile={myProfile} />
                       <TextInput
+                        onFocus={scrollFocusedIntoView}
                         value={content}
                         onChangeText={setContent}
                         placeholder={`Share something with ${club.name}…`}
@@ -188,7 +193,7 @@ export default function MyClubScreen() {
               }
             />
           )}
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     </ThemedView>
   );

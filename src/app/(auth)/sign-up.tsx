@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
 import { Wordmark } from '@/components/wordmark';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import { getFriendlyAuthErrorMessage } from '@/lib/auth-errors';
 import { CURRENT_AGREEMENT_VERSION } from '@/lib/legal';
@@ -66,6 +67,7 @@ const PasswordField = forwardRef<TextInput, ComponentProps<typeof TextField>>(fu
 
 export default function SignUpScreen() {
   const theme = useTheme();
+  const { ref: scrollRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<ScrollView>();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -175,10 +177,10 @@ export default function SignUpScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.flex}>
-          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* KeyboardAvoidingView shrank the container but never scrolled
+            the focused field into view, so the later fields in this form
+            could still sit under the keyboard. The hook does both. */}
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} {...keyboardProps}>
             <View style={styles.header}>
               <Wordmark size={26} />
               <ThemedText type="heading">Create your account</ThemedText>
@@ -190,6 +192,7 @@ export default function SignUpScreen() {
               <View style={styles.nameRow}>
                 <View style={styles.nameField}>
                   <FocusableTextField
+                    onFocus={scrollFocusedIntoView}
                     label="First name"
                     value={firstName}
                     onChangeText={(text) => {
@@ -206,6 +209,7 @@ export default function SignUpScreen() {
                 </View>
                 <View style={styles.nameField}>
                   <FocusableTextField
+                    onFocus={scrollFocusedIntoView}
                     ref={lastNameRef}
                     label="Last name"
                     value={lastName}
@@ -223,6 +227,7 @@ export default function SignUpScreen() {
                 </View>
               </View>
               <FocusableTextField
+                onFocus={scrollFocusedIntoView}
                 ref={emailRef}
                 label="Email"
                 value={email}
@@ -240,6 +245,7 @@ export default function SignUpScreen() {
                 onSubmitEditing={() => passwordRef.current?.focus()}
               />
               <PasswordField
+                onFocus={scrollFocusedIntoView}
                 ref={passwordRef}
                 label="Password"
                 value={password}
@@ -255,6 +261,7 @@ export default function SignUpScreen() {
                 onSubmitEditing={() => confirmPasswordRef.current?.focus()}
               />
               <PasswordField
+                onFocus={scrollFocusedIntoView}
                 ref={confirmPasswordRef}
                 label="Confirm password"
                 value={confirmPassword}
@@ -315,8 +322,7 @@ export default function SignUpScreen() {
                 </ThemedText>
               </Link>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </ScrollView>
       </SafeAreaView>
     </ThemedView>
   );

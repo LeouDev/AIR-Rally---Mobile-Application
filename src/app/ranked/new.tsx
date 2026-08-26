@@ -9,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import type { PublicProfile, RankedMatchType } from '@/lib/database.types';
 import { getPublicProfile } from '@/lib/follows';
 import { useSession } from '@/providers/session';
@@ -26,6 +27,7 @@ export default function RankedNewMatchScreen() {
   const { event, court, type } = useLocalSearchParams<{ event?: string; court?: string; type?: string }>();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
+  const { ref: scrollRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<ScrollView>();
 
   const [matchType, setMatchType] = useState<RankedMatchType>(type === 'doubles' ? 'doubles' : 'singles');
   const [host, setHost] = useState<PublicProfile | null | undefined>(undefined);
@@ -41,7 +43,7 @@ export default function RankedNewMatchScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'Build your party', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} {...keyboardProps}>
           {!event || !court ? (
             <ThemedText type="small" themeColor="subtle">
               This link is missing the game it belongs to.
@@ -71,6 +73,7 @@ export default function RankedNewMatchScreen() {
                 matchType={matchType}
                 eventId={event}
                 courtId={court}
+                onSearchFocus={scrollFocusedIntoView}
                 onCreated={(matchId) => router.replace({ pathname: '/ranked/[matchId]', params: { matchId } })}
               />
             </>

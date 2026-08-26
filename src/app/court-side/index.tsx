@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, PostCard } from '@/components/post-card';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import type { Club, CourtSideFeedScope, EventAttendeeStatus, PublicProfile } from '@/lib/database.types';
 import { listClubsForUser } from '@/lib/clubs';
@@ -74,6 +75,7 @@ export default function CourtSideScreen() {
   const mentionSeq = useRef(0);
   const [pendingImages, setPendingImages] = useState<PickedPostImage[]>([]);
   const contentInputRef = useRef<TextInput>(null);
+  const { ref: listRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<FlatList>();
 
   const loadFirstPage = useCallback(async () => {
     try {
@@ -322,16 +324,20 @@ export default function CourtSideScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ headerShown: true, title: 'COURT/Side', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-          <FlatList
-            data={posts ?? []}
-            keyExtractor={(item, index) => `${item.id}-${item.effective_at}-${index}`}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            onEndReachedThreshold={0.4}
-            onEndReached={loadMore}
-            contentContainerStyle={styles.list}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
+        {/* No KeyboardAvoidingView: it under-compensated by the nav
+            header height here (headerShown: true, no keyboardVerticalOffset)
+            which is why the composer sat under the keyboard despite it.
+            useKeyboardAwareScroll uses insets, which need no header offset. */}
+        <FlatList
+          ref={listRef}
+          {...keyboardProps}
+          data={posts ?? []}
+          keyExtractor={(item, index) => `${item.id}-${item.effective_at}-${index}`}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          onEndReachedThreshold={0.4}
+          onEndReached={loadMore}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
               <PostCard
                 post={item}
                 currentUserId={userId ?? ''}
@@ -422,6 +428,7 @@ export default function CourtSideScreen() {
                     <Avatar profile={myProfile} />
                     <TextInput
                       ref={contentInputRef}
+                      onFocus={scrollFocusedIntoView}
                       value={content}
                       onChangeText={onChangeContent}
                       placeholder="Share something with COURT/Side…"
@@ -510,7 +517,6 @@ export default function CourtSideScreen() {
               )
             }
           />
-        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -521,9 +527,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
-    flex: 1,
-  },
-  flex: {
     flex: 1,
   },
   list: {
