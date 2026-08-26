@@ -286,8 +286,11 @@ export type CourtSideFeedScope = 'for_you' | 'following';
  * repo's supabase/migrations/20260810000049_reports_support_rate_limits.sql
  * — the database is the boundary; these exist so the sheet can say what
  * is wrong without a round trip, not instead of the constraint.
+ * 'ranked_match' added by 20260810000086 — a team name/club choice is
+ * user-generated content the same as a post or a club, reported by the
+ * match's own id like every other target_type already is.
  */
-export type ReportTargetType = 'post' | 'comment' | 'club' | 'event' | 'user';
+export type ReportTargetType = 'post' | 'comment' | 'club' | 'event' | 'user' | 'ranked_match';
 
 export type ReportReason =
   | 'spam'
@@ -573,6 +576,18 @@ export type RankedMatch = {
   score_b: number;
   serving_team: RankedTeam;
   winning_team: RankedTeam | null;
+  /** Free-text team name for a doubles team, or null. Mutually exclusive
+   * with team_a_club_id — set_ranked_team_identity() enforces this at
+   * the RPC layer, but the DB's own CHECK constraint is what actually
+   * guarantees it. Lobby-only to set (migration 20260810000086); no
+   * client write path exists here — this table has none. */
+  team_a_name: string | null;
+  /** Club team A chose to represent, or null. Resolve the live club name
+   * by JOIN when displaying — a club rename should read on every match
+   * that selected it, not freeze at selection time. */
+  team_a_club_id: string | null;
+  team_b_name: string | null;
+  team_b_club_id: string | null;
   /** True once ratings have moved. The database's own double-apply guard. */
   rank_applied: boolean;
   dispute_reason: string | null;
@@ -950,6 +965,10 @@ export type Database = {
       ranked_match_is_booked: {
         Args: { p_match_id: string };
         Returns: boolean;
+      };
+      set_ranked_team_identity: {
+        Args: { p_match_id: string; p_team: RankedTeam; p_name?: string | null; p_club_id?: string | null };
+        Returns: undefined;
       };
       // resolve_ranked_dispute is admin-only — not called from mobile.
     };

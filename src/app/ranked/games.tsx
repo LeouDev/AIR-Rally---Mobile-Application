@@ -21,6 +21,7 @@ import {
   listRecentMatches,
   rankLabel,
   ratingImpact,
+  teamIdentityLabel,
   type RankedMatchSummary,
 } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
@@ -37,6 +38,21 @@ const NEVER_PLAYED: Pick<PlayerRank, 'is_calibrated' | 'calibration_matches'> = 
 function opponentNames(summary: RankedMatchSummary): string {
   const names = summary.opponents.map((p) => p.display_name ?? 'Player');
   return names.length > 0 ? names.join(' & ') : 'Opponent';
+}
+
+/** The "vs" line shows the OPPOSING team's chosen identity for doubles —
+ * a custom name or club, wherever a team is displayed, including history
+ * — falling back to opponent names when nobody's set one. Singles is
+ * unaffected: teamIdentityLabel() already returns the player name(s)
+ * there, identical to opponentNames() alone. */
+function opponentTeamLabel(summary: RankedMatchSummary): string {
+  const opposingTeam = summary.me.team === 'a' ? 'b' : 'a';
+  return teamIdentityLabel({
+    matchType: summary.match.match_type,
+    teamName: opposingTeam === 'a' ? summary.match.team_a_name : summary.match.team_b_name,
+    club: opposingTeam === 'a' ? summary.teamAClub : summary.teamBClub,
+    playerNames: opponentNames(summary),
+  }).label;
 }
 
 /** The viewer's score first, then the opponents' — a real minus-style en
@@ -240,7 +256,7 @@ function HistoryRow({ summary }: { summary: RankedMatchSummary }) {
       ]}>
       <View style={styles.cardTop}>
         <ThemedText type="smallBold" numberOfLines={1} style={styles.cardTitle}>
-          vs {opponentNames(summary)}
+          vs {opponentTeamLabel(summary)}
         </ThemedText>
         <View style={styles.badgeRow}>
           {impact.kind === 'none' ? (

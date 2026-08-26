@@ -5,7 +5,15 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { isFinishedGame, recordPoint, RankedError, submitResult, undoPoint, type RankedMatchDetail } from '@/lib/ranked';
+import {
+  isFinishedGame,
+  recordPoint,
+  RankedError,
+  submitResult,
+  teamIdentityLabel,
+  undoPoint,
+  type RankedMatchDetail,
+} from '@/lib/ranked';
 
 /**
  * The live phase. Direct RPC calls on tap, no confirmation dialog — a
@@ -36,7 +44,12 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
       .finally(() => setBusy(false));
   };
 
-  const teamNames = (team: typeof teamA) => team.map((p) => p.profile?.display_name?.split(' ')[0] ?? '—').join(' · ');
+  const firstNames = (team: typeof teamA) => team.map((p) => p.profile?.display_name?.split(' ')[0] ?? '—').join(' · ');
+  // Doubles shows the team's chosen identity; singles shows the player's
+  // name — the founder's own rule, keyed on match type inside
+  // teamIdentityLabel() itself, not duplicated here.
+  const teamLabel = (team: typeof teamA, club: typeof match.team_a_club, name: string | null) =>
+    teamIdentityLabel({ matchType: match.match_type, teamName: name, club, playerNames: firstNames(team) }).label;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
@@ -58,7 +71,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
             {match.score_a}
           </ThemedText>
           <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
-            {teamNames(teamA)}
+            {teamLabel(teamA, match.team_a_club, match.team_a_name)}
           </ThemedText>
         </View>
         <View style={styles.scoreCol}>
@@ -69,7 +82,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
             {match.score_b}
           </ThemedText>
           <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
-            {teamNames(teamB)}
+            {teamLabel(teamB, match.team_b_club, match.team_b_name)}
           </ThemedText>
         </View>
       </View>

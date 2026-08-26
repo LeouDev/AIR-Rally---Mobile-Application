@@ -358,11 +358,26 @@ export type RankedMatchParticipant = RankedMatchPlayer & {
   rank: PlayerRank | null;
 };
 
+export type ClubRef = { id: string; name: string };
+
 export type RankedMatchDetail = RankedMatch & {
   players: RankedMatchParticipant[];
   /** Null when nobody has been proposed yet, or when the referee isn't a player. */
   scorekeeper: PublicProfile | null;
+  /** Resolved live by JOIN when team_a_club_id is set — see that
+   * column's own comment for why this isn't frozen at selection time. */
+  team_a_club: ClubRef | null;
+  team_b_club: ClubRef | null;
 };
+
+/** Batched — one query for both teams' club names, not two. */
+async function fetchClubRefs(ids: (string | null)[]): Promise<Map<string, ClubRef>> {
+  const real = [...new Set(ids.filter((id): id is string => id !== null))];
+  if (real.length === 0) return new Map();
+  const { data, error } = await supabase.from('clubs').select('id,name').in('id', real);
+  if (error) throw error;
+  return new Map((data ?? []).map((c) => [c.id, c]));
+}
 
 export type MyMatchResult = {
   me: RankedMatchParticipant;
@@ -477,7 +492,15 @@ export async function getMatch(matchId: string): Promise<RankedMatchDetail | nul
   // Team A first, then B, host first within each.
   players.sort((a, b) => (a.team === b.team ? Number(b.is_host) - Number(a.is_host) : a.team.localeCompare(b.team)));
 
-  return { ...match, players, scorekeeper };
+  const clubs = await fetchClubRefs([match.team_a_club_id, match.team_b_club_id]);
+
+  return {
+    ...match,
+    players,
+    scorekeeper,
+    team_a_club: match.team_a_club_id ? (clubs.get(match.team_a_club_id) ?? null) : null,
+    team_b_club: match.team_b_club_id ? (clubs.get(match.team_b_club_id) ?? null) : null,
+  };
 }
 
 export async function listMatchPoints(matchId: string): Promise<RankedMatchPoint[]> {
@@ -538,6 +561,9 @@ export type RankedMatchSummary = {
   opponents: PublicProfile[];
   partner: PublicProfile | null;
   won: boolean;
+  /** Resolved live — see RankedMatchDetail's own fields for why. */
+  teamAClub: ClubRef | null;
+  teamBClub: ClubRef | null;
 };
 
 /**
@@ -589,6 +615,8 @@ export async function listRecentMatches(userId: string, limit = 10): Promise<Ran
 
   const myLineByMatch = new Map(mine.map((row) => [row.match_id, row]));
 
+  const clubs = await fetchClubRefs(matches.flatMap((m) => [m.team_a_club_id, m.team_b_club_id]));
+
   return matches.flatMap((match) => {
     const me = myLineByMatch.get(match.id);
     if (!me) return [];
@@ -603,6 +631,8 @@ export async function listRecentMatches(userId: string, limit = 10): Promise<Ran
           .map((p) => profileById.get(p.user_id))
           .filter((p): p is PublicProfile => p !== undefined),
         won: match.winning_team === me.team,
+        teamAClub: match.team_a_club_id ? (clubs.get(match.team_a_club_id) ?? null) : null,
+        teamBClub: match.team_b_club_id ? (clubs.get(match.team_b_club_id) ?? null) : null,
       },
     ];
   });
@@ -677,6 +707,63 @@ export async function isMatchBooked(matchId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc('ranked_match_is_booked', { p_match_id: matchId });
   if (error) throw error;
   return data ?? false;
+}
+
+/**
+ * Names a doubles team, or picks a club the caller belongs to — never
+ * both (set_ranked_team_identity() enforces this, but the database's
+ * own CHECK constraint is what actually guarantees it). Lobby-only:
+ * the server rejects this once the match has left 'lobby', same gate
+ * setReady() itself is under. Pass exactly one of name/clubId; passing
+ * neither clears whichever was set (last-write-wins between teammates
+ * — a team name is cosmetic, not something worth a vote over).
+ */
+export async function setTeamIdentity(
+  matchId: string,
+  team: RankedTeam,
+  identity: { name: string } | { clubId: string } | null
+): Promise<void> {
+  const { error } = await supabase.rpc('set_ranked_team_identity', {
+    p_match_id: matchId,
+    p_team: team,
+    p_name: identity && 'name' in identity ? identity.name : null,
+    p_club_id: identity && 'clubId' in identity ? identity.clubId : null,
+  });
+  if (error) throwRanked(error);
+}
+
+export type TeamIdentity =
+  | { kind: 'custom'; label: string }
+  | { kind: 'club'; label: string; clubId: string }
+  | { kind: 'players'; label: string };
+
+/**
+ * The founder's own rule, verbatim: "if double should show team name
+ * if single just the player name" — keyed on match type, not on
+ * whether a name happens to be set. A singles match has no team to
+ * name at all; showing player names there isn't a fallback, it's the
+ * only thing that was ever going to be correct. An unnamed doubles
+ * team falls back to its players' names too — the same shape, just for
+ * a different reason (nobody chose an identity yet).
+ */
+export function teamIdentityLabel({
+  matchType,
+  teamName,
+  club,
+  playerNames,
+}: {
+  matchType: RankedMatchType;
+  teamName: string | null;
+  club: ClubRef | null;
+  /** Pre-joined display name(s) for the team's player(s) — the
+   * existing fallback every surface already had before team identity
+   * existed (teamNames()/opponentNames()-style joins). */
+  playerNames: string;
+}): TeamIdentity {
+  if (matchType === 'singles') return { kind: 'players', label: playerNames };
+  if (club) return { kind: 'club', label: club.name, clubId: club.id };
+  if (teamName) return { kind: 'custom', label: teamName };
+  return { kind: 'players', label: playerNames };
 }
 
 export type RankedStakes = {

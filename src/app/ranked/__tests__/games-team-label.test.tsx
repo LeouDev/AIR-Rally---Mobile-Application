@@ -6,11 +6,10 @@ import type { RankedMatch, RankedMatchPlayer } from '@/lib/database.types';
 import { getPlayerRank, listRecentMatches, type RankedMatchSummary } from '@/lib/ranked';
 
 /**
- * The same casual-vs-frozen distinction as the result screen — a whole
- * casual match reads differently from an otherwise-rated match this
- * player was individually frozen in. History has to say which, same as
- * the result screen does, or a frozen match reads as an unremarkable
- * loss/win with no explanation for why it never moved the rating.
+ * "Wherever a team is displayed, including history" — the founder's own
+ * instruction. History shows the OPPOSING team's chosen identity on the
+ * "vs" line for doubles, falling back to opponent names when nobody's
+ * set one; singles is unaffected.
  */
 
 jest.mock('expo-router', () => ({
@@ -40,7 +39,7 @@ function matchFixture(overrides: Partial<RankedMatch> = {}): RankedMatch {
     event_id: null,
     court_id: null,
     venue_id: null,
-    match_type: 'singles',
+    match_type: 'doubles',
     match_weight_type: 'air_rally_ranked',
     team_a_name: null,
     team_a_club_id: null,
@@ -74,7 +73,7 @@ function meFixture(overrides: Partial<RankedMatchPlayer> = {}): RankedMatchPlaye
     user_id: 'me',
     team: 'a',
     is_host: true,
-    mode: 'singles',
+    mode: 'doubles',
     ready: true,
     ready_at: null,
     officiating_vote: true,
@@ -104,8 +103,11 @@ function summaryFixture(overrides: Partial<RankedMatchSummary> = {}): RankedMatc
   return {
     match: matchFixture(),
     me: meFixture(),
-    opponents: [{ id: 'opp-1', display_name: 'Robin', avatar_url: null }],
-    partner: null,
+    opponents: [
+      { id: 'opp-1', display_name: 'Robin', avatar_url: null },
+      { id: 'opp-2', display_name: 'Alex', avatar_url: null },
+    ],
+    partner: { id: 'partner', display_name: 'Sam', avatar_url: null },
     won: true,
     teamAClub: null,
     teamBClub: null,
@@ -118,30 +120,33 @@ beforeEach(() => {
   mockGetPlayerRank.mockResolvedValue(null);
 });
 
-it('badges a casual match as Casual in history', async () => {
+it('shows the opposing club on the vs line for a club-affiliated doubles opponent', async () => {
   mockListRecentMatches.mockResolvedValue([
-    summaryFixture({ match: matchFixture({ rated: false }), me: meFixture({ rating_delta: null, tier_after: null }) }),
+    summaryFixture({ teamBClub: { id: 'club-1', name: 'Rally Point' } }),
   ]);
   await render(<GamesScreen />);
 
-  await screen.findByText('Casual');
+  await screen.findByText('vs Rally Point');
 });
 
-it('badges a frozen (rated but unbooked-and-calibrated) match as No rating impact, not Casual', async () => {
-  mockListRecentMatches.mockResolvedValue([
-    summaryFixture({ match: matchFixture({ rated: true }), me: meFixture({ rating_delta: null, tier_after: null }) }),
-  ]);
-  await render(<GamesScreen />);
-
-  await screen.findByText('No rating impact');
-  expect(screen.queryByText('Casual')).toBeNull();
-});
-
-it('shows no impact badge at all for a normally-rated match', async () => {
+it('falls back to opponent names when the opposing doubles team is unnamed', async () => {
   mockListRecentMatches.mockResolvedValue([summaryFixture()]);
   await render(<GamesScreen />);
 
-  await screen.findByText('Won');
-  expect(screen.queryByText('Casual')).toBeNull();
-  expect(screen.queryByText('No rating impact')).toBeNull();
+  await screen.findByText('vs Robin & Alex');
+});
+
+it('never shows a team name for singles, even if one is somehow set', async () => {
+  mockListRecentMatches.mockResolvedValue([
+    summaryFixture({
+      match: matchFixture({ match_type: 'singles', team_b_name: 'Should never show' }),
+      me: meFixture({ mode: 'singles' }),
+      opponents: [{ id: 'opp-1', display_name: 'Robin', avatar_url: null }],
+      partner: null,
+    }),
+  ]);
+  await render(<GamesScreen />);
+
+  await screen.findByText('vs Robin');
+  expect(screen.queryByText(/Should never show/)).toBeNull();
 });
