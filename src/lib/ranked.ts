@@ -1,6 +1,7 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 
 import type {
+  PlayerMatchTotals,
   PlayerRank,
   PublicProfile,
   RankedLeaderboardRow,
@@ -9,7 +10,6 @@ import type {
   RankedMatchPoint,
   RankedMatchStatus,
   RankedMatchType,
-  RankedMode,
   RankedOfficiatingMode,
   RankedPips,
   RankedTeam,
@@ -293,13 +293,12 @@ export function matchStatusLabel(match: Pick<RankedMatch, 'status'>): string {
  * Reads
  * ---------------------------------------------------------------------- */
 
-/** The signed-in player's standing for the open season in this mode, or null if they've never opened Ranked in it. */
-export async function getPlayerRank(userId: string, mode: RankedMode): Promise<PlayerRank | null> {
+/** The signed-in player's standing for the open season, or null if they've never opened Ranked. */
+export async function getPlayerRank(userId: string): Promise<PlayerRank | null> {
   const { data, error } = await supabase
     .from('player_ranks')
     .select('*')
     .eq('user_id', userId)
-    .eq('mode', mode)
     .order('season_id', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -307,19 +306,18 @@ export async function getPlayerRank(userId: string, mode: RankedMode): Promise<P
   return data;
 }
 
-/** Batched — one query for a whole lobby, not one per player card. Always for one mode. */
-export async function getPlayerRanks(userIds: string[], mode: RankedMode): Promise<Map<string, PlayerRank>> {
+/** Batched — one query for a whole lobby, not one per player card. */
+export async function getPlayerRanks(userIds: string[]): Promise<Map<string, PlayerRank>> {
   if (userIds.length === 0) return new Map();
-  const { data, error } = await supabase.from('player_ranks').select('*').in('user_id', userIds).eq('mode', mode);
+  const { data, error } = await supabase.from('player_ranks').select('*').in('user_id', userIds);
   if (error) throw error;
   return new Map((data ?? []).map((row) => [row.user_id, row]));
 }
 
-export async function listLeaderboard(mode: RankedMode, limit = 50): Promise<RankedLeaderboardRow[]> {
+export async function listLeaderboard(limit = 50): Promise<RankedLeaderboardRow[]> {
   const { data, error } = await supabase
     .from('ranked_leaderboard')
     .select('*')
-    .eq('mode', mode)
     .order('position', { ascending: true })
     .limit(limit);
   if (error) throw error;
@@ -327,12 +325,29 @@ export async function listLeaderboard(mode: RankedMode, limit = 50): Promise<Ran
 }
 
 /** One player's row on the leaderboard, wherever it falls — fetched separately so a "you are 48th" footer doesn't need the 47 rows above it. */
-export async function getLeaderboardEntry(userId: string, mode: RankedMode): Promise<RankedLeaderboardRow | null> {
+export async function getLeaderboardEntry(userId: string): Promise<RankedLeaderboardRow | null> {
   const { data, error } = await supabase
     .from('ranked_leaderboard')
     .select('*')
     .eq('user_id', userId)
-    .eq('mode', mode)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * A player's wins/losses across EVERY confirmed match, casual results
+ * included — what "total wins whether it's a normal game or a ranked
+ * game" actually means. Deliberately not PlayerRank.wins/losses: those
+ * stay ranked-only because they're what the rating is computed from.
+ * Null when the player has no confirmed matches at all (the view has
+ * no row for them), which callers should read as zero, not as an error.
+ */
+export async function getPlayerMatchTotals(userId: string): Promise<PlayerMatchTotals | null> {
+  const { data, error } = await supabase
+    .from('player_match_totals')
+    .select('*')
+    .eq('user_id', userId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -391,13 +406,13 @@ export function opponentNames(players: readonly RankedMatchParticipant[], me: Pi
     .join(' & ');
 }
 
-async function attachParticipants(players: RankedMatchPlayer[], mode: RankedMode): Promise<RankedMatchParticipant[]> {
+async function attachParticipants(players: RankedMatchPlayer[]): Promise<RankedMatchParticipant[]> {
   const ids = players.map((p) => p.user_id);
   if (ids.length === 0) return [];
 
   const [profilesResult, ranks] = await Promise.all([
     supabase.from('public_profiles').select('*').in('id', ids),
-    getPlayerRanks(ids, mode),
+    getPlayerRanks(ids),
   ]);
   if (profilesResult.error) throw profilesResult.error;
 
@@ -420,7 +435,7 @@ export async function getMatch(matchId: string): Promise<RankedMatchDetail | nul
     .eq('match_id', matchId);
   if (playersError) throw playersError;
 
-  const players = await attachParticipants(playerRows ?? [], match.match_type);
+  const players = await attachParticipants(playerRows ?? []);
 
   let scorekeeper = players.find((p) => p.user_id === match.scorekeeper_id)?.profile ?? null;
   if (!scorekeeper && match.scorekeeper_id) {
@@ -464,6 +479,27 @@ export async function getActiveMatch(userId: string): Promise<RankedMatchDetail 
   return getMatch(matches[0].id);
 }
 
+/** The event's own active ranked match, if one is underway — same
+ * event → "still going" bridge as the web event page. RLS on
+ * ranked_matches means a match in progress only comes back here for
+ * its own participants/creator/scorekeeper/admin; a fellow attendee
+ * who isn't in that particular match sees nothing and the caller
+ * falls through to the "start one" bridge instead, even though one is
+ * already underway elsewhere in this session. Pre-existing scope
+ * limit inherited from the policy, not something this query adds. */
+export async function getActiveMatchForEvent(eventId: string): Promise<Pick<RankedMatch, 'id' | 'status'> | null> {
+  const { data, error } = await supabase
+    .from('ranked_matches')
+    .select('id, status')
+    .eq('event_id', eventId)
+    .in('status', ACTIVE_MATCH_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+  return data[0] as unknown as Pick<RankedMatch, 'id' | 'status'>;
+}
+
 export type RankedMatchSummary = {
   match: RankedMatch;
   /** The viewer's own line in this match. */
@@ -476,14 +512,14 @@ export type RankedMatchSummary = {
 /**
  * Confirmed matches only — an unresolved dispute has moved nothing, so
  * showing it in a history of results would be a lie about the record.
- * Filtered to one mode.
+ * Singles and doubles share one rating now, so this is one unified
+ * history — no mode filter.
  */
-export async function listRecentMatches(userId: string, mode: RankedMode, limit = 10): Promise<RankedMatchSummary[]> {
+export async function listRecentMatches(userId: string, limit = 10): Promise<RankedMatchSummary[]> {
   const { data: mine, error } = await supabase
     .from('ranked_match_players')
     .select('*')
     .eq('user_id', userId)
-    .eq('mode', mode)
     .order('created_at', { ascending: false })
     .limit(limit * 2);
   if (error) throw error;
@@ -560,13 +596,13 @@ export async function listRefereeCandidates(eventId: string, excludeUserIds: str
  * this is the only write path for any Ranked table.
  * ---------------------------------------------------------------------- */
 
-export async function ensureMyPlayerRank(mode: RankedMode): Promise<void> {
-  const { error } = await supabase.rpc('ensure_my_player_rank', { p_mode: mode });
+export async function ensureMyPlayerRank(): Promise<void> {
+  const { error } = await supabase.rpc('ensure_my_player_rank');
   if (error) throwRanked(error);
 }
 
-export async function getPartySpread(userIds: string[], mode: RankedMode): Promise<number> {
-  const { data, error } = await supabase.rpc('ranked_party_spread', { p_user_ids: userIds, p_mode: mode });
+export async function getPartySpread(userIds: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc('ranked_party_spread', { p_user_ids: userIds });
   if (error) throwRanked(error);
   return data ?? 0;
 }

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
@@ -6,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -16,6 +18,8 @@ import {
   listMyBookings,
   type BookingWithCourt,
 } from '@/lib/bookings';
+import { listHostableBookings } from '@/lib/events';
+import { useSession } from '@/providers/session';
 
 type BookingSection = { title: string; data: BookingWithCourt[] };
 
@@ -56,19 +60,33 @@ function statusBadge(status: BookingStatus): { tone: 'success' | 'warning' | 'ne
 
 export default function BookingsScreen() {
   const theme = useTheme();
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
   const [bookings, setBookings] = useState<BookingWithCourt[] | null>(null);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Which upcoming bookings can still start a game — a booking that
+  // already has one (or one outside the pending/confirmed+upcoming
+  // window listHostableBookings itself requires) doesn't get the
+  // affordance at all, rather than offering an action that would
+  // silently land on a different booking than the one tapped.
+  const [hostableIds, setHostableIds] = useState<Set<string>>(new Set());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setBookings(await listMyBookings());
+      const [myBookings, hostable] = await Promise.all([
+        listMyBookings(),
+        userId ? listHostableBookings(userId) : Promise.resolve([]),
+      ]);
+      setBookings(myBookings);
+      setHostableIds(new Set(hostable.filter((b) => !b.existingEventId).map((b) => b.bookingId)));
       setError(false);
     } catch {
       setError(true);
       setBookings((prev) => prev ?? []);
     }
-  }, []);
+  }, [userId]);
 
   // Refetch every time the tab gains focus — a booking made moments ago
   // on the venue screen should already be here when the user lands.
@@ -127,6 +145,8 @@ export default function BookingsScreen() {
           renderItem={({ item }) => {
             const badge = statusBadge(item.status);
             const timezone = item.courts?.venues?.timezone ?? 'Asia/Manila';
+            const hostable = hostableIds.has(item.id);
+            const expanded = expandedId === item.id;
             return (
               <Pressable
                 accessibilityRole="button"
@@ -143,15 +163,41 @@ export default function BookingsScreen() {
                   <ThemedText type="smallBold" numberOfLines={1} style={styles.cardTitle}>
                     {item.courts?.venues?.name ?? 'Venue'} · {item.courts?.name ?? 'Court'}
                   </ThemedText>
-                  <Badge label={badge.label} tone={badge.tone} />
+                  <View style={styles.cardTopRight}>
+                    <Badge label={badge.label} tone={badge.tone} />
+                    {hostable ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={expanded ? 'Hide actions' : 'Show actions'}
+                        onPress={() => setExpandedId(expanded ? null : item.id)}
+                        hitSlop={8}>
+                        <Ionicons
+                          name={expanded ? 'chevron-up' : 'chevron-down'}
+                          size={18}
+                          color={theme.mutedForeground}
+                        />
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </View>
                 <ThemedText type="small" themeColor="subtle">
                   {formatBookingWindow(item.start_time, item.end_time, timezone)}
                 </ThemedText>
-                <View style={styles.cardBottom}>
+                <View style={[styles.cardBottom, { borderTopColor: theme.hairline }]}>
                   <ThemedText type="caption">Code {item.confirmation_code}</ThemedText>
                   <ThemedText type="smallBold">{formatCentavos(item.price_amount)}</ThemedText>
                 </View>
+
+                {hostable && expanded ? (
+                  <View style={styles.expanded}>
+                    <Button
+                      title="Start Game"
+                      onPress={() =>
+                        router.push({ pathname: '/events/new', params: { bookingId: item.id } })
+                      }
+                    />
+                  </View>
+                ) : null}
               </Pressable>
             );
           }}
@@ -194,15 +240,25 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   card: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius['2xl'],
     borderWidth: 1,
     padding: Spacing.three,
     gap: Spacing.one,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  cardTopRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
   },
   cardTitle: {
@@ -212,6 +268,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Spacing.half,
+    marginTop: Spacing.two,
+    paddingTop: Spacing.two,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+  },
+  expanded: {
+    marginTop: Spacing.two,
   },
 });

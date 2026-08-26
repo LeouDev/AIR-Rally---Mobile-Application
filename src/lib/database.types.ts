@@ -301,6 +301,33 @@ export type ReportReason =
 
 export type ReportStatus = 'open' | 'reviewed' | 'dismissed';
 
+/**
+ * Support requests. Same migration as reports above
+ * (20260810000049_reports_support_rate_limits.sql), plus resolution_note
+ * from 20260810000088. Category is NOT NULL with a CHECK, so a client
+ * cannot omit it — the web's form asks for it and so must this one.
+ */
+export type SupportCategory = 'booking' | 'payment' | 'account' | 'venue' | 'safety' | 'bug' | 'other';
+
+export type SupportStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+export type SupportRequest = {
+  id: string;
+  user_id: string;
+  category: SupportCategory;
+  subject: string;
+  message: string;
+  status: SupportStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  /** The single admin reply. Required once status reaches resolved or
+   * closed (support_resolution_complete), cleared again on reopen — so
+   * "has a reply" and "is closed" always agree. */
+  resolution_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Report = {
   id: string;
   reporter_id: string;
@@ -467,8 +494,6 @@ export type RankedTier = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** 1–5, the star within a tier — 1-indexed, never 0. */
 export type RankedPips = 1 | 2 | 3 | 4 | 5;
 export type RankedMatchType = 'singles' | 'doubles';
-/** player_ranks.mode reuses this — a player's rating is tracked once per mode, independently. */
-export type RankedMode = RankedMatchType;
 export type RankedMatchWeightType = 'self_reported_rec' | 'club' | 'league' | 'tournament' | 'air_rally_ranked';
 export type RankedTeam = 'a' | 'b';
 export type RankedMatchStatus =
@@ -494,8 +519,6 @@ export type RankedSeason = {
 export type PlayerRank = {
   season_id: number;
   user_id: string;
-  /** Which of a player's two independent ratings this row is — singles and doubles never cross-pollinate. */
-  mode: RankedMode;
   /** DUPR-inspired AAR. Meaningful from day one, but hidden from the player until is_calibrated. Starts at 1000. */
   rating: number;
   /** Stateless — derived from `rating` every time it changes, never independently incremented. */
@@ -558,8 +581,10 @@ export type RankedMatchPlayer = {
   user_id: string;
   team: RankedTeam;
   is_host: boolean;
-  /** Denormalized from the match at creation time — which of the player's two ratings this row moves. */
-  mode: RankedMode | null;
+  /** Denormalized from the match's own match_type at creation time. A
+   * team-size record, same as the match's — every player shares one
+   * rating now, so this no longer selects between two of them. */
+  mode: RankedMatchType | null;
   ready: boolean;
   ready_at: string | null;
   /** Null means "hasn't answered", not the same as voting no. */
@@ -596,10 +621,23 @@ export type RankedMatchPoint = {
   recorded_at: string;
 };
 
-/** Calibrated players only. One leaderboard per mode; position is ranked within (season_id, mode). */
+/**
+ * Every CONFIRMED match a player has been in, rated or not — the
+ * broader number behind "total wins including normal games". Distinct
+ * from PlayerRank.wins/losses, which stay ranked-only because they
+ * feed the rating: a casual result moves this and not that. Disputed
+ * matches never reach 'confirmed', so they're excluded automatically.
+ */
+export type PlayerMatchTotals = {
+  user_id: string;
+  total_matches: number;
+  wins: number;
+  losses: number;
+};
+
+/** Calibrated players only. One leaderboard per season; position is ranked within season_id. */
 export type RankedLeaderboardRow = {
   season_id: number;
-  mode: RankedMode;
   user_id: string;
   display_name: string | null;
   avatar_url: string | null;
@@ -680,6 +718,20 @@ export type Database = {
         never
       >;
 
+      /* Insert-only from a client, same posture as reports: status and
+         the resolution columns belong to the admin queue, and RLS gives
+         no client an update path to them. */
+      support_requests: TableDef<
+        SupportRequest,
+        {
+          user_id: string;
+          category: SupportCategory;
+          subject: string;
+          message: string;
+        },
+        never
+      >;
+
       /* Insert-only / delete-only from a client — RLS on user_blocks
          scopes both to blocker_id = auth.uid(). No client update path;
          a block is either in force or removed, never edited. */
@@ -755,6 +807,7 @@ export type Database = {
       ranked_match_players: TableDef<RankedMatchPlayer, never, never>;
       ranked_match_points: TableDef<RankedMatchPoint, never, never>;
       ranked_leaderboard: TableDef<RankedLeaderboardRow, never, never>;
+      player_match_totals: TableDef<PlayerMatchTotals, never, never>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -823,14 +876,14 @@ export type Database = {
         Args: Record<string, never>;
         Returns: number | null;
       };
-      /** Idempotent. Creates the caller's standing for the open season, in the given mode, if they have none yet. */
+      /** Idempotent. Creates the caller's standing for the open season, if they have none yet. */
       ensure_my_player_rank: {
-        Args: { p_mode: RankedMode };
+        Args: Record<string, never>;
         Returns: undefined;
       };
-      /** Widest AAR gap among the calibrated players in a proposed party, for the given mode. Ranked parties must stay within 250 AAR of each other. */
+      /** Widest AAR gap among the calibrated players in a proposed party. Ranked parties must stay within 250 AAR of each other. */
       ranked_party_spread: {
-        Args: { p_user_ids: string[]; p_mode: RankedMode };
+        Args: { p_user_ids: string[] };
         Returns: number;
       };
       /** Returns the new match's id. The caller must be one of the players. */

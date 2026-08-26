@@ -1,8 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { RankBadge } from '@/components/ranked/rank-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Badge } from '@/components/ui/badge';
@@ -10,14 +12,26 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { RankedMode } from '@/lib/database.types';
-import { listRecentMatches, type RankedMatchSummary } from '@/lib/ranked';
+import type { PlayerRank } from '@/lib/database.types';
+import {
+  calibrationState,
+  formatRating,
+  formatWinRate,
+  getPlayerRank,
+  listRecentMatches,
+  rankLabel,
+  type RankedMatchSummary,
+} from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
-const MODE_OPTIONS: { value: RankedMode; label: string }[] = [
-  { value: 'singles', label: 'Singles' },
-  { value: 'doubles', label: 'Doubles' },
-];
+/** A PlayerRank row exists the instant a player's first ranked match is
+ * created, so `rank === null` only ever means "has never opened Ranked
+ * at all" — display-wise that's indistinguishable from 0 of 10
+ * calibration matches played, not a separate empty state. */
+const NEVER_PLAYED: Pick<PlayerRank, 'is_calibrated' | 'calibration_matches'> = {
+  is_calibrated: false,
+  calibration_matches: 0,
+};
 
 function opponentNames(summary: RankedMatchSummary): string {
   const names = summary.opponents.map((p) => p.display_name ?? 'Player');
@@ -39,29 +53,34 @@ function formatMatchDate(iso: string | null): string {
 }
 
 /**
- * The signed-in player's own confirmed ranked results — account-scoped,
- * unlike the public leaderboard. listRecentMatches() already filters to
- * status='confirmed' (an unresolved dispute never moved anything, so it
- * has no place in a results history) and to one mode at a time.
+ * The signed-in player's own AIR/Rally Ranked record: a stats card
+ * (wins/losses/win rate/rank/AAR, or calibration progress while
+ * unplaced) over their confirmed results, most recent first.
+ * listRecentMatches() already filters to status='confirmed' (an
+ * unresolved dispute never moved anything, so it has no place in a
+ * results history). Singles and doubles share one rating now, so this
+ * is one unified list — no mode toggle.
  */
-export default function RankedHistoryScreen() {
+export default function GamesScreen() {
   const theme = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
 
-  const [mode, setMode] = useState<RankedMode>('singles');
+  const [rank, setRank] = useState<PlayerRank | null | undefined>(undefined);
   const [matches, setMatches] = useState<RankedMatchSummary[] | null>(null);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     if (!userId) return;
     try {
-      setMatches(await listRecentMatches(userId, mode, 20));
+      const [rankRow, matchRows] = await Promise.all([getPlayerRank(userId), listRecentMatches(userId, 20)]);
+      setRank(rankRow);
+      setMatches(matchRows);
       setError(false);
     } catch {
       setError(true);
     }
-  }, [userId, mode]);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -69,16 +88,9 @@ export default function RankedHistoryScreen() {
     }, [load])
   );
 
-  const selectMode = (next: RankedMode) => {
-    if (next === mode) return;
-    setMode(next);
-    setMatches(null);
-    setError(false);
-  };
-
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: 'Ranked history', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Games', headerBackButtonDisplayMode: 'minimal' }} />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <FlatList
           data={matches ?? []}
@@ -86,10 +98,14 @@ export default function RankedHistoryScreen() {
           contentContainerStyle={styles.list}
           ListHeaderComponent={
             <View style={styles.header}>
+              {rank === undefined ? (
+                <Skeleton height={168} radius={Radius.xl} />
+              ) : (
+                <GamesStatsCard rank={rank} />
+              )}
               <ThemedText type="small" themeColor="subtle">
                 Confirmed ranked results, most recent first.
               </ThemedText>
-              <ModeToggle mode={mode} onChange={selectMode} />
             </View>
           }
           ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}
@@ -124,32 +140,85 @@ export default function RankedHistoryScreen() {
   );
 }
 
-/** Singles/Doubles segmented toggle — matches the leaderboard screen's
- * toggle exactly (same visual language as booking-panel's
- * DurationSegmented: muted track, navy fill on the active segment). */
-function ModeToggle({ mode, onChange }: { mode: RankedMode; onChange: (mode: RankedMode) => void }) {
+/** Wins/losses/win rate/rank/AAR for a calibrated player; calibration
+ * progress otherwise — the same is_calibrated split RankCard uses on
+ * Profile, just with the fuller stat set this screen's the home for. */
+function GamesStatsCard({ rank }: { rank: PlayerRank | null }) {
   const theme = useTheme();
+
+  if (!rank?.is_calibrated) {
+    const calibration = calibrationState(rank ?? NEVER_PLAYED);
+    return (
+      <View style={[styles.statsCard, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
+        <ThemedText type="caption" style={[styles.eyebrow, { color: theme.primary }]}>
+          Calibrating
+        </ThemedText>
+        <ThemedText type="subtitle" style={{ color: theme.navyForeground }}>
+          {calibration.played} of {calibration.total} calibration matches played
+        </ThemedText>
+        <View style={styles.calibrationTrack}>
+          {Array.from({ length: calibration.total }, (_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.calibrationSegment,
+                { backgroundColor: i < calibration.played ? theme.primary : `${theme.navyForeground}33` },
+              ]}
+            />
+          ))}
+        </View>
+        <ThemedText type="caption" style={{ color: `${theme.navyForeground}CC` }}>
+          Your tier stays hidden until match {calibration.total}. Results still count — they place you.
+        </ThemedText>
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.segmented, { backgroundColor: theme.muted, borderColor: theme.input }]}>
-      {MODE_OPTIONS.map((option) => {
-        const active = option.value === mode;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.segment,
-              active && { backgroundColor: theme.navy },
-              pressed && { opacity: 0.85 },
-            ]}>
-            <ThemedText type="smallBold" style={{ color: active ? theme.navyForeground : theme.mutedForeground }}>
-              {option.label}
+    <View style={[styles.statsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View style={styles.statsTop}>
+        <RankBadge tier={rank.tier} size={48} />
+        <View style={styles.statsIdentity}>
+          <ThemedText type="caption" themeColor="mutedForeground">
+            AIR/Rally Rating
+          </ThemedText>
+          <ThemedText type="heading">{formatRating(rank.rating)}</ThemedText>
+          <View style={styles.rankPill}>
+            <Ionicons name="star" size={12} color={theme.primary} />
+            <ThemedText type="caption" style={{ color: theme.primary }}>
+              {rankLabel(rank.tier, rank.pips)}
             </ThemedText>
-          </Pressable>
-        );
-      })}
+          </View>
+        </View>
+      </View>
+
+      {/* Explicitly "Ranked" — Profile shows a total-wins number that
+          counts casual results too, so an unlabelled "Wins" here would
+          read as the same figure disagreeing with itself. These three
+          are the ranked record specifically: they're what the rating
+          above them is computed from. */}
+      <View style={[styles.statsRow, { borderTopColor: theme.hairline }]}>
+        <View style={styles.statCell}>
+          <ThemedText type="caption" themeColor="mutedForeground">
+            Ranked wins
+          </ThemedText>
+          <ThemedText type="subtitle">{rank.wins}</ThemedText>
+        </View>
+        <View style={styles.statCell}>
+          <ThemedText type="caption" themeColor="mutedForeground">
+            Ranked losses
+          </ThemedText>
+          <ThemedText type="subtitle">{rank.losses}</ThemedText>
+        </View>
+        <View style={styles.statCell}>
+          <ThemedText type="caption" themeColor="mutedForeground">
+            Win Rate
+          </ThemedText>
+          <ThemedText type="subtitle" themeColor="primary">
+            {formatWinRate(rank)}
+          </ThemedText>
+        </View>
+      </View>
     </View>
   );
 }
@@ -202,18 +271,6 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     marginBottom: Spacing.three,
   },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    padding: 3,
-    alignSelf: 'flex-start',
-  },
-  segment: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Radius.pill,
-  },
   skeletons: {
     gap: Spacing.three,
   },
@@ -243,5 +300,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: Spacing.half,
+  },
+  statsCard: {
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    padding: Spacing.four,
+    gap: Spacing.three,
+  },
+  statsTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  statsIdentity: {
+    flex: 1,
+    gap: 2,
+  },
+  rankPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+    marginTop: Spacing.half,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    paddingTop: Spacing.three,
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  eyebrow: {
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  calibrationTrack: {
+    flexDirection: 'row',
+    gap: 3,
+    height: 6,
+  },
+  calibrationSegment: {
+    flex: 1,
+    borderRadius: 2,
   },
 });

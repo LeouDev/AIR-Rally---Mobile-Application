@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TextField } from '@/components/ui/text-field';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -20,46 +21,6 @@ import { getPublicProfile } from '@/lib/follows';
 import { useSession } from '@/providers/session';
 
 type GameMode = 'casual' | 'ranked';
-
-/**
- * The two-state "which kind of game" and "singles or doubles" pickers,
- * same visual language as booking-picker.tsx's DurationSegmented — a
- * bordered, muted-fill row with a navy pill for the active option.
- */
-function SegmentedControl<T extends string>({
-  options,
-  selected,
-  onSelect,
-}: {
-  options: readonly { value: T; label: string }[];
-  selected: T;
-  onSelect: (value: T) => void;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.segmented, { backgroundColor: theme.muted, borderColor: theme.input }]}>
-      {options.map((option) => {
-        const isSelected = option.value === selected;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isSelected }}
-            onPress={() => onSelect(option.value)}
-            style={({ pressed }) => [
-              styles.segment,
-              isSelected && { backgroundColor: theme.navy },
-              pressed && { opacity: 0.85 },
-            ]}>
-            <ThemedText type="smallBold" style={{ color: isSelected ? theme.navyForeground : theme.mutedForeground }}>
-              {option.label}
-            </ThemedText>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-PH', {
@@ -75,6 +36,10 @@ export default function NewOpenPlayScreen() {
   const theme = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
+  // Set when a booking card's own "Start Game" already knows which
+  // booking it means — falls back to the first available one below
+  // when absent (reached generically, e.g. from the Play tab).
+  const { bookingId: requestedBookingId } = useLocalSearchParams<{ bookingId?: string }>();
 
   const [bookings, setBookings] = useState<HostableBooking[] | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
@@ -97,11 +62,14 @@ export default function NewOpenPlayScreen() {
     listHostableBookings(userId)
       .then((rows) => {
         setBookings(rows);
+        const requested = requestedBookingId
+          ? rows.find((b) => b.bookingId === requestedBookingId && !b.existingEventId)
+          : undefined;
         const firstAvailable = rows.find((b) => !b.existingEventId);
-        setBookingId(firstAvailable?.bookingId ?? null);
+        setBookingId(requested?.bookingId ?? firstAvailable?.bookingId ?? null);
       })
       .catch(() => setBookings([]));
-  }, [userId]);
+  }, [userId, requestedBookingId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -409,18 +377,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
-  },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: 3,
-  },
-  segment: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: Radius.lg - 3,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

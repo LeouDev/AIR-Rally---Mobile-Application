@@ -1,6 +1,6 @@
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RankBadge } from '@/components/ranked/rank-badge';
@@ -9,14 +9,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import type { RankedLeaderboardRow, RankedMode } from '@/lib/database.types';
+import type { RankedLeaderboardRow } from '@/lib/database.types';
 import { formatRating, getLeaderboardEntry, listLeaderboard, pipNumeral } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
-
-const MODE_OPTIONS: { value: RankedMode; label: string }[] = [
-  { value: 'singles', label: 'Singles' },
-  { value: 'doubles', label: 'Doubles' },
-];
 
 /**
  * Standings for the open season — public, same posture as the web's
@@ -29,7 +24,6 @@ export default function LeaderboardScreen() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
 
-  const [mode, setMode] = useState<RankedMode>('singles');
   const [leaders, setLeaders] = useState<RankedLeaderboardRow[] | null>(null);
   const [myEntry, setMyEntry] = useState<RankedLeaderboardRow | null>(null);
   const [error, setError] = useState(false);
@@ -38,8 +32,8 @@ export default function LeaderboardScreen() {
   const load = useCallback(async () => {
     try {
       const [leaderRows, entry] = await Promise.all([
-        listLeaderboard(mode, 25),
-        userId ? getLeaderboardEntry(userId, mode) : Promise.resolve(null),
+        listLeaderboard(25),
+        userId ? getLeaderboardEntry(userId) : Promise.resolve(null),
       ]);
       setLeaders(leaderRows);
       setMyEntry(entry);
@@ -48,24 +42,13 @@ export default function LeaderboardScreen() {
       setError(true);
       setLeaders((prev) => prev ?? []);
     }
-  }, [mode, userId]);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load])
   );
-
-  // A mode switch is a deliberate tap, not a background refresh — clear
-  // the stale list so the skeleton shows rather than flashing the other
-  // mode's rows under the newly-selected tab for a beat.
-  const selectMode = (next: RankedMode) => {
-    if (next === mode) return;
-    setMode(next);
-    setLeaders(null);
-    setMyEntry(null);
-    setError(false);
-  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -89,7 +72,6 @@ export default function LeaderboardScreen() {
               <ThemedText type="small" themeColor="subtle">
                 Standings for the current season.
               </ThemedText>
-              <ModeToggle mode={mode} onChange={selectMode} />
               {error ? (
                 <ThemedText type="small" themeColor="destructive">
                   Couldn&apos;t refresh. Pull to retry.
@@ -136,37 +118,6 @@ export default function LeaderboardScreen() {
         />
       </SafeAreaView>
     </ThemedView>
-  );
-}
-
-/** Singles/Doubles segmented toggle — same visual language as the
- * booking panel's DurationSegmented (muted track, navy fill on the
- * active segment). A player's AAR is tracked once per mode, so every
- * read on this screen is scoped to whichever one is selected. */
-function ModeToggle({ mode, onChange }: { mode: RankedMode; onChange: (mode: RankedMode) => void }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.segmented, { backgroundColor: theme.muted, borderColor: theme.input }]}>
-      {MODE_OPTIONS.map((option) => {
-        const active = option.value === mode;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.segment,
-              active && { backgroundColor: theme.navy },
-              pressed && { opacity: 0.85 },
-            ]}>
-            <ThemedText type="smallBold" style={{ color: active ? theme.navyForeground : theme.mutedForeground }}>
-              {option.label}
-            </ThemedText>
-          </Pressable>
-        );
-      })}
-    </View>
   );
 }
 
@@ -244,18 +195,6 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.three,
     marginBottom: Spacing.one,
-  },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    padding: 3,
-    alignSelf: 'flex-start',
-  },
-  segment: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Radius.pill,
   },
   columnHeader: {
     flexDirection: 'row',

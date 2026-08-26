@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Image } from 'expo-image';
-import * as Sharing from 'expo-sharing';
 import { useRef, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
@@ -16,6 +15,7 @@ import type { EventAttendeeStatus, PublicProfile } from '@/lib/database.types';
 import { formatRelativeTime } from '@/lib/relative-time';
 import { postImagePublicUrl } from '@/lib/post-images';
 import type { PostWithAuthor } from '@/lib/posts';
+import { shareCard } from '@/lib/share';
 
 function formatEventWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -243,27 +243,29 @@ export function PostCard({
   const isOwn = post.user_id === currentUserId;
   const shareCardRef = useRef<View>(null);
 
+  const shareMessage = post.author?.display_name
+    ? `${post.author.display_name} on AIR/Rally COURT/Side.`
+    : 'From AIR/Rally COURT/Side.';
+
   const handleExternalShare = async () => {
-    // The branded card first — captures the always-mounted, off-screen
-    // ShareCard (see its own comment) and attaches the actual image, not
-    // just a link, to whatever app the sheet's target is.
+    // No `url` passed, deliberately. This used to send
+    // `air-rally.com/court-side/${post.id}` — a POST id in a route that
+    // takes a USER id (/court-side/[userId] is a player's My/Rally page,
+    // and is itself sign-in gated), so the link could never resolve for
+    // anyone. There is no public post permalink on the web at all yet;
+    // creating one is a public/private decision on post data, not a
+    // mobile fix. Sending no link is honest, a dead link isn't — so the
+    // link is gone until a real page exists to point at.
     try {
       const uri = await captureRef(shareCardRef, { format: 'png', quality: 1, width: 1080, height: 1920 });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share to AIR/Rally', UTI: 'public.png' });
-        return;
-      }
+      await shareCard({ fileUri: uri, message: shareMessage });
+      return;
     } catch {
-      // Capture failed or sharing isn't available on this device — fall
-      // through to a plain link rather than the share button doing
-      // nothing at all.
+      // Capture failed — fall through to the text alone rather than the
+      // share button doing nothing at all.
     }
     try {
-      const postUrl = `https://air-rally.com/court-side/${post.id}`;
-      await Share.share({
-        message: `Check out this post on AIR/Rally: ${postUrl}`,
-        url: postUrl,
-      });
+      await Share.share({ message: shareMessage });
     } catch {
       // Share sheet dismissed or unavailable — not an error.
     }

@@ -15,6 +15,10 @@ import { listMyEventStatuses, listUpcomingEvents, type EventWithDetails } from '
 import type { EventAttendeeStatus } from '@/lib/database.types';
 import { useSession } from '@/providers/session';
 
+/** Above this, individual slot dots stop reading as a roster and start
+ * reading as noise — the "X/Y playing" text alone carries it better. */
+const CAPACITY_DOT_LIMIT = 8;
+
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-PH', {
     weekday: 'short',
@@ -81,9 +85,14 @@ export default function PlayScreen() {
                   { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.92 : 1 },
                 ]}>
                 <View style={styles.cardHeader}>
-                  <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>
-                    {item.title}
-                  </ThemedText>
+                  <View style={styles.titleBlock}>
+                    <ThemedText type="caption" themeColor="primary" style={styles.eyebrow}>
+                      Open Play
+                    </ThemedText>
+                    <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>
+                      {item.title}
+                    </ThemedText>
+                  </View>
                   {status === 'joined' ? <Badge label="You're in" tone="success" /> : null}
                   {status === 'waitlisted' ? <Badge label="Waitlisted" tone="warning" /> : null}
                   {status === 'pending_approval' ? <Badge label="Requested" tone="neutral" /> : null}
@@ -97,20 +106,40 @@ export default function PlayScreen() {
                     {[item.venue.name, item.venue.city].filter(Boolean).join(', ')}
                   </ThemedText>
                 ) : null}
-                <ThemedText type="small" themeColor="subtle">
-                  {item.attendeeCount}
-                  {item.max_players ? ` / ${item.max_players}` : ''} playing
-                  {item.isFull ? ' · full' : ''}
-                </ThemedText>
 
-                {item.price_amount > 0 ? (
-                  <ThemedText type="small">
-                    <ThemedText type="smallBold">{formatShare(split.sharePerPlayer)}</ThemedText>{' '}
-                    <ThemedText type="small" themeColor="mutedForeground">
-                      each if split {split.playerCount} ways
+                <View style={[styles.stub, { borderTopColor: theme.hairline }]}>
+                  <View style={styles.slotsRow}>
+                    {item.max_players && item.max_players <= CAPACITY_DOT_LIMIT ? (
+                      <View style={styles.slotDots}>
+                        {Array.from({ length: item.max_players }, (_, i) => (
+                          <View
+                            key={i}
+                            style={[
+                              styles.slotDot,
+                              i < item.attendeeCount
+                                ? { backgroundColor: theme.primary }
+                                : { borderColor: theme.border, borderWidth: 1.5 },
+                            ]}
+                          />
+                        ))}
+                      </View>
+                    ) : null}
+                    <ThemedText type="small" themeColor="subtle">
+                      {item.attendeeCount}
+                      {item.max_players ? ` / ${item.max_players}` : ''} playing
+                      {item.isFull ? ' · full' : ''}
                     </ThemedText>
-                  </ThemedText>
-                ) : null}
+                  </View>
+
+                  {item.price_amount > 0 ? (
+                    <ThemedText type="small">
+                      <ThemedText type="smallBold">{formatShare(split.sharePerPlayer)}</ThemedText>{' '}
+                      <ThemedText type="small" themeColor="mutedForeground">
+                        each
+                      </ThemedText>
+                    </ThemedText>
+                  ) : null}
+                </View>
               </Pressable>
             );
           }}
@@ -176,19 +205,58 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   card: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius['2xl'],
     borderWidth: 1,
     padding: Spacing.four,
     gap: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  titleBlock: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  eyebrow: {
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  title: {
+    flexShrink: 1,
+  },
+  stub: {
+    marginTop: Spacing.one,
+    paddingTop: Spacing.two,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
   },
-  title: {
+  slotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
     flexShrink: 1,
+  },
+  slotDots: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  slotDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   skeletons: {
     gap: Spacing.three,

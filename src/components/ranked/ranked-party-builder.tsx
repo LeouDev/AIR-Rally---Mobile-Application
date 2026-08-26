@@ -13,6 +13,13 @@ import type { PlayerRank, PublicProfile, RankedMatchType, RankedTeam } from '@/l
 import { searchPublicProfiles } from '@/lib/follows';
 import { createRankedMatch, getPlayerRank, partyEligibilityDisplay, RankedError, rankLabel } from '@/lib/ranked';
 
+/** searchPublicProfiles() runs a leading-wildcard ILIKE, which can't use
+ * an index and forces a scan — firing it on every keystroke turns a
+ * short name into several overlapping full scans. This batches
+ * keystrokes into one search after typing pauses; requestSeq (below)
+ * still decides which response wins once it fires. */
+const SEARCH_DEBOUNCE_MS = 300;
+
 type Slot = {
   key: string;
   team: RankedTeam;
@@ -45,13 +52,13 @@ function slotsFor(matchType: RankedMatchType, host: PublicProfile): Slot[] {
  * Team assignment happens here, at setup — this is a challenge-your-
  * friends flow, not a public queue.
  *
- * Singles and doubles are independent ratings, so every fetched
- * `PlayerRank` — including the host's — is specific to the current
- * `matchType`. The parent screen owns the singles/doubles toggle and
- * remounts this component on change (`key={matchType}`), which is what
- * clears every non-host slot and the whole rank cache — the RN
- * equivalent of the web reference's switchType(), without an effect
- * that resets state synchronously on every prop change.
+ * `matchType` only picks a team size (2 slots vs. 4) — singles and
+ * doubles share one rating, so a fetched `PlayerRank` is never mode-
+ * specific. The parent screen still owns the singles/doubles toggle and
+ * remounts this component on change (`key={matchType}`), which clears
+ * every non-host slot for the new slot count — the RN equivalent of the
+ * web reference's switchType(), without an effect that resets state
+ * synchronously on every prop change.
  *
  * Does not navigate on success — `onCreated(matchId)` hands that back
  * to the caller, which has its own flow to finish first (see
@@ -75,15 +82,35 @@ export function RankedPartyBuilder({
 
   const [slots, setSlots] = useState<Slot[]>(() => slotsFor(matchType, host));
   const [ranks, setRanks] = useState<Map<string, PlayerRank>>(new Map());
+  // Which empty slot's own placeholder currently holds the search
+  // field — never more than one at a time. The query/results belong to
+  // this slot specifically, not the party as a whole, so switching
+  // (or filling, or collapsing) it clears both.
+  const [activeSlotKey, setActiveSlotKey] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PublicProfile[]>([]);
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const requestSeq = useRef(0);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const activeInputRef = useRef<TextInput>(null);
 
-  async function fetchRank(userId: string, mode: RankedMatchType) {
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
+  // Autofocus the moment a slot's search field appears — the whole
+  // point of moving it into the slot is that tapping the slot is the
+  // only gesture needed before typing.
+  useEffect(() => {
+    if (activeSlotKey) activeInputRef.current?.focus();
+  }, [activeSlotKey]);
+
+  async function fetchRank(userId: string) {
     try {
-      const rank = await getPlayerRank(userId, mode);
+      const rank = await getPlayerRank(userId);
       if (rank) {
         setRanks((prev) => new Map(prev).set(userId, rank));
       } else {
@@ -100,14 +127,14 @@ export function RankedPartyBuilder({
   }
 
   // The one thing this mount still needs from the network: the host's
-  // own rank for this matchType. (The parent remounts this whole
-  // component on a matchType switch, so there is no reset to do here —
-  // every other piece of state above already starts fresh.)
+  // own rank. (The parent remounts this whole component on a matchType
+  // switch, so there is no reset to do here — every other piece of
+  // state above already starts fresh.)
   useEffect(() => {
     let cancelled = false;
     async function loadHostRank() {
       try {
-        const rank = await getPlayerRank(host.id, matchType);
+        const rank = await getPlayerRank(host.id);
         if (!cancelled && rank) setRanks((prev) => new Map(prev).set(host.id, rank));
       } catch {
         // The lookup failed — the eligibility preview just treats the
@@ -121,13 +148,7 @@ export function RankedPartyBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleQueryChange(value: string) {
-    setQuery(value);
-    if (value.trim().length < 2) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
+  function runSearch(value: string) {
     const seq = ++requestSeq.current;
     setSearching(true);
     searchPublicProfiles(value, 8)
@@ -141,17 +162,38 @@ export function RankedPartyBuilder({
       });
   }
 
-  function fillNextSlot(player: PublicProfile) {
-    const openIndex = slots.findIndex((s) => !s.isHost && !s.player);
-    if (openIndex === -1) return;
-    setSlots((prev) => prev.map((s, i) => (i === openIndex ? { ...s, player } : s)));
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (value.trim().length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    debounceTimer.current = setTimeout(() => runSearch(value), SEARCH_DEBOUNCE_MS);
+  }
+
+  function fillSlot(key: string, player: PublicProfile) {
+    setSlots((prev) => prev.map((s) => (s.key === key ? { ...s, player } : s)));
+    setActiveSlotKey(null);
     setQuery('');
     setResults([]);
-    void fetchRank(player.id, matchType);
+    void fetchRank(player.id);
   }
 
   function clearSlot(key: string) {
     setSlots((prev) => prev.map((s) => (s.key === key ? { ...s, player: null } : s)));
+  }
+
+  /** Tapping an empty slot opens its own search field; tapping the
+   * same one again collapses it, same as any other disclosure. */
+  function toggleSlotSearch(key: string) {
+    const opening = activeSlotKey !== key;
+    setActiveSlotKey(opening ? key : null);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    setQuery('');
+    setResults([]);
+    setSearching(false);
   }
 
   const filledPlayers = slots.filter((s) => s.player).map((s) => s.player!);
@@ -190,8 +232,9 @@ export function RankedPartyBuilder({
           // that would tell this player a fake rank.
           const rank = slot.player ? ranks.get(slot.player.id) : undefined;
           const placed = rank?.is_calibrated ?? false;
-          return (
-            <View key={slot.key} style={[styles.slotRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          const active = activeSlotKey === slot.key;
+          const rowContent = (
+            <>
               <Avatar profile={slot.player} size={40} />
               {placed && rank ? <RankBadge tier={rank.tier} size={32} /> : null}
               <View style={styles.slotInfo}>
@@ -205,9 +248,22 @@ export function RankedPartyBuilder({
                       {placed && rank ? rankLabel(rank.tier, rank.pips) : 'Not yet placed'}
                     </ThemedText>
                   </>
+                ) : active ? (
+                  <View style={styles.inlineSearchWrap}>
+                    <TextInput
+                      ref={activeInputRef}
+                      value={query}
+                      onChangeText={handleQueryChange}
+                      placeholder={`Search for ${slot.roleLabel.toLowerCase()}`}
+                      placeholderTextColor={theme.placeholder}
+                      accessibilityLabel="Search players by name"
+                      style={[styles.inlineSearchInput, { color: theme.cardForeground }]}
+                    />
+                    {searching ? <ActivityIndicator size="small" color={theme.mutedForeground} /> : null}
+                  </View>
                 ) : (
                   <ThemedText type="small" themeColor="mutedForeground">
-                    Search below to fill this spot
+                    Tap to search for {slot.roleLabel.toLowerCase()}
                   </ThemedText>
                 )}
               </View>
@@ -223,56 +279,70 @@ export function RankedPartyBuilder({
                   hitSlop={8}>
                   <Ionicons name="close" size={18} color={theme.mutedForeground} />
                 </Pressable>
+              ) : active ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Stop searching for ${slot.roleLabel.toLowerCase()}`}
+                  onPress={() => toggleSlotSearch(slot.key)}
+                  hitSlop={8}>
+                  <Ionicons name="close" size={18} color={theme.mutedForeground} />
+                </Pressable>
               ) : (
                 <ThemedText type="caption" themeColor="mutedForeground" style={styles.roleLabel}>
                   {slot.roleLabel}
                 </ThemedText>
               )}
+            </>
+          );
+          return (
+            <View key={slot.key}>
+              {slot.isHost || slot.player || active ? (
+                <View
+                  style={[
+                    styles.slotRow,
+                    { backgroundColor: theme.card, borderColor: active ? theme.primary : theme.border },
+                  ]}>
+                  {rowContent}
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Search for ${slot.roleLabel.toLowerCase()}`}
+                  onPress={() => toggleSlotSearch(slot.key)}
+                  style={({ pressed }) => [
+                    styles.slotRow,
+                    { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+                  ]}>
+                  {rowContent}
+                </Pressable>
+              )}
+
+              {active ? (
+                results.length > 0 ? (
+                  <View style={[styles.results, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    {results.map((player) => (
+                      <Pressable
+                        key={player.id}
+                        accessibilityRole="button"
+                        onPress={() => fillSlot(slot.key, player)}
+                        style={({ pressed }) => [styles.resultRow, pressed && { opacity: 0.7 }]}>
+                        <Avatar profile={player} size={28} />
+                        <ThemedText type="small" numberOfLines={1} style={styles.resultName}>
+                          {player.display_name}
+                        </ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : query.trim().length >= 2 && !searching ? (
+                  <ThemedText type="caption" themeColor="mutedForeground" style={styles.noResults}>
+                    No players found. They need an AIR/Rally account first.
+                  </ThemedText>
+                ) : null
+              ) : null}
             </View>
           );
         })}
       </View>
-
-      {!allFilled ? (
-        <View style={styles.searchBlock}>
-          <View style={styles.searchWrap}>
-            <Ionicons name="search" size={16} color={theme.mutedForeground} style={styles.searchIcon} />
-            <TextInput
-              value={query}
-              onChangeText={handleQueryChange}
-              placeholder="Search players by name"
-              placeholderTextColor={theme.placeholder}
-              accessibilityLabel="Search players by name"
-              style={[
-                styles.input,
-                { backgroundColor: theme.card, borderColor: theme.input, color: theme.cardForeground },
-              ]}
-            />
-            {searching ? <ActivityIndicator style={styles.spinner} color={theme.mutedForeground} /> : null}
-          </View>
-
-          {results.length > 0 ? (
-            <View style={[styles.results, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              {results.map((player) => (
-                <Pressable
-                  key={player.id}
-                  accessibilityRole="button"
-                  onPress={() => fillNextSlot(player)}
-                  style={({ pressed }) => [styles.resultRow, pressed && { opacity: 0.7 }]}>
-                  <Avatar profile={player} size={28} />
-                  <ThemedText type="small" numberOfLines={1} style={styles.resultName}>
-                    {player.display_name}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-          ) : query.trim().length >= 2 && !searching ? (
-            <ThemedText type="caption" themeColor="mutedForeground">
-              No players found. They need an AIR/Rally account first.
-            </ThemedText>
-          ) : null}
-        </View>
-      ) : null}
 
       {allFilled && !eligibility.eligible ? (
         <View style={[styles.card, { backgroundColor: theme.destructiveSoft, borderColor: theme.destructiveSoft }]}>
@@ -346,31 +416,22 @@ const styles = StyleSheet.create({
   roleLabel: {
     letterSpacing: 0.5,
   },
-  searchBlock: {
+  inlineSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
   },
-  searchWrap: {
-    position: 'relative',
-    justifyContent: 'center',
+  inlineSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    padding: 0,
   },
-  searchIcon: {
-    position: 'absolute',
-    left: Spacing.three,
-    zIndex: 1,
-  },
-  input: {
-    minHeight: 48,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    paddingLeft: Spacing.four + Spacing.two,
-    paddingRight: Spacing.three,
-    fontSize: 16,
-  },
-  spinner: {
-    position: 'absolute',
-    right: Spacing.three,
+  noResults: {
+    marginTop: Spacing.one,
+    paddingHorizontal: Spacing.three,
   },
   results: {
+    marginTop: Spacing.one,
     borderRadius: Radius.md,
     borderWidth: 1,
     overflow: 'hidden',

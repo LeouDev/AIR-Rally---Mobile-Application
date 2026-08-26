@@ -95,4 +95,18 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget('/ranked')).toBe('/(tabs)/profile');
     expect(resolveNotificationTarget('/ranked?x=1')).toBe('/(tabs)/profile');
   });
+
+  // notify_on_support_resolution (20260810000088) stamps '/support' on
+  // every support reply. With no mapping this fell through to the Alerts
+  // tab — the screen the user was already on — so tapping the
+  // notification navigated successfully to nowhere and looked broken.
+  it('opens the support screen for a support reply, not the Alerts tab it came from', () => {
+    expect(resolveNotificationTarget('/support')).toBe('/support');
+  });
+
+  it('still lands somewhere real for a link this app genuinely has no screen for', () => {
+    // Clubs detail exists here, but an unmapped web-only surface must
+    // not resolve to a route that does not exist.
+    expect(resolveNotificationTarget('/admin/payouts/abc')).toBe('/(tabs)/notifications');
+  });
 });

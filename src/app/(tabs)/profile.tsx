@@ -21,6 +21,7 @@ import type { Profile } from '@/lib/database.types';
 import { getFollowCounts, type FollowCounts } from '@/lib/follows';
 import { updateProfile } from '@/lib/profile';
 import { getProfileStats, type ProfileStats } from '@/lib/profile-stats';
+import { getPlayerMatchTotals } from '@/lib/ranked';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/providers/session';
 
@@ -36,6 +37,10 @@ export default function ProfileScreen() {
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [followCounts, setFollowCounts] = useState<FollowCounts | null>(null);
+  // Across every confirmed match, casual included — not PlayerRank.wins,
+  // which is ranked-only. A player with no confirmed matches has no row
+  // in the view at all; that's zero wins, not a failure.
+  const [totalWins, setTotalWins] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -51,7 +56,8 @@ export default function ProfileScreen() {
       supabase.from('user_credit_wallets').select('balance').eq('user_id', userId).maybeSingle(),
       getProfileStats(userId),
       getFollowCounts(userId),
-    ]).then(([profileResult, walletResult, statsResult, followResult]) => {
+      getPlayerMatchTotals(userId),
+    ]).then(([profileResult, walletResult, statsResult, followResult, totalsResult]) => {
       let failed = false;
 
       if (profileResult.status === 'fulfilled') {
@@ -74,6 +80,10 @@ export default function ProfileScreen() {
       else failed = true;
 
       if (followResult.status === 'fulfilled') setFollowCounts(followResult.value);
+      else failed = true;
+
+      // No row means no confirmed matches — zero, not an error.
+      if (totalsResult.status === 'fulfilled') setTotalWins(totalsResult.value?.wins ?? 0);
       else failed = true;
 
       if (failed) show("Some profile info couldn't be loaded. Switch tabs and back to retry.", 'error');
@@ -188,8 +198,14 @@ export default function ProfileScreen() {
               ) : null}
 
               <View style={[styles.statsRow, { borderTopColor: theme.border }]}>
+                {/* Four fits, five collides — "Followers"/"Following"
+                    run together at this width. Reviews gives up the
+                    slot rather than Wins: Wins is what was actually
+                    asked for, and nothing on this screen links to a
+                    reviews list anyway. getProfileStats still returns
+                    reviewCount, so restoring it is a one-line change. */}
                 <StatItem label="Plays" value={stats?.tripCount} />
-                <StatItem label="Reviews" value={stats?.reviewCount} />
+                <StatItem label="Wins" value={totalWins ?? undefined} />
                 <StatItem label="Followers" value={followCounts?.followers} />
                 <StatItem label="Following" value={followCounts?.following} />
               </View>
@@ -261,10 +277,10 @@ export default function ProfileScreen() {
                 onPress={() => router.push('/clubs')}
               />
               <ShortcutCard
-                icon="calendar-outline"
-                title="Open Play"
-                subtitle="Join a game, or start one on a court you've booked."
-                onPress={() => router.push('/(tabs)/play')}
+                icon="trophy-outline"
+                title="Games"
+                subtitle="Your ranked record — wins, rank, and match history."
+                onPress={() => router.push('/ranked/games')}
               />
               <ShortcutCard
                 icon="list-outline"
@@ -295,6 +311,12 @@ export default function ProfileScreen() {
                 title="Find a court"
                 subtitle="Browse venues and book your next rally."
                 onPress={() => router.push('/(tabs)')}
+              />
+              <ShortcutCard
+                icon="help-buoy-outline"
+                title="Get help"
+                subtitle="Message support and track your requests."
+                onPress={() => router.push('/support')}
               />
               <ShortcutCard
                 icon="settings-outline"
