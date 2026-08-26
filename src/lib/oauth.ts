@@ -7,6 +7,25 @@ import { supabase } from '@/lib/supabase';
 
 export type OAuthProvider = 'google' | 'facebook';
 
+/**
+ * Facebook sign-in is HIDDEN, not removed.
+ *
+ * The Meta app is in Development mode with Business Verification still
+ * pending (as of 2026-08-27). In Development mode, Facebook Login only
+ * succeeds for accounts listed on the Meta app as an admin, developer or
+ * tester — everyone else gets an error. It tested clean because the
+ * person testing was an admin, which is exactly the shape of bug that
+ * survives testing and fails every real user.
+ *
+ * TO UN-HIDE: once Meta clears Business Verification and the app is
+ * switched to Live mode, flip this to true. Nothing else needs changing
+ * — the button, the provider plumbing and the callback handling are all
+ * still here and still wired up. Verify with a Facebook account that is
+ * NOT on the Meta app's roster, since an admin account cannot tell you
+ * whether this is fixed.
+ */
+export const FACEBOOK_SIGN_IN_ENABLED = false;
+
 export type OAuthResult =
   | { status: 'signed_in' }
   | { status: 'cancelled' }

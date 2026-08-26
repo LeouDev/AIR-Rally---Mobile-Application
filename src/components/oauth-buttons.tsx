@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
-import { signInWithApple, signInWithProvider, type OAuthProvider } from '@/lib/oauth';
+import { FACEBOOK_SIGN_IN_ENABLED, signInWithApple, signInWithProvider, type OAuthProvider } from '@/lib/oauth';
 
 /** One height for all three, so the stack reads as a single control
  * group. Apple's button is a native component whose internal typography
@@ -130,25 +130,31 @@ export function OAuthButtons() {
         </ThemedText>
       </Pressable>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Continue with Facebook"
-        onPress={() => handlePress('facebook')}
-        disabled={pending !== null}
-        style={({ pressed }) => [
-          styles.button,
-          styles.brandButton,
-          { backgroundColor: '#1877F2', opacity: pressed || pending !== null ? 0.85 : 1 },
-        ]}>
-        {pending === 'facebook' ? (
-          <ActivityIndicator color="#ffffff" />
-        ) : (
-          <FontAwesome name="facebook" size={20} color="#ffffff" />
-        )}
-        <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
-          {pending === 'facebook' ? 'Connecting…' : 'Continue with Facebook'}
-        </ThemedText>
-      </Pressable>
+      {/* Hidden while the Meta app is in Development mode — see
+          FACEBOOK_SIGN_IN_ENABLED for why and for what un-hides it. Kept
+          rendered-conditionally rather than deleted so it returns with a
+          one-line change once Meta clears verification. */}
+      {FACEBOOK_SIGN_IN_ENABLED ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Continue with Facebook"
+          onPress={() => handlePress('facebook')}
+          disabled={pending !== null}
+          style={({ pressed }) => [
+            styles.button,
+            styles.brandButton,
+            { backgroundColor: '#1877F2', opacity: pressed || pending !== null ? 0.85 : 1 },
+          ]}>
+          {pending === 'facebook' ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <FontAwesome name="facebook" size={20} color="#ffffff" />
+          )}
+          <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
+            {pending === 'facebook' ? 'Connecting…' : 'Continue with Facebook'}
+          </ThemedText>
+        </Pressable>
+      ) : null}
 
       {error ? (
         <ThemedText type="small" themeColor="destructive">
