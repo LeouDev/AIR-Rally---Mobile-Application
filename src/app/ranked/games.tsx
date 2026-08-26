@@ -255,7 +255,7 @@ function HistoryRow({ summary }: { summary: RankedMatchSummary }) {
         { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.92 : 1 },
       ]}>
       <View style={styles.cardTop}>
-        <ThemedText type="smallBold" numberOfLines={1} style={styles.cardTitle}>
+        <ThemedText type="smallBold" style={styles.cardTitle}>
           vs {opponentTeamLabel(summary)}
         </ThemedText>
         <View style={styles.badgeRow}>
@@ -314,7 +314,11 @@ const styles = StyleSheet.create({
   },
   cardTop: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // flex-start, not center — a wrapped multi-line team name (up to 40
+    // chars, user-supplied) would otherwise vertically center the badges
+    // into the middle of the wrapped text instead of anchoring them to
+    // the first line.
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: Spacing.two,
   },

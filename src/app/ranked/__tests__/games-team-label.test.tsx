@@ -136,6 +136,20 @@ it('falls back to opponent names when the opposing doubles team is unnamed', asy
   await screen.findByText('vs Robin & Alex');
 });
 
+it('does not clamp the vs line to one line — a 40-char team name needs to wrap, not truncate', async () => {
+  // RNTL's text matcher ignores numberOfLines (it matches content, not
+  // rendered pixels) — this is a code-level guard against reintroducing
+  // the clamp, not proof of wrapping. Device-verified separately: a
+  // 40-char name previously ellipsized to "vs The Absolutely U…" here.
+  mockListRecentMatches.mockResolvedValue([
+    summaryFixture({ match: matchFixture({ team_b_name: 'The Absolutely Unstoppable Smashers XYZ!' }) }),
+  ]);
+  await render(<GamesScreen />);
+
+  const title = await screen.findByText('vs The Absolutely Unstoppable Smashers XYZ!');
+  expect(title.props.numberOfLines).toBeUndefined();
+});
+
 it('never shows a team name for singles, even if one is somehow set', async () => {
   mockListRecentMatches.mockResolvedValue([
     summaryFixture({
