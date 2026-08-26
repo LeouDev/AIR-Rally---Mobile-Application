@@ -254,14 +254,21 @@ export default function OwnerScreen() {
               </View>
             ) : earnings ? (
               <>
+                {/* "See your Earnings page on air-rally.com" points at the web
+                    because mobile has no settlement view yet — the Available ->
+                    Paid state lives only in the web's SettlementPanel. When a
+                    mobile settlement view ships, this sentence becomes wrong in a
+                    new way: it will send an owner to a browser for something the
+                    app now shows. Update it then. */}
                 <View style={[styles.warningCard, { backgroundColor: theme.warningSoft, borderColor: theme.warning }]}>
                   <ThemedText type="small" style={{ color: theme.warningSoftForeground }}>
                     <ThemedText type="smallBold" style={{ color: theme.warningSoftForeground }}>
                       This is not a statement of funds paid out to you.
                     </ThemedText>{' '}
                     A booking showing as &quot;Paid&quot; means the customer&apos;s payment succeeded — it does not mean
-                    AIR/Rally has settled or transferred any amount to you. Payout automation is not yet live;
-                    contact AIR/Rally directly about compensation for confirmed bookings. The same applies to any
+                    AIR/Rally has settled or transferred any amount to you. Payouts are sent weekly, on
+                    Wednesdays, covering court time from the Sunday–Saturday week before — see your Earnings
+                    page on air-rally.com for what&apos;s actually been paid. The same applies to any
                     refund figure below: it reflects what PayMongo&apos;s own refund response reported, not a
                     confirmed debit from your bank account.
                   </ThemedText>
