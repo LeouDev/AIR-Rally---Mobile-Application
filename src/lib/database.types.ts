@@ -555,6 +555,14 @@ export type RankedMatch = {
   match_type: RankedMatchType;
   /** Every match created through create_ranked_match() today is air_rally_ranked. */
   match_weight_type: RankedMatchWeightType;
+  /** False for a casual result: recorded and confirmed like any match, but
+   * apply_ranked_result() skips every player_ranks mutation for everyone in
+   * it. Set once at creation, never updated afterward — see
+   * migration 20260810000087. Distinct from a calibrated player being
+   * individually FROZEN in a `rated: true` match with no booking behind it
+   * (20260810000100) — that shows up per-player as a null rating_delta on
+   * an otherwise-rated match, not as `rated: false` on the match itself. */
+  rated: boolean;
   status: RankedMatchStatus;
   officiating_mode: RankedOfficiatingMode | null;
   /** Whoever holds the scoreboard, under either mode. */
@@ -894,6 +902,7 @@ export type Database = {
           p_team_b: string[];
           p_event_id?: string | null;
           p_court_id?: string | null;
+          p_rated?: boolean;
         };
         Returns: string;
       };
@@ -934,6 +943,13 @@ export type Database = {
       cancel_ranked_match: {
         Args: { p_match_id: string };
         Returns: undefined;
+      };
+      /** Stable/read-only, granted to anon+authenticated (unlike every
+       * mutating RPC here) — confirmed live before use, since the
+       * migration that added it had no explicit grant statement. */
+      ranked_match_is_booked: {
+        Args: { p_match_id: string };
+        Returns: boolean;
       };
       // resolve_ranked_dispute is admin-only — not called from mobile.
     };

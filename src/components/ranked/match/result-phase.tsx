@@ -19,6 +19,7 @@ import {
   RANKED_DISPUTE_REASONS,
   rankLabel,
   RankedError,
+  ratingImpact,
   respondToResult,
   tierInfo,
   type RankedDisputeReason,
@@ -401,6 +402,33 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
             </View>
           ) : null}
         </View>
+      ) : me ? (
+        // Not shown for the two cases above — a rank/tier/AAR card would
+        // just be wrong here, since apply_ranked_result() never wrote
+        // one for this player on this match. Silently showing nothing
+        // instead of the card would look like the app forgot, so this
+        // says which of the two reasons it was: 'casual' means nobody's
+        // rating moved because the game type never touches it; 'frozen'
+        // means it WAS a ranked match and this player specifically
+        // didn't move, because they're already calibrated and this
+        // wasn't at a booked court — their opponent, if still
+        // calibrating, may have moved on this very match.
+        (() => {
+          const impact = ratingImpact(match, me);
+          if (impact.kind === 'applied') return null;
+          return (
+            <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.card }]}>
+              <ThemedText type="caption" style={[styles.eyebrow, { color: theme.mutedForeground }]}>
+                {impact.reason === 'casual' ? 'CASUAL' : 'NO RATING IMPACT'}
+              </ThemedText>
+              <ThemedText type="small" themeColor="subtle">
+                {impact.reason === 'casual'
+                  ? "Recorded, but this doesn't affect anyone's rating."
+                  : "Recorded, but your rating didn't move — this wasn't at a booked court. Book a court to keep climbing."}
+              </ThemedText>
+            </View>
+          );
+        })()
       ) : null}
 
       <Button title="Share result" variant="outline" onPress={shareResult} icon={<Ionicons name="share-outline" size={18} color={theme.foreground} />} />

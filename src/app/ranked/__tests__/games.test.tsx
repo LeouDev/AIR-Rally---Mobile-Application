@@ -70,6 +70,7 @@ function matchFixture(overrides: Partial<RankedMatch> = {}): RankedMatch {
     venue_id: null,
     match_type: 'singles',
     match_weight_type: 'air_rally_ranked',
+    rated: true,
     status: 'confirmed',
     officiating_mode: null,
     scorekeeper_id: null,

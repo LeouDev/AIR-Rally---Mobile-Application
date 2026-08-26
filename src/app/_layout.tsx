@@ -118,6 +118,7 @@ function RootNavigator() {
           <Stack.Screen name="ranked/[matchId]" />
           <Stack.Screen name="ranked/games" />
           <Stack.Screen name="ranked/new" />
+          <Stack.Screen name="ranked/play" />
         </Stack.Protected>
         <Stack.Protected guard={session !== null && needsAgreement === true}>
           <Stack.Screen name="complete-signup" />

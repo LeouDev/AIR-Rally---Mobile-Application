@@ -1,6 +1,7 @@
-import { Stack, useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RankBadge } from '@/components/ranked/rank-badge';
@@ -60,7 +61,26 @@ export default function LeaderboardScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ headerShown: true, title: 'Leaderboard', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Leaderboard',
+          headerBackButtonDisplayMode: 'minimal',
+          // Signed out has nowhere to send a match anyway — the same
+          // sign-in-optional posture as this whole screen.
+          headerRight: userId
+            ? () => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Play a game"
+                  onPress={() => router.push('/ranked/play')}
+                  hitSlop={8}>
+                  <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
+                </Pressable>
+              )
+            : undefined,
+        }}
+      />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <FlatList
           data={leaders ?? []}

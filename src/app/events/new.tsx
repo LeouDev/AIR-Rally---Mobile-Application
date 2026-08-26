@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { PlayerPicker } from '@/components/player-picker';
 import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -18,8 +17,21 @@ import type { PublicProfile, RankedMatchType } from '@/lib/database.types';
 import { formatShare } from '@/lib/event-split';
 import { createOpenPlayForBooking, listHostableBookings, type HostableBooking } from '@/lib/events';
 import { getPublicProfile } from '@/lib/follows';
+import { rankedStakes } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
+/**
+ * Both modes build a structured 1v1/2v2 party through RankedPartyBuilder
+ * now — casual and ranked differ only in `rated`. This REMOVED the old
+ * casual path: an open PlayerPicker invite to an arbitrary-size group,
+ * with no match structure and no recorded result. That capability is
+ * gone deliberately, not by oversight — the founder confirmed it
+ * explicitly on 2026-08-27 ("Yep that all set") after being asked
+ * plainly whether they meant a structured match or wanted the loose-
+ * group path kept. If a future gap between "casual" and "invite anyone
+ * to hang out" shows up, it was a founder decision, not an omission —
+ * restoring the loose path would be a new addition, not a revert.
+ */
 type GameMode = 'casual' | 'ranked';
 
 function formatWhen(iso: string): string {
@@ -44,18 +56,17 @@ export default function NewOpenPlayScreen() {
   const [bookings, setBookings] = useState<HostableBooking[] | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
-  const [players, setPlayers] = useState<PublicProfile[]>([]);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Ranked mode. Casual's `players`/`submitting`/`error` above stay
-  // untouched by any of this — the two modes only ever share the
-  // booking list and the optional title.
+  // Both modes now build a structured 1v1/2v2 party through the same
+  // RankedPartyBuilder — casual and ranked differ only in `rated`, not
+  // in the flow. See partyEventId's own comment for why an Open Play
+  // session shell has to exist before the party builder can run.
   const [mode, setMode] = useState<GameMode>('casual');
   const [matchType, setMatchType] = useState<RankedMatchType>('singles');
   const [hostProfile, setHostProfile] = useState<PublicProfile | null>(null);
-  const [rankedEventId, setRankedEventId] = useState<string | null>(null);
-  const [startingRankedMatch, setStartingRankedMatch] = useState(false);
+  const [partyEventId, setPartyEventId] = useState<string | null>(null);
+  const [startingMatch, setStartingMatch] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -83,38 +94,22 @@ export default function NewOpenPlayScreen() {
 
   const selectBooking = (id: string) => {
     setBookingId(id);
-    // A ranked event already started belongs to the booking it was
-    // created under — picking a different one starts fresh.
-    setRankedEventId(null);
-  };
-
-  const submit = async () => {
-    if (!userId || !bookingId || submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const result = await createOpenPlayForBooking(userId, {
-        bookingId,
-        playerIds: players.map((p) => p.id),
-        title: title.trim() || undefined,
-      });
-      router.replace({ pathname: '/events/[id]', params: { id: result.eventId } });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "We couldn't set up that game.");
-    } finally {
-      setSubmitting(false);
-    }
+    // A party already started belongs to the booking it was created
+    // under — picking a different one starts fresh.
+    setPartyEventId(null);
   };
 
   /**
-   * Ranked's first step: the underlying Open Play session has to exist
-   * — with a real id — before RankedPartyBuilder can hand that id to
-   * create_ranked_match(). Once it does, the party builder replaces this
-   * button and owns the rest of the flow (including its own submit).
+   * Both modes' first step: the underlying Open Play session has to
+   * exist — with a real id — before RankedPartyBuilder can hand that id
+   * to create_ranked_match(). Once it does, the party builder replaces
+   * this button and owns the rest of the flow (including its own
+   * submit) — `rated` is the only thing that differs between casual and
+   * ranked from here on.
    */
-  const startRankedMatch = async () => {
-    if (!userId || !bookingId || startingRankedMatch) return;
-    setStartingRankedMatch(true);
+  const startMatch = async () => {
+    if (!userId || !bookingId || startingMatch) return;
+    setStartingMatch(true);
     setError(null);
     try {
       const result = await createOpenPlayForBooking(userId, {
@@ -122,15 +117,15 @@ export default function NewOpenPlayScreen() {
         playerIds: [],
         title: title.trim() || undefined,
       });
-      setRankedEventId(result.eventId);
+      setPartyEventId(result.eventId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "We couldn't set up that game.");
     } finally {
-      setStartingRankedMatch(false);
+      setStartingMatch(false);
     }
   };
 
-  const handleRankedMatchCreated = (matchId: string) => {
+  const handleMatchCreated = (matchId: string) => {
     router.replace({ pathname: '/ranked/[matchId]', params: { matchId } });
   };
 
@@ -141,8 +136,7 @@ export default function NewOpenPlayScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <ThemedText type="small" themeColor="subtle">
-            Invite your playmates to a court you&apos;ve booked. You pay the venue; splitting it is between you and
-            them.
+            Start a match on a court you&apos;ve booked. You pay the venue; splitting it is between you and them.
           </ThemedText>
 
           {bookings === null ? (
@@ -199,14 +193,23 @@ export default function NewOpenPlayScreen() {
                   selected={mode}
                   onSelect={(value) => {
                     setMode(value);
-                    setRankedEventId(null);
+                    setPartyEventId(null);
                   }}
                 />
-                <ThemedText type="caption" themeColor="mutedForeground">
-                  {mode === 'ranked'
-                    ? 'A ranked match counts toward your AIR/Rally Ranked rating.'
-                    : 'Just for fun — nothing here affects your rating.'}
-                </ThemedText>
+                {(() => {
+                  // A booked match never freezes — the freeze
+                  // (20260810000100) only ever applies to an UNBOOKED
+                  // ranked match, and this screen only ever creates
+                  // booked ones. isCalibrated doesn't change which
+                  // message shows here either way, so it's not fetched
+                  // just to word this one line more precisely.
+                  const stakes = rankedStakes({ rated: mode === 'ranked', booked: true, isCalibrated: true });
+                  return (
+                    <ThemedText type="caption" themeColor="mutedForeground">
+                      {stakes.detail}
+                    </ThemedText>
+                  );
+                })()}
               </View>
 
               <View style={styles.block}>
@@ -251,41 +254,7 @@ export default function NewOpenPlayScreen() {
                 placeholder={selected ? `Open Play at ${selected.venueName}` : 'Open Play'}
               />
 
-              {mode === 'casual' ? (
-                <>
-                  {selected ? (
-                    <PlayerPicker
-                      selected={players}
-                      onChange={setPlayers}
-                      totalAmount={selected.priceAmount}
-                      currency={selected.currency}
-                      excludeUserId={userId}
-                    />
-                  ) : null}
-
-                  {selected && players.length > 0 && selected.priceAmount > 0 ? (
-                    <ThemedText type="caption" themeColor="mutedForeground">
-                      You&apos;ve already paid {formatShare(selected.priceAmount, selected.currency)} for this
-                      court. Collect each player&apos;s share from your group directly, however you like.
-                    </ThemedText>
-                  ) : null}
-
-                  {error ? (
-                    <ThemedText type="small" themeColor="destructive">
-                      {error}
-                    </ThemedText>
-                  ) : null}
-
-                  <Button
-                    title={
-                      submitting ? 'Creating…' : players.length > 0 ? `Create game and invite ${players.length}` : 'Create game'
-                    }
-                    onPress={submit}
-                    disabled={submitting || !bookingId}
-                    loading={submitting}
-                  />
-                </>
-              ) : selected ? (
+              {selected ? (
                 <>
                   <View style={styles.block}>
                     <ThemedText type="smallBold">Singles or doubles?</ThemedText>
@@ -305,25 +274,26 @@ export default function NewOpenPlayScreen() {
                     </ThemedText>
                   ) : null}
 
-                  {rankedEventId ? (
+                  {partyEventId ? (
                     hostProfile ? (
                       <RankedPartyBuilder
-                        key={matchType}
+                        key={`${matchType}-${mode}`}
                         host={hostProfile}
                         matchType={matchType}
-                        eventId={rankedEventId}
+                        eventId={partyEventId}
                         courtId={selected.courtId}
-                        onCreated={handleRankedMatchCreated}
+                        rated={mode === 'ranked'}
+                        onCreated={handleMatchCreated}
                       />
                     ) : (
                       <Skeleton height={220} radius={Radius.xl} />
                     )
                   ) : (
                     <Button
-                      title={startingRankedMatch ? 'Starting…' : 'Start ranked match'}
-                      onPress={startRankedMatch}
-                      disabled={startingRankedMatch || !bookingId}
-                      loading={startingRankedMatch}
+                      title={startingMatch ? 'Starting…' : mode === 'ranked' ? 'Start ranked match' : 'Start casual match'}
+                      onPress={startMatch}
+                      disabled={startingMatch || !bookingId}
+                      loading={startingMatch}
                     />
                   )}
                 </>
