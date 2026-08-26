@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VenueCard } from '@/components/venue-card';
+import { VenueRequestForm } from '@/components/venue-request-form';
 import { Wordmark } from '@/components/wordmark';
 import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
@@ -213,6 +214,13 @@ export default function ExploreScreen() {
                   <Skeleton height={230} radius={Radius.xl} />
                   <Skeleton height={230} radius={Radius.xl} />
                 </View>
+              ) : userId ? (
+                <VenueRequestForm
+                  key={search || activeFilterCount > 0 ? 'searching' : 'empty'}
+                  userId={userId}
+                  variant={search || activeFilterCount > 0 ? 'searching' : 'empty'}
+                  initialPlaceName={search.trim()}
+                />
               ) : (
                 <View
                   style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>

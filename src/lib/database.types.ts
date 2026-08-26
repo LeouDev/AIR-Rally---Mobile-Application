@@ -240,6 +240,34 @@ export type BookingSettlement = {
   created_at: string;
 };
 
+/** A player's "bring a court here" ask — migration
+ * 20260810000099_venue_requests.sql. Only the columns the client actually
+ * writes/reads; admin-only columns (status transitions, venue_id linking,
+ * merged_into_id) are intentionally omitted since no client role can select
+ * or write them — mirrors the pattern BookingSettlement already sets for
+ * admin-managed tables. RLS is own-row-select-only, so `user_id` on a row
+ * this client can ever read is always the caller's own id — not worth
+ * carrying in the read type. */
+export type VenueRequest = {
+  id: string;
+  place_name: string;
+  place_city: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+/** The insert shape. `user_id` IS sent explicitly here, sourced from the
+ * caller's own session inside createVenueRequest() — never a parameter one
+ * layer up — matching the RLS insert policy's own `user_id = auth.uid()`
+ * check; failing at the same point in application code first is cheaper to
+ * read than only at the database. */
+export type VenueRequestInsert = {
+  user_id: string;
+  place_name: string;
+  place_city?: string | null;
+  note?: string | null;
+};
+
 // --- Audit-findings additions: reviews, favorites, credits history,
 // follows, COURT/Side posts, Clubs, Open Play events. Mirrors the web
 // repo's src/lib/supabase/types.ts field-for-field for each of these. ---
@@ -717,6 +745,7 @@ export type Database = {
       booking_refunds: TableDef<BookingRefund, never, never>;
       // No client role has write access — see BookingSettlement's own comment.
       booking_settlements: TableDef<BookingSettlement, never, never>;
+      venue_requests: TableDef<VenueRequest, VenueRequestInsert, never>;
 
       favorites: TableDef<Favorite, Pick<Favorite, 'user_id' | 'venue_id'>, never>;
       reviews: TableDef<
@@ -904,6 +933,32 @@ export type Database = {
       invite_event_players: {
         Args: { p_event_id: string; p_user_ids: string[] };
         Returns: number;
+      };
+
+      /* --- Venue requests (migrations 099, 106) ------------------------
+       * "Bring a court here" — capture surface only; admin/link RPCs
+       * (admin_venue_demand, admin_link_venue_requests,
+       * admin_set_venue_request_cluster_status,
+       * admin_unlinked_venue_requests, public_venue_request_summary) are
+       * deliberately not typed here — this app never calls them. The
+       * public summary is for the shared web page, not the mobile client.
+       * ------------------------------------------------------------- */
+
+      /** Free-text-only, never surfaces a draft/pending_review venue's
+       * name (see the migration). Empty/blank query returns nothing. */
+      venue_request_place_suggestions: {
+        Args: { p_query: string };
+        Returns: { place_name: string; place_city: string }[];
+      };
+      /** The requester's own feedback, for a request the caller owns —
+       * refuses (no_data_found) for anyone else's. `requesters` is always
+       * the real count; `show_count` is false below the threshold of 5 —
+       * the UI must key off show_count and show the promise, not read
+       * requesters directly, since the raw number below threshold is not
+       * meant to be displayed. */
+      venue_request_demand_for_me: {
+        Args: { p_request_id: string };
+        Returns: { requesters: number; show_count: boolean }[];
       };
 
       /* --- Ranked -----------------------------------------------------
