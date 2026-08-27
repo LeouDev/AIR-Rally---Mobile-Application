@@ -283,15 +283,18 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
       }.`
     : 'AIR/Rally Ranked match result.';
 
+  // The public, no-session result page (migration 20260810000107) —
+  // deliberately `/ranked/results/{id}`, NOT `/ranked/match/{id}`, which
+  // stays behind requireSignedIn() and is the wrong thing to hand to
+  // someone without an account. This is the page that used to not exist;
+  // now that it does, every share carries a link a recipient can actually
+  // open rather than text alone.
+  const shareUrl = `https://air-rally.com/ranked/results/${match.id}`;
+
   const shareResult = async () => {
-    // No `url` passed, deliberately: the web's /ranked/match/{id} sits
-    // behind requireSignedIn(), so a recipient tapping a link to it
-    // lands on a login wall rather than the result — worse than sending
-    // no link at all. When a publicly-viewable confirmed-match page
-    // exists, pass its URL here; shareCard() carries it from there.
     try {
       const uri = await captureRef(shareCardRef, { format: 'png', quality: 1, width: 1080, height: 1920 });
-      await shareCard({ fileUri: uri, message: shareText });
+      await shareCard({ fileUri: uri, message: shareText, url: shareUrl });
       return;
     } catch {
       // Capture failed — fall through to the text alone rather than
@@ -299,7 +302,7 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
       // reaching here means there was no image to attach.
     }
     try {
-      await Share.share({ message: shareText });
+      await Share.share({ message: shareText, url: shareUrl });
     } catch {
       // Share sheet dismissed or unavailable — not an error.
     }
