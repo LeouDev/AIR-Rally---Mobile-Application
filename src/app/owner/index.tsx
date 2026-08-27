@@ -307,9 +307,31 @@ export default function OwnerScreen() {
                         amount={settlements.available}
                         tone="success"
                       />
+                      {/* Hint was "Gross settled — see your payslip email for
+                          the net after fees". Too long for a numberOfLines={2}
+                          hint in a third-width card, so it actually rendered as
+                          "Gross settled — see your p…" and told the owner
+                          nothing. It was also wrong twice over: venue_amount is
+                          already net of the 5% platform fee, so "Gross" reads as
+                          if that deduction were still coming; and this is a
+                          LIFETIME total while a payslip covers ONE payout, so
+                          pointing at one to explain the other invites exactly
+                          the reconciliation getOwnerSettlementSummary's own
+                          comment says never to attempt.
+
+                          "Transfer fees" rather than "fees": the fee still
+                          outstanding is PayMongo's per-payout transfer charge,
+                          NOT the 5% commission, which is already out. Naming
+                          the rail is the whole point — an owner who misread
+                          "Gross" as "commission still to come" would misread a
+                          bare "fees" the same way. Plural because a lifetime
+                          total spans many payouts, each charged once. Measured
+                          at real width: "Before per-payout transfer fees"
+                          truncates to "Before per-payout transf…", this does
+                          not. */}
                       <SettlementCard
                         label="Paid (all time)"
-                        hint="Gross settled — see your payslip email for the net after fees"
+                        hint="Before transfer fees"
                         amount={settlements.paid}
                         tone="success"
                       />
