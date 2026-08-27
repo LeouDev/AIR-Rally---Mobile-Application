@@ -130,14 +130,18 @@ export function VenueRequestForm({
             replace only if the notify pipeline gets fixed to actually
             cover this path. */}
         <ThemedText type="smallBold">{placeName} is on our list.</ThemedText>
+        {demand?.showCount ? (
+          // show_count is only ever true at the RPC's threshold of 5
+          // (venue_request_demand_for_me returns v_count >= 5), so this
+          // can never render below "5 players" — no singular case exists
+          // to handle, so none is added.
+          <ThemedText type="small" themeColor="mutedForeground">
+            {demand.requesters} players have asked for this venue.
+          </ThemedText>
+        ) : null}
         <ThemedText type="small" themeColor="mutedForeground">
           The fastest way to get them on AIR/Rally: send them this.
         </ThemedText>
-        {demand?.showCount ? (
-          <ThemedText type="small" themeColor="mutedForeground">
-            {demand.requesters} player{demand.requesters === 1 ? '' : 's'} have asked for this venue.
-          </ThemedText>
-        ) : null}
         <Button title="Share with your venue" variant="outline" onPress={handleShare} />
       </View>
     );
