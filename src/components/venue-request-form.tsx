@@ -122,7 +122,17 @@ export function VenueRequestForm({
   if (submitted) {
     return (
       <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <ThemedText type="smallBold">We&apos;ll email you the moment {placeName} lists.</ThemedText>
+        {/* No email promise here — nothing currently sends one for a
+            free-text request (the notify trigger matches on venue_id,
+            which a fresh request doesn't have, and fires on the venue's
+            approval, not on an admin's later manual link). Points at the
+            share link instead, which is real, live, and verified —
+            replace only if the notify pipeline gets fixed to actually
+            cover this path. */}
+        <ThemedText type="smallBold">{placeName} is on our list.</ThemedText>
+        <ThemedText type="small" themeColor="mutedForeground">
+          The fastest way to get them on AIR/Rally: send them this.
+        </ThemedText>
         {demand?.showCount ? (
           <ThemedText type="small" themeColor="mutedForeground">
             {demand.requesters} player{demand.requesters === 1 ? '' : 's'} have asked for this venue.
