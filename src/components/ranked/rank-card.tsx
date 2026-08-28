@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { PlayerRank } from '@/lib/database.types';
-import { calibrationState, getPlayerRank, rankLabel } from '@/lib/ranked';
+import { calibrationState, formatRating, getPlayerRank, rankLabel } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
 /**
@@ -141,6 +141,9 @@ export function RankCard() {
             AIR/Rally Rank
           </ThemedText>
           <ThemedText type="subtitle">{rankLabel(primary.tier, primary.pips)}</ThemedText>
+          <ThemedText type="caption" style={{ color: theme.primary }}>
+            AAR {formatRating(primary.rating)}
+          </ThemedText>
         </View>
       </View>
 

@@ -86,4 +86,24 @@ describe('RankCard — single rating', () => {
     await screen.findByText('AIR/Rally Rank');
     expect(screen.getByText('Volleyer II')).toBeTruthy();
   });
+
+  it('shows the numeric AAR alongside the tier once calibrated, formatted the same way as the leaderboard', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2, rating: 1099 }));
+    await render(<RankCard />);
+
+    await screen.findByText('AIR/Rally Rank');
+    expect(screen.getByText('AAR 1,099')).toBeTruthy();
+  });
+
+  it('does NOT show a provisional AAR while still calibrating — the number stays hidden with the tier', async () => {
+    // Load-bearing: the founder explicitly decided both the tier and the
+    // number stay hidden until match 10, so a calibrating player must
+    // never see a number here even though `rating` exists on the row
+    // from day one.
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 4, rating: 1050 }));
+    await render(<RankCard />);
+
+    await screen.findByText('4 of 10 calibration matches played');
+    expect(screen.queryByText(/AAR/)).toBeNull();
+  });
 });
