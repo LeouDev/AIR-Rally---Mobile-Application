@@ -15,6 +15,13 @@ import { getPlayerRank } from '@/lib/ranked';
  * two screens. The calibrated branch couldn't be seen on this screen
  * before today (rankedStakes() always took the !isCalibrated path here),
  * so it's pinned explicitly below rather than assumed correct by reuse.
+ *
+ * Once calibrated, this screen also has to say that migration 100 freezes
+ * their rating outside a booked court (still no booking exists here by
+ * construction), and it offers VenueRequestForm's `rankedBlocked` variant
+ * as the one thing the player can actually do about it — the single
+ * highest-intent moment to capture a venue request, since they're blocked
+ * specifically by not having one.
  */
 
 jest.mock('expo-router', () => ({
@@ -37,6 +44,13 @@ jest.mock('@/components/ranked/ranked-party-builder', () => ({
   RankedPartyBuilder: () => {
     const { View } = jest.requireActual('react-native');
     return <View />;
+  },
+}));
+
+jest.mock('@/components/venue-request-form', () => ({
+  VenueRequestForm: ({ userId, variant }: { userId: string; variant: string }) => {
+    const { Text } = jest.requireActual('react-native');
+    return <Text>{`venue-request-form:${userId}:${variant}`}</Text>;
   },
 }));
 
@@ -100,22 +114,38 @@ describe('PlayRankedScreen — Ranked-mode explainer', () => {
     expect(screen.queryByText(/calibration matches played/)).toBeNull();
   });
 
-  it('still warns a calibrated player that this booking-free screen will not move their rating', async () => {
-    // This screen hardcodes booked: false, so rankedStakes()'s warning
-    // for a calibrated-but-unbooked match still applies here and would
-    // otherwise silently vanish behind the new rank/ARR display.
+  it('once calibrated, warns that rating is frozen outside a booked court', async () => {
+    // This screen hardcodes booked: false, and migration 100 freezes
+    // rating (no change, no win, no loss, no streak) outside a booked
+    // court — this notice would otherwise silently vanish behind the
+    // new rank/ARR display.
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
     await render(<PlayRankedScreen />);
 
-    await screen.findByText(/won't move/);
+    await screen.findByText(/your rating only moves in matches on a court booked through AIR\/Rally/);
   });
 
-  it('does not show that unbooked-match warning while still calibrating', async () => {
+  it('does not show the booked-court notice while still calibrating', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 3 }));
     await render(<PlayRankedScreen />);
 
     await screen.findByText('3 of 10 calibration matches played');
-    expect(screen.queryByText(/won't move/)).toBeNull();
+    expect(screen.queryByText(/court booked through AIR\/Rally/)).toBeNull();
+  });
+
+  it('once calibrated, offers the venue-request form as the way to close that gap', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+    await render(<PlayRankedScreen />);
+
+    await screen.findByText('venue-request-form:me:rankedBlocked');
+  });
+
+  it('does not offer the venue-request form while still calibrating', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 3 }));
+    await render(<PlayRankedScreen />);
+
+    await screen.findByText('3 of 10 calibration matches played');
+    expect(screen.queryByText(/venue-request-form:/)).toBeNull();
   });
 
   it('leaves Casual mode entirely untouched', async () => {
