@@ -23,9 +23,20 @@ import {
  * the CourtDiagram (this app has no SVG-rendering library) — the serving
  * side is still called out in the score row and the status line below.
  */
+type ScoreAction = 'pointA' | 'pointB' | 'undo' | 'submit';
+
 export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDetail; currentUserId: string }) {
   const theme = useTheme();
-  const [busy, setBusy] = useState(false);
+  // One RPC in flight at a time, still — a scorekeeper double-tapping
+  // must never record two points or race two writes against the same
+  // match row, so `disabled` below stays keyed on `busy` for all four
+  // buttons. What changes is the FEEDBACK: `pending` names which single
+  // action actually triggered it, so only that one button shows the
+  // loading state instead of all four flashing together. Reported by the
+  // founder on the app's first live-scored match — every button dimmed
+  // on any tap, with no way to tell which one had registered.
+  const [pending, setPending] = useState<ScoreAction | null>(null);
+  const busy = pending !== null;
   const [error, setError] = useState<string | null>(null);
 
   const isScorekeeper = match.scorekeeper_id === currentUserId;
@@ -33,15 +44,15 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
   const teamB = match.players.filter((p) => p.team === 'b');
   const finished = isFinishedGame(match);
 
-  const run = (action: () => Promise<void>) => {
+  const run = (key: ScoreAction, action: () => Promise<void>) => {
     if (busy) return;
     setError(null);
-    setBusy(true);
+    setPending(key);
     action()
       .catch((err) => {
         setError(err instanceof RankedError ? err.message : "That didn't go through. Try again.");
       })
-      .finally(() => setBusy(false));
+      .finally(() => setPending(null));
   };
 
   const firstNames = (team: typeof teamA) => team.map((p) => p.profile?.display_name?.split(' ')[0] ?? '—').join(' · ');
@@ -104,23 +115,36 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
 
       {isScorekeeper ? (
         <View style={styles.actions}>
-          <Button title="+ Point team A" onPress={() => run(() => recordPoint(match.id, 'a'))} disabled={busy} />
-          <Button title="+ Point team B" variant="outline" onPress={() => run(() => recordPoint(match.id, 'b'))} disabled={busy} />
+          <Button
+            title="+ Point team A"
+            onPress={() => run('pointA', () => recordPoint(match.id, 'a'))}
+            disabled={busy}
+            loading={pending === 'pointA'}
+          />
+          <Button
+            title="+ Point team B"
+            variant="outline"
+            onPress={() => run('pointB', () => recordPoint(match.id, 'b'))}
+            disabled={busy}
+            loading={pending === 'pointB'}
+          />
           <View style={styles.actionRow}>
             <View style={styles.actionHalf}>
               <Button
                 title="Undo"
                 variant="outline"
-                onPress={() => run(() => undoPoint(match.id))}
+                onPress={() => run('undo', () => undoPoint(match.id))}
                 disabled={busy || (match.score_a === 0 && match.score_b === 0)}
+                loading={pending === 'undo'}
               />
             </View>
             <View style={styles.actionHalf}>
               <Button
                 title="Submit final"
                 variant="outline"
-                onPress={() => run(() => submitResult(match.id))}
+                onPress={() => run('submit', () => submitResult(match.id))}
                 disabled={busy || !finished}
+                loading={pending === 'submit'}
               />
             </View>
           </View>
