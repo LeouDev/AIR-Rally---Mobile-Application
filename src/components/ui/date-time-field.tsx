@@ -1,5 +1,5 @@
 import { DatePicker, Host } from '@expo/ui/swift-ui';
-import { datePickerStyle, labelsHidden } from '@expo/ui/swift-ui/modifiers';
+import { datePickerStyle, environment, labelsHidden } from '@expo/ui/swift-ui/modifiers';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -86,7 +86,14 @@ export function DateTimeField({
               if (!editable) return;
               onChangeText(mode === 'date' ? formatFilterDate(date) : formatFilterTime(date));
             }}
-            modifiers={[datePickerStyle('compact'), labelsHidden()]}
+            /* The app is forced light (hooks/use-color-scheme.ts), but this is
+               a real SwiftUI view and follows the PHONE, not us. On a
+               dark-mode device it painted its value in dark-mode white on
+               our light pill — the date became unreadable, which is worse
+               than merely inconsistent. Pinning the SwiftUI environment
+               keeps the control in step with the app that hosts it.
+               Remove this if the app ever follows the system again. */
+            modifiers={[datePickerStyle('compact'), labelsHidden(), environment({ key: 'colorScheme', value: 'light' })]}
           />
         </Host>
       </View>

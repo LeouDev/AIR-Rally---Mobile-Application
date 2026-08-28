@@ -1,12 +1,12 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 
 import { EnvironmentBanner } from '@/components/environment-banner';
 import { ErrorScreen } from '@/components/error-screen';
 import { ToastProvider } from '@/components/ui/toast';
 import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationObserver } from '@/lib/notifications-runtime';
 import { initSentry } from '@/lib/sentry';
 import { SessionProvider, useSession } from '@/providers/session';
