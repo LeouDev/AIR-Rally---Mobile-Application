@@ -12,22 +12,52 @@ import type { Notification } from '@/lib/database.types';
 import { resolveNotificationTarget } from '@/lib/notification-links';
 import { formatRelativeTime } from '@/lib/relative-time';
 import { supabase } from '@/lib/supabase';
+import { useSession } from '@/providers/session';
 
 /**
- * Straight supabase-js read — the RLS policy ("Users can view their own
- * notifications") is the entire filter; no user_id predicate needed or
- * wanted client-side.
+ * Scoped to the signed-in user IN THE QUERY, deliberately, rather than
+ * left to RLS.
+ *
+ * This used to read `.from('notifications').select('*')` with no
+ * predicate, on the reasoning — written into the comment here — that the
+ * policy "Users can view their own notifications" was the entire filter.
+ * That quoted the policy name at exactly the point it stops being true.
+ * It is actually "Users can view their own notifications, ADMINS SEE
+ * ALL", `using (auth.uid() = user_id or public.is_admin())`, so an admin
+ * opening their own Alerts tab got every user's notifications, all worded
+ * in the second person. Reported as duplicate "Email confirmed" rows;
+ * they were seventeen different people's.
+ *
+ * RLS is a security boundary, not a UI filter. Here the two want
+ * different answers — the boundary is "may this account read this row",
+ * the screen's question is "is this row addressed to me" — and only the
+ * second one belongs in a personal feed. A screen that asks the security
+ * layer what to display inherits every widening of that layer as a
+ * feature.
+ *
+ * Today the leak is harmless: "your account is ready" tells an admin
+ * nothing. The same feed carries booking confirmations, payout amounts
+ * and match results as those start flowing, and it gets worse with every
+ * signup.
  */
 export default function NotificationsScreen() {
   const theme = useTheme();
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
   const [notifications, setNotifications] = useState<Notification[] | null>(null);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    if (!userId) {
+      setNotifications([]);
+      setError(false);
+      return;
+    }
     const { data, error: fetchError } = await supabase
       .from('notifications')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50);
     if (fetchError) {
@@ -36,7 +66,7 @@ export default function NotificationsScreen() {
       setNotifications(data);
       setError(false);
     }
-  }, []);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,7 +84,7 @@ export default function NotificationsScreen() {
    * link_url uses the web's paths — "/bookings/<id>" maps onto the app's
    * booking screen; a bare "/bookings" stays on the tab bar. */
   const openNotification = useCallback((notification: Notification) => {
-    if (notification.read_at === null) {
+    if (notification.read_at === null && userId) {
       const readAt = new Date().toISOString();
       setNotifications((prev) =>
         prev?.map((n) => (n.id === notification.id ? { ...n, read_at: readAt } : n)) ?? prev
@@ -63,6 +93,13 @@ export default function NotificationsScreen() {
         .from('notifications')
         .update({ read_at: readAt })
         .eq('id', notification.id)
+        // Belt to the query filter's braces. The UPDATE policy is also
+        // `auth.uid() = user_id or is_admin()`, so an admin tapping a row
+        // that wasn't theirs would have silently marked ANOTHER user's
+        // notification read — that person then never sees it as new. That
+        // was reachable before the list was scoped; this makes it
+        // unreachable even if the list ever widens again.
+        .eq('user_id', userId)
         .then(({ error }) => {
           if (error) {
             setNotifications((prev) =>
@@ -80,7 +117,7 @@ export default function NotificationsScreen() {
     if (target !== '/(tabs)/notifications') {
       router.push(target);
     }
-  }, []);
+  }, [userId]);
 
   return (
     <ThemedView style={styles.container}>
