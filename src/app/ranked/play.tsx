@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CalibrationStatus } from '@/components/ranked/calibration-status';
 import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -89,12 +90,29 @@ export default function PlayRankedScreen() {
                   onSelect={setMode}
                 />
                 <View style={[styles.stakesCard, { backgroundColor: theme.muted, borderColor: theme.border }]}>
-                  <ThemedText type="caption" themeColor="mutedForeground" style={styles.stakesHeadline}>
-                    {stakes.headline.toUpperCase()}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="subtle">
-                    {stakes.detail}
-                  </ThemedText>
+                  {mode === 'ranked' ? (
+                    <>
+                      <CalibrationStatus rank={myRank} />
+                      {/* Once calibrated, this screen still has no booking (booked
+                          is hardcoded false above) — rankedStakes' own warning that
+                          the result won't move their rating still applies and would
+                          otherwise silently disappear behind the new rank/ARR display. */}
+                      {isCalibrated ? (
+                        <ThemedText type="small" themeColor="subtle">
+                          {stakes.detail}
+                        </ThemedText>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <ThemedText type="caption" themeColor="mutedForeground" style={styles.stakesHeadline}>
+                        {stakes.headline.toUpperCase()}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="subtle">
+                        {stakes.detail}
+                      </ThemedText>
+                    </>
+                  )}
                 </View>
               </View>
 
