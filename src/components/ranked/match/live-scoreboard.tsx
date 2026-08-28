@@ -116,13 +116,13 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
       {isScorekeeper ? (
         <View style={styles.actions}>
           <Button
-            title="+ Point team A"
+            title="Team A won the rally"
             onPress={() => run('pointA', () => recordPoint(match.id, 'a'))}
             disabled={busy}
             loading={pending === 'pointA'}
           />
           <Button
-            title="+ Point team B"
+            title="Team B won the rally"
             variant="outline"
             onPress={() => run('pointB', () => recordPoint(match.id, 'b'))}
             disabled={busy}

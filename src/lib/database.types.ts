@@ -543,6 +543,8 @@ export type RankedPips = 1 | 2 | 3 | 4 | 5;
 export type RankedMatchType = 'singles' | 'doubles';
 export type RankedMatchWeightType = 'self_reported_rec' | 'club' | 'league' | 'tournament' | 'air_rally_ranked';
 export type RankedTeam = 'a' | 'b';
+/** 'rally' (every rally scores, pre-20260810000110) or 'side_out' (only the serving team can score). A property of the match row, not of the code — see that migration's header for why. */
+export type RankedScoringMode = 'rally' | 'side_out';
 export type RankedMatchStatus =
   | 'lobby'
   | 'officiating'
@@ -619,6 +621,12 @@ export type RankedMatch = {
   score_a: number;
   score_b: number;
   serving_team: RankedTeam;
+  /** 'rally' or 'side_out' — see 20260810000110_ranked_side_out_scoring.sql. Fixed at creation; never changes for the life of the match, so old and new matches can coexist. Governs how record_ranked_point/undo_ranked_point interpret every row this match logs in ranked_match_points. */
+  scoring_mode: RankedScoringMode;
+  /** Doubles + scoring_mode 'side_out' only; null otherwise. Stores 1 for the game's opening turn — the UI must CALL that turn "2" (see compute_side_out_state()'s header), never display server_number directly without checking first_service_turn_used. */
+  server_number: 1 | 2 | null;
+  /** Whether the game's one-server opening-turn exception has been used. Meaningless (stays false) for scoring_mode 'rally' and for singles. */
+  first_service_turn_used: boolean;
   winning_team: RankedTeam | null;
   /** Free-text team name for a doubles team, or null. Mutually exclusive
    * with team_a_club_id — set_ranked_team_identity() enforces this at
@@ -683,6 +691,7 @@ export type RankedMatchPlayer = {
 export type RankedMatchPoint = {
   match_id: string;
   seq: number;
+  /** Meaning depends on the owning match's scoring_mode: "team that scored" under 'rally', "team that WON THE RALLY" (only sometimes the same team) under 'side_out'. Never assume "team = point scored" without checking the match's scoring_mode — see the column comment in 20260810000110_ranked_side_out_scoring.sql. */
   team: RankedTeam;
   recorded_by: string;
   recorded_at: string;

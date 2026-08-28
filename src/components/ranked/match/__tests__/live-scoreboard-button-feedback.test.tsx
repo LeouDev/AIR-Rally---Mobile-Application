@@ -49,6 +49,9 @@ function matchFixture(overrides: Partial<RankedMatch> = {}): RankedMatch {
     score_a: 6,
     score_b: 6,
     serving_team: 'a',
+    scoring_mode: 'rally',
+    server_number: null,
+    first_service_turn_used: false,
     winning_team: null,
     rank_applied: false,
     dispute_reason: null,
@@ -110,10 +113,10 @@ it('only the pressed button reports itself busy — the other three are disabled
 
   await render(<LiveScoreboard match={match} currentUserId="me" />);
 
-  await fireEvent.press(screen.getByLabelText('+ Point team A'));
+  await fireEvent.press(screen.getByLabelText('Team A won the rally'));
 
-  const pointA = screen.getByLabelText('+ Point team A');
-  const pointB = screen.getByLabelText('+ Point team B');
+  const pointA = screen.getByLabelText('Team A won the rally');
+  const pointB = screen.getByLabelText('Team B won the rally');
   const undo = screen.getByLabelText('Undo');
   const submit = screen.getByLabelText('Submit final');
 
