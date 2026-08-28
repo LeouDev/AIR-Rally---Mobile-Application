@@ -91,8 +91,8 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
 
       {isScorekeeper ? (
         <View style={styles.actions}>
-          <Button title="+ Point team A" onPress={() => run(() => recordPoint(match.id, 'a'))} disabled={busy} />
-          <Button title="+ Point team B" variant="outline" onPress={() => run(() => recordPoint(match.id, 'b'))} disabled={busy} />
+          <Button title="Team A won the rally" onPress={() => run(() => recordPoint(match.id, 'a'))} disabled={busy} />
+          <Button title="Team B won the rally" variant="outline" onPress={() => run(() => recordPoint(match.id, 'b'))} disabled={busy} />
           <View style={styles.actionRow}>
             <View style={styles.actionHalf}>
               <Button
