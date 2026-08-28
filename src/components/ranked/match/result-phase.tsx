@@ -104,7 +104,7 @@ function RankedResultShareCard({
             <>
               <View style={shareCardStyles.rankedDivider} />
               <View style={shareCardStyles.rankRow}>
-                <Text style={shareCardStyles.rankRowLabel}>Rating (AAR)</Text>
+                <Text style={shareCardStyles.rankRowLabel}>Rating (ARR)</Text>
                 <Text style={shareCardStyles.ratingShift}>
                   {result.me.rating_before !== null ? `${formatRating(result.me.rating_before)} → ` : ''}
                   {formatRating(result.me.rating_after)}
@@ -407,13 +407,13 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
           {me.rating_after !== null ? (
             <View
               style={[
-                styles.aarRow,
+                styles.arrRow,
                 { borderTopColor: impactful ? 'rgba(246, 241, 232, 0.25)' : theme.border },
               ]}>
               <ThemedText type="caption" style={{ color: impactful ? theme.navyForeground : theme.mutedForeground, opacity: 0.7 }}>
-                AAR
+                ARR
               </ThemedText>
-              <View style={styles.aarValues}>
+              <View style={styles.arrValues}>
                 {me.rating_before !== null ? (
                   <ThemedText type="small" style={{ color: impactful ? theme.navyForeground : theme.mutedForeground, opacity: 0.7 }}>
                     {formatRating(me.rating_before)}
@@ -435,7 +435,7 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
           ) : null}
         </View>
       ) : me ? (
-        // Not shown for the two cases above — a rank/tier/AAR card would
+        // Not shown for the two cases above — a rank/tier/ARR card would
         // just be wrong here, since apply_ranked_result() never wrote
         // one for this player on this match. Silently showing nothing
         // instead of the card would look like the app forgot, so this
@@ -476,7 +476,7 @@ function DisputedView({ match }: { match: RankedMatchDetail }) {
         Result disputed
       </ThemedText>
       <ThemedText type="small" style={{ color: theme.rallyForeground, lineHeight: 20 }}>
-        Reason: {match.dispute_reason ?? 'Not specified'}. No pips, AAR or win/loss changes are applied until this is
+        Reason: {match.dispute_reason ?? 'Not specified'}. No pips, ARR or win/loss changes are applied until this is
         resolved.
       </ThemedText>
       <View style={[styles.disputedFooter, { borderTopColor: 'rgba(255,255,255,0.35)' }]}>
@@ -591,14 +591,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  aarRow: {
+  arrRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
     paddingTop: Spacing.three,
   },
-  aarValues: {
+  arrValues: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Spacing.two,

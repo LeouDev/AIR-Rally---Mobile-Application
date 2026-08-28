@@ -8,7 +8,7 @@ import { createRankedMatch, getPlayerRank } from '@/lib/ranked';
 
 /**
  * Its own file — see ranked-party-builder-rated-spread-blocks.test.tsx
- * for why. Same 400-AAR-gap party as that file's test, proving
+ * for why. Same 400-ARR-gap party as that file's test, proving
  * create_ranked_match()'s own skip of the spread cap for an unrated
  * match is mirrored here: the identical party that gets blocked when
  * rated must be allowed when casual.
@@ -60,7 +60,7 @@ beforeEach(() => {
   mockCreate.mockResolvedValue('match-1');
 });
 
-it('the SAME 400-AAR-gap party is allowed when casual (rated=false)', async () => {
+it('the SAME 400-ARR-gap party is allowed when casual (rated=false)', async () => {
   mockGetPlayerRank.mockImplementation(async (id: string) =>
     id === HOST.id ? rank({ user_id: HOST.id, rating: 1000 }) : rank({ user_id: ROBIN.id, rating: 1400 })
   );
@@ -75,7 +75,7 @@ it('the SAME 400-AAR-gap party is allowed when casual (rated=false)', async () =
   fireEvent.press(result);
 
   await screen.findByText('Robin');
-  expect(screen.queryByText(/AAR of each other/)).toBeNull();
+  expect(screen.queryByText(/ARR of each other/)).toBeNull();
 
   fireEvent.press(screen.getByText('Find match'));
   await waitFor(() => expect(mockCreate).toHaveBeenCalled());

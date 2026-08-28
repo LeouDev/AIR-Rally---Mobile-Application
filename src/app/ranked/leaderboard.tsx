@@ -109,7 +109,7 @@ export default function LeaderboardScreen() {
                     Star
                   </ThemedText>
                   <ThemedText type="caption" themeColor="mutedForeground" style={styles.rating}>
-                    AAR
+                    ARR
                   </ThemedText>
                 </View>
               ) : null}

@@ -566,7 +566,7 @@ export type RankedSeason = {
 export type PlayerRank = {
   season_id: number;
   user_id: string;
-  /** DUPR-inspired AAR. Meaningful from day one, but hidden from the player until is_calibrated. Starts at 1000. */
+  /** DUPR-inspired ARR. Meaningful from day one, but hidden from the player until is_calibrated. Starts at 1000. */
   rating: number;
   /** Stateless — derived from `rating` every time it changes, never independently incremented. */
   tier: RankedTier;
@@ -977,7 +977,7 @@ export type Database = {
         Args: Record<string, never>;
         Returns: undefined;
       };
-      /** Widest AAR gap among the calibrated players in a proposed party. Ranked parties must stay within 250 AAR of each other. */
+      /** Widest ARR gap among the calibrated players in a proposed party. Ranked parties must stay within 250 ARR of each other. */
       ranked_party_spread: {
         Args: { p_user_ids: string[] };
         Returns: number;

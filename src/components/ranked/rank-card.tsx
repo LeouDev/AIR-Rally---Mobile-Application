@@ -142,7 +142,7 @@ export function RankCard() {
           </ThemedText>
           <ThemedText type="subtitle">{rankLabel(primary.tier, primary.pips)}</ThemedText>
           <ThemedText type="caption" style={{ color: theme.primary }}>
-            AAR {formatRating(primary.rating)}
+            ARR {formatRating(primary.rating)}
           </ThemedText>
         </View>
       </View>

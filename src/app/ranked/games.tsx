@@ -71,7 +71,7 @@ function formatMatchDate(iso: string | null): string {
 
 /**
  * The signed-in player's own AIR/Rally Ranked record: a stats card
- * (wins/losses/win rate/rank/AAR, or calibration progress while
+ * (wins/losses/win rate/rank/ARR, or calibration progress while
  * unplaced) over their confirmed results, most recent first.
  * listRecentMatches() already filters to status='confirmed' (an
  * unresolved dispute never moved anything, so it has no place in a
@@ -157,7 +157,7 @@ export default function GamesScreen() {
   );
 }
 
-/** Wins/losses/win rate/rank/AAR for a calibrated player; calibration
+/** Wins/losses/win rate/rank/ARR for a calibrated player; calibration
  * progress otherwise — the same is_calibrated split RankCard uses on
  * Profile, just with the fuller stat set this screen's the home for. */
 function GamesStatsCard({ rank }: { rank: PlayerRank | null }) {

@@ -64,7 +64,7 @@ beforeEach(() => {
   mockCreate.mockResolvedValue('match-1');
 });
 
-it('a 400-AAR-gap party is blocked when rated (over the 250 cap)', async () => {
+it('a 400-ARR-gap party is blocked when rated (over the 250 cap)', async () => {
   mockGetPlayerRank.mockImplementation(async (id: string) =>
     id === HOST.id ? rank({ user_id: HOST.id, rating: 1000 }) : rank({ user_id: ROBIN.id, rating: 1400 })
   );
@@ -78,6 +78,6 @@ it('a 400-AAR-gap party is blocked when rated (over the 250 cap)', async () => {
   const result = await screen.findByText('Robin');
   fireEvent.press(result);
 
-  await screen.findByText(/AAR of each other/);
+  await screen.findByText(/ARR of each other/);
   expect(mockCreate).not.toHaveBeenCalled();
 });
