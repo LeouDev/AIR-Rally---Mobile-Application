@@ -1,37 +1,25 @@
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalibrationStatus } from '@/components/ranked/calibration-status';
 import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
+import { RatingFreezeSheet } from '@/components/ranked/rating-freeze-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
-import { VenueRequestForm } from '@/components/venue-request-form';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import type { PlayerRank, PublicProfile, RankedMatchType } from '@/lib/database.types';
 import { getPublicProfile } from '@/lib/follows';
+import { acknowledgeUnbookedPlay, getUnbookedPlayAcknowledged } from '@/lib/profile';
 import { getPlayerRank, rankedStakes } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
 type GameMode = 'casual' | 'ranked';
-
-// Migration 100 freezes rating entirely for a calibrated player outside a
-// booked court — no rating change, no win, no loss, no streak. This screen
-// has no booking by construction (see `stakes` below), so this is the one
-// place that has to say so before the player starts a match here, not
-// after. Deliberately doesn't claim booking is currently easy — as of this
-// writing no venue is bookable, so overpromising here would just move the
-// same broken promise instead of removing it. Founder-approved copy,
-// scoped to this screen; rankedStakes()'s own generic copy (used verbatim
-// by the lobby, which already knows its match's real booking state) is
-// untouched.
-const CALIBRATED_UNBOOKED_NOTICE =
-  "You've finished calibration — from here, your rating only moves in matches on a court booked through AIR/Rally. You can still play without one; it just won't count.";
 
 /**
  * The booking-free doorway — the founder's own words: casual is "free
@@ -60,6 +48,47 @@ export default function PlayRankedScreen() {
   const [matchType, setMatchType] = useState<RankedMatchType>('singles');
   const [host, setHost] = useState<PublicProfile | null | undefined>(undefined);
   const [myRank, setMyRank] = useState<PlayerRank | null | undefined>(undefined);
+  const [freezeSheetVisible, setFreezeSheetVisible] = useState(false);
+  // Whether the open sheet is gating a pending "Find match" submit
+  // (Cancel/Play anyway) or just answering the on-screen line's tap
+  // (a single Close) — see RatingFreezeSheet's own `onConfirm`.
+  const [freezeConfirmMode, setFreezeConfirmMode] = useState(false);
+  // A native Promise's resolve, once called, ignores every later call —
+  // so "Play anyway" resolving true and the sheet's own onClose
+  // resolving false right after it can both fire unconditionally
+  // without a second flag to track which already happened.
+  const confirmResolveRef = useRef<((confirmed: boolean) => void) | null>(null);
+  // Starts false (show the dialog) rather than undefined/loading —
+  // worst case before the real value arrives is one dialog a returning
+  // player didn't strictly need to see again, never a skipped one.
+  const [acknowledgedUnbookedPlay, setAcknowledgedUnbookedPlay] = useState(false);
+
+  function confirmBeforeUnbookedMatch(): Promise<boolean> {
+    if (acknowledgedUnbookedPlay) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      confirmResolveRef.current = resolve;
+      setFreezeConfirmMode(true);
+      setFreezeSheetVisible(true);
+    });
+  }
+
+  function closeFreezeSheet() {
+    confirmResolveRef.current?.(false);
+    confirmResolveRef.current = null;
+    setFreezeSheetVisible(false);
+  }
+
+  function confirmFreezeSheet() {
+    // Resolve first — the match proceeds on the strength of this tap
+    // alone. The write below is best-effort and never awaited here: a
+    // failed write must cost a repeated dialog next session, never a
+    // blocked or delayed match now (acknowledgeUnbookedPlay swallows
+    // its own errors for the same reason).
+    confirmResolveRef.current?.(true);
+    confirmResolveRef.current = null;
+    setAcknowledgedUnbookedPlay(true);
+    if (userId) void acknowledgeUnbookedPlay(userId);
+  }
 
   useEffect(() => {
     if (!userId) return;
@@ -69,6 +98,7 @@ export default function PlayRankedScreen() {
     getPlayerRank(userId)
       .then(setMyRank)
       .catch(() => setMyRank(null));
+    getUnbookedPlayAcknowledged(userId).then(setAcknowledgedUnbookedPlay);
   }, [userId]);
 
   // Nobody has ever calibrated before their first match — a brand new
@@ -109,7 +139,18 @@ export default function PlayRankedScreen() {
                       <CalibrationStatus rank={myRank} />
                       {isCalibrated ? (
                         <ThemedText type="small" themeColor="subtle">
-                          {CALIBRATED_UNBOOKED_NOTICE}
+                          Rating only moves on a booked court.{' '}
+                          <ThemedText
+                            type="small"
+                            themeColor="primary"
+                            accessibilityRole="button"
+                            onPress={() => {
+                              setFreezeConfirmMode(false);
+                              setFreezeSheetVisible(true);
+                            }}
+                            style={styles.freezeLink}>
+                            Your court not here?
+                          </ThemedText>
                         </ThemedText>
                       ) : null}
                     </>
@@ -124,14 +165,6 @@ export default function PlayRankedScreen() {
                     </>
                   )}
                 </View>
-                {/* Fact (rank/ARR) and constraint (the notice above) live in the
-                    card; the action — asking us to bring their court onto
-                    AIR/Rally — is its own card below, since no venue is
-                    currently bookable and this is the moment they're blocked
-                    specifically by that. */}
-                {mode === 'ranked' && isCalibrated && userId ? (
-                  <VenueRequestForm userId={userId} variant="rankedBlocked" />
-                ) : null}
               </View>
 
               <View style={styles.block}>
@@ -153,11 +186,20 @@ export default function PlayRankedScreen() {
                 rated={mode === 'ranked'}
                 onSearchFocus={scrollFocusedIntoView}
                 onCreated={(matchId) => router.replace({ pathname: '/ranked/[matchId]', params: { matchId } })}
+                confirmBeforeCreate={mode === 'ranked' && isCalibrated ? confirmBeforeUnbookedMatch : undefined}
               />
             </>
           )}
         </ScrollView>
       </SafeAreaView>
+      {userId ? (
+        <RatingFreezeSheet
+          visible={freezeSheetVisible}
+          onClose={closeFreezeSheet}
+          userId={userId}
+          onConfirm={freezeConfirmMode ? confirmFreezeSheet : undefined}
+        />
+      ) : null}
     </ThemedView>
   );
 }
@@ -184,5 +226,9 @@ const styles = StyleSheet.create({
   stakesHeadline: {
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  freezeLink: {
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });

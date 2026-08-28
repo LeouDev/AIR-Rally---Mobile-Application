@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
 import PlayRankedScreen from '@/app/ranked/play';
 import type { PlayerRank } from '@/lib/database.types';
 import { getPublicProfile } from '@/lib/follows';
+import { acknowledgeUnbookedPlay, getUnbookedPlayAcknowledged } from '@/lib/profile';
 import { getPlayerRank } from '@/lib/ranked';
 
 /**
@@ -16,12 +17,13 @@ import { getPlayerRank } from '@/lib/ranked';
  * before today (rankedStakes() always took the !isCalibrated path here),
  * so it's pinned explicitly below rather than assumed correct by reuse.
  *
- * Once calibrated, this screen also has to say that migration 100 freezes
- * their rating outside a booked court (still no booking exists here by
- * construction), and it offers VenueRequestForm's `rankedBlocked` variant
- * as the one thing the player can actually do about it — the single
- * highest-intent moment to capture a venue request, since they're blocked
- * specifically by not having one.
+ * Once calibrated, this screen also has to say that migration 100
+ * freezes their rating outside a booked court (still no booking exists
+ * here by construction) — as a compact tappable line on the screen, and
+ * as a "Find match" gate the first time via RatingFreezeSheet's confirm
+ * mode (RankedPartyBuilder's `confirmBeforeCreate`). Both are pinned
+ * here: the line's copy/visibility, and that the confirm hook only
+ * reaches RankedPartyBuilder for a calibrated Ranked-mode player.
  */
 
 jest.mock('expo-router', () => ({
@@ -36,26 +38,66 @@ jest.mock('@/lib/ranked', () => ({
   getPlayerRank: jest.fn(),
 }));
 
+jest.mock('@/lib/profile', () => ({
+  getUnbookedPlayAcknowledged: jest.fn(),
+  acknowledgeUnbookedPlay: jest.fn(),
+}));
+
 jest.mock('@/providers/session', () => ({
   useSession: () => ({ session: { user: { id: 'me' } } }),
 }));
 
+let capturedConfirmBeforeCreate: (() => Promise<boolean>) | undefined;
+
 jest.mock('@/components/ranked/ranked-party-builder', () => ({
-  RankedPartyBuilder: () => {
+  RankedPartyBuilder: ({ confirmBeforeCreate }: { confirmBeforeCreate?: () => Promise<boolean> }) => {
+    capturedConfirmBeforeCreate = confirmBeforeCreate;
     const { View } = jest.requireActual('react-native');
     return <View />;
   },
 }));
 
-jest.mock('@/components/venue-request-form', () => ({
-  VenueRequestForm: ({ userId, variant }: { userId: string; variant: string }) => {
-    const { Text } = jest.requireActual('react-native');
-    return <Text>{`venue-request-form:${userId}:${variant}`}</Text>;
+jest.mock('@/components/ranked/rating-freeze-sheet', () => ({
+  RatingFreezeSheet: ({
+    visible,
+    onClose,
+    onConfirm,
+    userId,
+  }: {
+    visible: boolean;
+    onClose: () => void;
+    onConfirm?: () => void;
+    userId: string;
+  }) => {
+    const { Pressable, Text, View } = jest.requireActual('react-native');
+    if (!visible) return null;
+    return (
+      <View>
+        <Text>{`freeze-sheet:${userId}:${onConfirm ? 'confirm' : 'info'}`}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="sheet-close" onPress={onClose} />
+        {onConfirm ? (
+          // Mirrors the real RatingFreezeSheet footer: "Play anyway"
+          // fires onConfirm() THEN onClose(), same as the actual
+          // component — a mock that only fired onConfirm would leave
+          // `visible` stuck true and mask a real closing bug.
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="sheet-confirm"
+            onPress={() => {
+              onConfirm();
+              onClose();
+            }}
+          />
+        ) : null}
+      </View>
+    );
   },
 }));
 
 const mockGetPublicProfile = getPublicProfile as jest.MockedFunction<typeof getPublicProfile>;
 const mockGetPlayerRank = getPlayerRank as jest.MockedFunction<typeof getPlayerRank>;
+const mockGetAcknowledged = getUnbookedPlayAcknowledged as jest.MockedFunction<typeof getUnbookedPlayAcknowledged>;
+const mockAcknowledge = acknowledgeUnbookedPlay as jest.MockedFunction<typeof acknowledgeUnbookedPlay>;
 const ME = { id: 'me', display_name: 'Galileouuu', avatar_url: null };
 
 function rankFixture(overrides: Partial<PlayerRank>): PlayerRank {
@@ -86,7 +128,10 @@ function rankFixture(overrides: Partial<PlayerRank>): PlayerRank {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  capturedConfirmBeforeCreate = undefined;
   mockGetPublicProfile.mockResolvedValue(ME);
+  mockGetAcknowledged.mockResolvedValue(false);
+  mockAcknowledge.mockResolvedValue(undefined);
 });
 
 describe('PlayRankedScreen — Ranked-mode explainer', () => {
@@ -114,38 +159,144 @@ describe('PlayRankedScreen — Ranked-mode explainer', () => {
     expect(screen.queryByText(/calibration matches played/)).toBeNull();
   });
 
-  it('once calibrated, warns that rating is frozen outside a booked court', async () => {
-    // This screen hardcodes booked: false, and migration 100 freezes
-    // rating (no change, no win, no loss, no streak) outside a booked
-    // court — this notice would otherwise silently vanish behind the
-    // new rank/ARR display.
+  it('once calibrated, shows the compact booked-court line with a tappable second half', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
     await render(<PlayRankedScreen />);
 
-    await screen.findByText(/your rating only moves in matches on a court booked through AIR\/Rally/);
+    await screen.findByText(/Rating only moves on a booked court\./);
+    await screen.findByText('Your court not here?');
   });
 
-  it('does not show the booked-court notice while still calibrating', async () => {
+  it('does not show the booked-court line while still calibrating', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 3 }));
     await render(<PlayRankedScreen />);
 
     await screen.findByText('3 of 10 calibration matches played');
-    expect(screen.queryByText(/court booked through AIR\/Rally/)).toBeNull();
+    expect(screen.queryByText(/booked court/)).toBeNull();
   });
 
-  it('once calibrated, offers the venue-request form as the way to close that gap', async () => {
+  it('tapping "Your court not here?" opens the sheet in info mode (no onConfirm)', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
     await render(<PlayRankedScreen />);
 
-    await screen.findByText('venue-request-form:me:rankedBlocked');
+    const link = await screen.findByText('Your court not here?');
+    fireEvent.press(link);
+
+    await screen.findByText('freeze-sheet:me:info');
   });
 
-  it('does not offer the venue-request form while still calibrating', async () => {
+  it('passes confirmBeforeCreate to RankedPartyBuilder only for a calibrated Ranked-mode player', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+    await render(<PlayRankedScreen />);
+
+    await screen.findByText('AIR/Rally Rank');
+    expect(capturedConfirmBeforeCreate).toBeInstanceOf(Function);
+  });
+
+  it('does not pass confirmBeforeCreate while still calibrating', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 3 }));
     await render(<PlayRankedScreen />);
 
     await screen.findByText('3 of 10 calibration matches played');
-    expect(screen.queryByText(/venue-request-form:/)).toBeNull();
+    expect(capturedConfirmBeforeCreate).toBeUndefined();
+  });
+
+  it('does not pass confirmBeforeCreate in Casual mode, even for a calibrated player', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+    await render(<PlayRankedScreen />);
+    await screen.findByText('AIR/Rally Rank');
+
+    const casualTab = await screen.findByRole('button', { name: 'Casual' });
+    fireEvent.press(casualTab);
+
+    await screen.findByText('CASUAL');
+    expect(capturedConfirmBeforeCreate).toBeUndefined();
+  });
+
+  it('confirmBeforeCreate resolves true when "Play anyway" is pressed, opening the sheet in confirm mode', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+    await render(<PlayRankedScreen />);
+    await screen.findByText('AIR/Rally Rank');
+
+    let result: Promise<boolean>;
+    await act(() => {
+      result = capturedConfirmBeforeCreate!();
+    });
+    await screen.findByText('freeze-sheet:me:confirm');
+    fireEvent.press(screen.getByLabelText('sheet-confirm'));
+
+    await expect(result!).resolves.toBe(true);
+  });
+
+  it('confirmBeforeCreate resolves false when the sheet is closed without confirming', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+    await render(<PlayRankedScreen />);
+    await screen.findByText('AIR/Rally Rank');
+
+    let result: Promise<boolean>;
+    await act(() => {
+      result = capturedConfirmBeforeCreate!();
+    });
+    await screen.findByText('freeze-sheet:me:confirm');
+    fireEvent.press(screen.getByLabelText('sheet-close'));
+
+    await expect(result!).resolves.toBe(false);
+  });
+
+  it('skips the dialog entirely once the player has already acknowledged (persisted from a prior session)', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+    mockGetAcknowledged.mockResolvedValue(true);
+    await render(<PlayRankedScreen />);
+    await screen.findByText('AIR/Rally Rank');
+    await waitFor(() => expect(mockGetAcknowledged).toHaveBeenCalledWith('me'));
+
+    let result: Promise<boolean>;
+    await act(() => {
+      result = capturedConfirmBeforeCreate!();
+    });
+
+    await expect(result!).resolves.toBe(true);
+    expect(screen.queryByText(/freeze-sheet:/)).toBeNull();
+  });
+
+  it('persists the acknowledgement (best-effort) when "Play anyway" is pressed', async () => {
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+    await render(<PlayRankedScreen />);
+    await screen.findByText('AIR/Rally Rank');
+
+    let result: Promise<boolean>;
+    await act(() => {
+      result = capturedConfirmBeforeCreate!();
+    });
+    await screen.findByText('freeze-sheet:me:confirm');
+    fireEvent.press(screen.getByLabelText('sheet-confirm'));
+
+    await expect(result!).resolves.toBe(true);
+    expect(mockAcknowledge).toHaveBeenCalledWith('me');
+  });
+
+  it('after confirming once, a second submit resolves true immediately without reopening the sheet', async () => {
+    // Optimistic local state — the match already proceeded on the tap
+    // alone, so a second Find match in the same session shouldn't ask
+    // again even before the best-effort write has had time to land.
+    mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+    await render(<PlayRankedScreen />);
+    await screen.findByText('AIR/Rally Rank');
+
+    let first: Promise<boolean>;
+    await act(() => {
+      first = capturedConfirmBeforeCreate!();
+    });
+    await screen.findByText('freeze-sheet:me:confirm');
+    fireEvent.press(screen.getByLabelText('sheet-confirm'));
+    await expect(first!).resolves.toBe(true);
+
+    let second: Promise<boolean>;
+    await act(() => {
+      second = capturedConfirmBeforeCreate!();
+    });
+    await expect(second!).resolves.toBe(true);
+    expect(screen.queryByText('freeze-sheet:me:confirm')).toBeNull();
   });
 
   it('leaves Casual mode entirely untouched', async () => {

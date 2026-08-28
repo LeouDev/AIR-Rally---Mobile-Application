@@ -36,6 +36,29 @@ export async function updateEmailNotificationPreference(userId: string, enabled:
   if (error) throw error;
 }
 
+/** Whether this player has ever tapped "Play anyway" on the Play
+ * doorway's unbooked-rating-freeze dialog. A read failure returns
+ * false — the safe default, since it only re-shows a dialog rather
+ * than silently skipping a warning the player hasn't actually seen. */
+export async function getUnbookedPlayAcknowledged(userId: string): Promise<boolean> {
+  const { data, error } = await supabase.from('profiles').select('unbooked_play_ack_at').eq('id', userId).single();
+  if (error || !data) return false;
+  return data.unbooked_play_ack_at !== null;
+}
+
+/** Best-effort — the caller (play.tsx's confirmBeforeUnbookedMatch)
+ * resolves the player into their match on the strength of the tap
+ * alone, before this even starts. A failed write costs a repeated
+ * dialog on a future session; it must never block or unwind a match
+ * that's already been approved. */
+export async function acknowledgeUnbookedPlay(userId: string): Promise<void> {
+  try {
+    await supabase.from('profiles').update({ unbooked_play_ack_at: new Date().toISOString() }).eq('id', userId);
+  } catch {
+    // Swallowed deliberately — see above.
+  }
+}
+
 /** Change-password-while-signed-in — same auth.updateUser() call the
  * web's ChangePasswordForm makes, just without the server-action layer
  * mobile doesn't have. */

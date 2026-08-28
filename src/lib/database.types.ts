@@ -21,6 +21,11 @@ export type Profile = {
   owner_status: OwnerStatus;
   referral_code: string;
   email_notifications_enabled: boolean;
+  /** Null until a calibrated player taps "Play anyway" on the Play
+   * doorway's unbooked-rating-freeze dialog — see play.tsx's
+   * confirmBeforeUnbookedMatch(). Named for the fact acknowledged
+   * rather than the dialog, so it survives the UI changing. */
+  unbooked_play_ack_at: string | null;
   created_at: string;
   updated_at: string;
 };
