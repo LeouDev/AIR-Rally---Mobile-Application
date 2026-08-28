@@ -72,6 +72,7 @@ export function RankedPartyBuilder({
   rated = true,
   onCreated,
   onSearchFocus,
+  confirmBeforeCreate,
 }: {
   host: PublicProfile;
   matchType: RankedMatchType;
@@ -91,6 +92,13 @@ export function RankedPartyBuilder({
    * applies to it. */
   rated?: boolean;
   onCreated: (matchId: string) => void;
+  /** Awaited before create_ranked_match() fires, when the caller passes
+   * one — omitted by every other caller (e.g. the booked flow in
+   * events/new.tsx), which stay untouched. A `false` resolution aborts
+   * *before* `submitting` ever flips true, so declining never leaves
+   * the Find match button stuck in a loading state. Built for the Play
+   * doorway's calibrated-but-unbooked confirmation. */
+  confirmBeforeCreate?: () => Promise<boolean>;
 }) {
   const theme = useTheme();
   const { show } = useToast();
@@ -229,6 +237,7 @@ export function RankedPartyBuilder({
 
   async function submit() {
     if (!allFilled || !eligibility.eligible || submitting) return;
+    if (confirmBeforeCreate && !(await confirmBeforeCreate())) return;
     setSubmitting(true);
     try {
       const teamA = slots.filter((s) => s.team === 'a').map((s) => s.player!.id);
