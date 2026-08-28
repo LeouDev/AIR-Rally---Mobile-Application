@@ -8,12 +8,11 @@ import { listFeedPosts } from '@/lib/posts';
 /**
  * COURT/Side's tabs must never claim to have changed a feed they did not.
  *
- * 'Near you' is gone rather than quiet — it needs a device location,
- * which means expo-location, a native dependency already declined once
- * for Explore's radius filter (see the note in lib/venues.ts) and one
- * that moves the OTA fingerprint, so it cannot reach installed builds
- * without a new binary. A tab that can never do its job should not be
- * offered.
+ * 'Near you' is gone rather than quiet — it needs a device location.
+ * expo-location is a dependency from build 10 onward, but nothing
+ * requests permission yet (see the note in lib/venues.ts), so the tab
+ * still has no position to sort by. A tab that cannot do its job should
+ * not be offered.
  *
  * 'Following' is real: court_side_feed() takes a required p_scope with
  * no default (web repo migration 20260810000077_court_side_feed_scope.sql)

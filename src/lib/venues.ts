@@ -11,9 +11,10 @@ export function publicImageUrl(storagePath: string): string {
 export type VenueSortOption = 'recommended' | 'price_asc' | 'price_desc' | 'rating';
 
 /** Same shape as the web's MarketplaceFilters, minus the geolocation
- * radius filter — that needs expo-location, a native dependency this
- * app doesn't carry (same "avoid a native rebuild" call as the maps
- * deep link in directionsUrl below). */
+ * radius filter. expo-location ships as a dependency from build 10, but
+ * no code requests permission yet, so there is still no position to
+ * filter on — the blocker moved from "needs a native rebuild" to "needs
+ * a decision about when to prompt". */
 export type MarketplaceFilters = {
   q?: string;
   indoorOutdoor?: 'indoor' | 'outdoor';

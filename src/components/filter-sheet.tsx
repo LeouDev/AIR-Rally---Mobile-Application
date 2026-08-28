@@ -84,7 +84,10 @@ type FilterSheetProps = {
 /**
  * Same filter set as the web's FilterBar (court type, price range, min
  * rating, surface, open-on date/time, amenities) minus distance — that
- * one needs expo-location, a native module this app doesn't carry. Date
+ * one needs a device location. expo-location is now a dependency (added
+ * unused for build 10) but nothing requests permission yet, so there is
+ * still no location to filter by; adding distance means deciding when to
+ * prompt, which is a separate call. Date
  * and time are plain text fields rather than a native picker for the
  * same reason: no @react-native-community/datetimepicker dependency to
  * avoid another native-rebuild detour.
