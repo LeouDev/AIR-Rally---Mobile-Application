@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FilterSheet } from '@/components/filter-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VenueCard } from '@/components/venue-card';
 import { VenueRequestForm } from '@/components/venue-request-form';
@@ -133,6 +134,20 @@ export default function ExploreScreen() {
 
   const activeFilterCount = countActiveFilters(filters);
 
+  // The empty state's only way back to a populated list. Before the
+  // venue-request form existed here, an empty result was a small static
+  // card nobody lingered on — clearing search text alone (the `x` in the
+  // search field) re-fetches with filters still applied, and if THOSE
+  // alone also match nothing, the same empty state renders again with no
+  // visible change, reading as stuck rather than as "still filtered."
+  // Filters can only be reset via the separate filter sheet otherwise,
+  // which isn't reachable from this screen without noticing the icon —
+  // this clears both in the one tap a dead end actually needs.
+  const clearSearchAndFilters = () => {
+    setSearch('');
+    setFilters({});
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -215,21 +230,31 @@ export default function ExploreScreen() {
                   <Skeleton height={230} radius={Radius.xl} />
                 </View>
               ) : userId ? (
-                <VenueRequestForm
-                  key={search || activeFilterCount > 0 ? 'searching' : 'empty'}
-                  userId={userId}
-                  variant={search || activeFilterCount > 0 ? 'searching' : 'empty'}
-                  initialPlaceName={search.trim()}
-                />
+                <View style={styles.emptyStack}>
+                  {search || activeFilterCount > 0 ? (
+                    <Button title="Clear search & filters" variant="ghost" onPress={clearSearchAndFilters} />
+                  ) : null}
+                  <VenueRequestForm
+                    key={search || activeFilterCount > 0 ? 'searching' : 'empty'}
+                    userId={userId}
+                    variant={search || activeFilterCount > 0 ? 'searching' : 'empty'}
+                    initialPlaceName={search.trim()}
+                  />
+                </View>
               ) : (
-                <View
-                  style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <ThemedText type="subtitle">No venues found</ThemedText>
-                  <ThemedText type="small" themeColor="subtle">
-                    {search || activeFilterCount > 0
-                      ? 'Try a different name, area, or fewer filters.'
-                      : 'Venues appear here as owners come aboard.'}
-                  </ThemedText>
+                <View style={styles.emptyStack}>
+                  {search || activeFilterCount > 0 ? (
+                    <Button title="Clear search & filters" variant="ghost" onPress={clearSearchAndFilters} />
+                  ) : null}
+                  <View
+                    style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <ThemedText type="subtitle">No venues found</ThemedText>
+                    <ThemedText type="small" themeColor="subtle">
+                      {search || activeFilterCount > 0
+                        ? 'Try a different name, area, or fewer filters.'
+                        : 'Venues appear here as owners come aboard.'}
+                    </ThemedText>
+                  </View>
                 </View>
               )
             }
@@ -313,6 +338,9 @@ const styles = StyleSheet.create({
   },
   skeletons: {
     gap: Spacing.three,
+  },
+  emptyStack: {
+    gap: Spacing.two,
   },
   empty: {
     borderRadius: Radius.xl,
