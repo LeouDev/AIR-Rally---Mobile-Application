@@ -3,13 +3,13 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { RankBadge } from '@/components/ranked/rank-badge';
+import { CalibrationStatus } from '@/components/ranked/calibration-status';
 import { ThemedText } from '@/components/themed-text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { PlayerRank } from '@/lib/database.types';
-import { calibrationState, formatRating, getPlayerRank, rankLabel } from '@/lib/ranked';
+import { calibrationState, getPlayerRank } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
 /**
@@ -93,23 +93,7 @@ export function RankCard() {
     const calibration = calibrationState(calibrating);
     return (
       <View style={[styles.card, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
-        <ThemedText type="caption" style={[styles.eyebrow, { color: theme.primary }]}>
-          Calibrating
-        </ThemedText>
-        <ThemedText type="subtitle" style={{ color: theme.navyForeground }}>
-          {calibration.played} of {calibration.total} calibration matches played
-        </ThemedText>
-        <View style={styles.calibrationTrack}>
-          {Array.from({ length: calibration.total }, (_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.calibrationSegment,
-                { backgroundColor: i < calibration.played ? theme.primary : `${theme.navyForeground}33` },
-              ]}
-            />
-          ))}
-        </View>
+        <CalibrationStatus rank={calibrating} surface="navy" />
         <ThemedText type="caption" style={{ color: `${theme.navyForeground}CC` }}>
           Your tier stays hidden until match {calibration.total}. Results still count — they place you.
         </ThemedText>
@@ -134,18 +118,7 @@ export function RankCard() {
 
   return (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      <View style={styles.row}>
-        <RankBadge tier={primary.tier} size={40} />
-        <View style={styles.text}>
-          <ThemedText type="caption" themeColor="mutedForeground">
-            AIR/Rally Rank
-          </ThemedText>
-          <ThemedText type="subtitle">{rankLabel(primary.tier, primary.pips)}</ThemedText>
-          <ThemedText type="caption" style={{ color: theme.primary }}>
-            ARR {formatRating(primary.rating)}
-          </ThemedText>
-        </View>
-      </View>
+      <CalibrationStatus rank={primary} />
 
       <View style={styles.actions}>
         <Pressable
@@ -196,20 +169,6 @@ const styles = StyleSheet.create({
   },
   cta: {
     alignSelf: 'flex-end',
-  },
-  eyebrow: {
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  calibrationTrack: {
-    flexDirection: 'row',
-    gap: 3,
-    height: 6,
-  },
-  calibrationSegment: {
-    flex: 1,
-    borderRadius: 2,
   },
   actions: {
     flexDirection: 'row',
