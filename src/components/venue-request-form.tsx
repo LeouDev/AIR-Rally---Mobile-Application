@@ -27,12 +27,20 @@ const COPY = {
     title: 'No venues here yet',
     subtitle: 'Tell us where you’d play and we’ll reach out to them.',
   },
+  rankedBlocked: {
+    title: 'Your court not on AIR/Rally yet?',
+    subtitle: 'Tell us where you play and we’ll reach out to get it listed.',
+  },
 } as const;
 
 /**
- * "Bring a court here" — the capture surface on Explore's empty state, in
- * both variants (a search/filter that matched nothing, and the bare
- * unfiltered empty state). Port of the web repo's RequestVenueForm.
+ * "Bring a court here" — the capture surface reused wherever a player
+ * hits the lack of a listed venue: Explore's empty state (`searching`/
+ * `empty`, a search/filter that matched nothing vs. the bare unfiltered
+ * state) and the Ranked doorway's calibrated-but-nothing-bookable dead
+ * end (`rankedBlocked`). Port of the web repo's RequestVenueForm. One
+ * component per caller would let the submit flow — duplicates, the
+ * demand threshold, the share message — drift between them.
  *
  * Gated by the caller already being signed in — every screen this renders
  * on sits inside the app's Stack.Protected(session !== null) guard, so
@@ -45,7 +53,7 @@ export function VenueRequestForm({
   initialPlaceName = '',
 }: {
   userId: string;
-  variant: 'searching' | 'empty';
+  variant: 'searching' | 'empty' | 'rankedBlocked';
   /** Prefilled from the Explore search box when there's active search
    * text — the player already told us what they want. */
   initialPlaceName?: string;

@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VenueRequestForm } from '@/components/venue-request-form';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
@@ -18,6 +19,19 @@ import { getPlayerRank, rankedStakes } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
 type GameMode = 'casual' | 'ranked';
+
+// Migration 100 freezes rating entirely for a calibrated player outside a
+// booked court — no rating change, no win, no loss, no streak. This screen
+// has no booking by construction (see `stakes` below), so this is the one
+// place that has to say so before the player starts a match here, not
+// after. Deliberately doesn't claim booking is currently easy — as of this
+// writing no venue is bookable, so overpromising here would just move the
+// same broken promise instead of removing it. Founder-approved copy,
+// scoped to this screen; rankedStakes()'s own generic copy (used verbatim
+// by the lobby, which already knows its match's real booking state) is
+// untouched.
+const CALIBRATED_UNBOOKED_NOTICE =
+  "You've finished calibration — from here, your rating only moves in matches on a court booked through AIR/Rally. You can still play without one; it just won't count.";
 
 /**
  * The booking-free doorway — the founder's own words: casual is "free
@@ -93,13 +107,9 @@ export default function PlayRankedScreen() {
                   {mode === 'ranked' ? (
                     <>
                       <CalibrationStatus rank={myRank} />
-                      {/* Once calibrated, this screen still has no booking (booked
-                          is hardcoded false above) — rankedStakes' own warning that
-                          the result won't move their rating still applies and would
-                          otherwise silently disappear behind the new rank/ARR display. */}
                       {isCalibrated ? (
                         <ThemedText type="small" themeColor="subtle">
-                          {stakes.detail}
+                          {CALIBRATED_UNBOOKED_NOTICE}
                         </ThemedText>
                       ) : null}
                     </>
@@ -114,6 +124,14 @@ export default function PlayRankedScreen() {
                     </>
                   )}
                 </View>
+                {/* Fact (rank/ARR) and constraint (the notice above) live in the
+                    card; the action — asking us to bring their court onto
+                    AIR/Rally — is its own card below, since no venue is
+                    currently bookable and this is the moment they're blocked
+                    specifically by that. */}
+                {mode === 'ranked' && isCalibrated && userId ? (
+                  <VenueRequestForm userId={userId} variant="rankedBlocked" />
+                ) : null}
               </View>
 
               <View style={styles.block}>
