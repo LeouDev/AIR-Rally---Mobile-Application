@@ -8,7 +8,7 @@ import { getPlayerRank, listRecentMatches, type RankedMatchSummary } from '@/lib
 /**
  * Replaces Profile's old "Open Play" shortcut and rank-card.tsx's
  * "Match history" destination. The founder's spec: a stats card
- * (wins/losses/win rate/rank+badge/AAR), or calibration progress
+ * (wins/losses/win rate/rank+badge/ARR), or calibration progress
  * below 10 matches — pinned here as a property of the RENDERED card,
  * not which internal branch produced it, since `rank === null` (never
  * opened Ranked) and an unplaced PlayerRank row both have to reach the
@@ -144,7 +144,7 @@ beforeEach(() => {
 });
 
 describe('GamesScreen — stats card', () => {
-  it('shows wins, losses, win rate, rank, and AAR for a calibrated player', async () => {
+  it('shows wins, losses, win rate, rank, and ARR for a calibrated player', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ wins: 6, losses: 4, rating: 1250, tier: 3, pips: 2 }));
     await render(<GamesScreen />);
 

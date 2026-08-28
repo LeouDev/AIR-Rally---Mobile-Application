@@ -6,7 +6,7 @@ import type { RankedMatch } from '@/lib/database.types';
 import type { RankedMatchDetail, RankedMatchParticipant } from '@/lib/ranked';
 
 /**
- * Before this, both cases below rendered NOTHING where the rank/tier/AAR
+ * Before this, both cases below rendered NOTHING where the rank/tier/ARR
  * card normally goes — `me.tier_after !== null` is false for both, since
  * apply_ranked_result() never writes it for either. A silent gap where
  * a card usually is reads as the app forgetting, not as a deliberate

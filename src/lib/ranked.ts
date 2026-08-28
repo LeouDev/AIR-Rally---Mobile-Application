@@ -78,8 +78,8 @@ export const RANKED_TIER_COUNT = RANK_THRESHOLDS.length;
 export const RANKED_PIPS_PER_TIER = 5;
 /** Matches c_calibration_matches in apply_ranked_result(). */
 export const RANKED_CALIBRATION_MATCHES = 10;
-/** The party-spread cap — a ranked doubles party's members must all sit within this many AAR points of each other. */
-export const RANKED_MAX_PARTY_AAR_SPREAD = 250;
+/** The party-spread cap — a ranked doubles party's members must all sit within this many ARR points of each other. */
+export const RANKED_MAX_PARTY_ARR_SPREAD = 250;
 
 export type RankedTierInfo = (typeof RANK_THRESHOLDS)[number];
 
@@ -90,8 +90,8 @@ export function tierInfo(tier: RankedTier): RankedTierInfo {
 
 const STARS_PER_RANK = 5;
 
-/** Stateless rank+star from a raw AAR value. Mirrors ranked_rank_for_aar() exactly. */
-export function rankForAar(rating: number): { tier: RankedTier; pips: RankedPips } {
+/** Stateless rank+star from a raw ARR value. Mirrors ranked_rank_for_aar() exactly — that's the database function's actual name, unchanged by this rename. */
+export function rankForArr(rating: number): { tier: RankedTier; pips: RankedPips } {
   const band = RANK_THRESHOLDS.find((r) => rating < r.floor + r.width) ?? RANK_THRESHOLDS[RANK_THRESHOLDS.length - 1];
   const starWidth = band.width === Infinity ? 200 / STARS_PER_RANK : band.width / STARS_PER_RANK;
   const offset = rating - band.floor;
@@ -120,7 +120,7 @@ export type ClimbState = {
   /** 0-1, how far through the current tier's five stars. */
   progress: number;
   nextTier: RankedTier | null;
-  /** Close to promotion, never a guarantee — rank is derived continuously from AAR. */
+  /** Close to promotion, never a guarantee — rank is derived continuously from ARR. */
   nearPromotion: boolean;
   atCeiling: boolean;
 };
@@ -157,7 +157,7 @@ export function formatWinRate(rank: Pick<PlayerRank, 'wins' | 'losses'>): string
   return rate === null ? '—' : `${(rate * 100).toFixed(1)}%`;
 }
 
-/** AAR is shown grouped — a four-digit number reads as a rating, not a year. */
+/** ARR is shown grouped — a four-digit number reads as a rating, not a year. */
 export function formatRating(rating: number): string {
   return rating.toLocaleString('en-PH');
 }
@@ -171,7 +171,7 @@ export function formatReliability(reliability: number): string {
   return `${Math.round(reliability)}%`;
 }
 
-export type PartyAarEligibility = {
+export type PartyArrEligibility = {
   eligible: boolean;
   spread: number;
   allowedLowestRating: number | null;
@@ -179,15 +179,15 @@ export type PartyAarEligibility = {
 };
 
 /**
- * Mirrors ranked_party_spread()'s AAR-based rule. Uncalibrated players
+ * Mirrors ranked_party_spread()'s ARR-based rule. Uncalibrated players
  * are excluded — they have no meaningful rating to compare yet, and
  * excluding them is what makes the placement matches playable at all.
  * A preview only: the button this gates just re-tries after the server's
  * own rejection either way.
  */
-export function partyAarEligibility(
+export function partyArrEligibility(
   party: readonly (Pick<PlayerRank, 'rating' | 'is_calibrated'> | null | undefined)[]
-): PartyAarEligibility {
+): PartyArrEligibility {
   const ratings = party
     .filter((p): p is Pick<PlayerRank, 'rating' | 'is_calibrated'> => Boolean(p?.is_calibrated))
     .map((p) => p.rating);
@@ -198,29 +198,29 @@ export function partyAarEligibility(
   const highestRating = Math.max(...ratings);
   const spread = highestRating - lowestRating;
   return {
-    eligible: spread <= RANKED_MAX_PARTY_AAR_SPREAD,
+    eligible: spread <= RANKED_MAX_PARTY_ARR_SPREAD,
     spread,
-    allowedLowestRating: highestRating - RANKED_MAX_PARTY_AAR_SPREAD,
-    allowedHighestRating: lowestRating + RANKED_MAX_PARTY_AAR_SPREAD,
+    allowedLowestRating: highestRating - RANKED_MAX_PARTY_ARR_SPREAD,
+    allowedHighestRating: lowestRating + RANKED_MAX_PARTY_ARR_SPREAD,
   };
 }
 
-export type PartyEligibilityDisplay = PartyAarEligibility & {
+export type PartyEligibilityDisplay = PartyArrEligibility & {
   allowedLowestTierName: string | null;
   allowedHighestTierName: string | null;
   maxSpread: number;
 };
 
-/** Wraps partyAarEligibility() with tier NAMES for a "Volleyer → Kitchen King" style message — display only. */
+/** Wraps partyArrEligibility() with tier NAMES for a "Volleyer → Kitchen King" style message — display only. */
 export function partyEligibilityDisplay(
   party: readonly (Pick<PlayerRank, 'rating' | 'is_calibrated'> | null | undefined)[]
 ): PartyEligibilityDisplay {
-  const result = partyAarEligibility(party);
+  const result = partyArrEligibility(party);
   return {
     ...result,
-    allowedLowestTierName: result.allowedLowestRating === null ? null : tierInfo(rankForAar(result.allowedLowestRating).tier).name,
-    allowedHighestTierName: result.allowedHighestRating === null ? null : tierInfo(rankForAar(result.allowedHighestRating).tier).name,
-    maxSpread: RANKED_MAX_PARTY_AAR_SPREAD,
+    allowedLowestTierName: result.allowedLowestRating === null ? null : tierInfo(rankForArr(result.allowedLowestRating).tier).name,
+    allowedHighestTierName: result.allowedHighestRating === null ? null : tierInfo(rankForArr(result.allowedHighestRating).tier).name,
+    maxSpread: RANKED_MAX_PARTY_ARR_SPREAD,
   };
 }
 
@@ -228,7 +228,7 @@ export type MatchBalance = { bars: number; label: string; gap: number };
 
 const BALANCE_LABELS = ['Lopsided', 'Uneven', 'Fair', 'Even', 'Very even'] as const;
 
-/** Turns the AAR gap between two sides into a five-bar meter. */
+/** Turns the ARR gap between two sides into a five-bar meter. */
 export function matchBalance(teamARatings: number[], teamBRatings: number[]): MatchBalance {
   const mean = (xs: number[]) => (xs.length === 0 ? 0 : xs.reduce((a, b) => a + b, 0) / xs.length);
   const gap = Math.abs(mean(teamARatings) - mean(teamBRatings));
@@ -418,7 +418,7 @@ export type RatingImpact =
   | { kind: 'none'; reason: 'casual' | 'frozen' };
 
 /**
- * Whether THIS result screen should show a rank/tier/AAR-delta block at
+ * Whether THIS result screen should show a rank/tier/ARR-delta block at
  * all, and why not when it shouldn't. Two cases produce the identical
  * symptom — rating_delta is null on this player's row — for different
  * reasons, and they read differently to the player:
