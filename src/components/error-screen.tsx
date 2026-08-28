@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Share, StyleSheet, View, useColorScheme } from 'react-native';
+import { Share, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Wordmark } from '@/components/wordmark';
 import { Colors, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { captureFatalError, formatReportForSupport, type ErrorReport } from '@/lib/error-reporting';
 
 /**
