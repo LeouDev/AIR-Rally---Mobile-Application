@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import { getMatch, type RankedMatchDetail } from '@/lib/ranked';
 import { supabase } from '@/lib/supabase';
@@ -35,6 +35,17 @@ const FALLBACK_POLL_MS = 5000;
  */
 export function useRankedMatch(matchId: string, initial: RankedMatchDetail) {
   const [match, setMatch] = useState<RankedMatchDetail>(initial);
+  // Supabase dedupes channels by topic string across the whole client — a
+  // second `.channel('ranked-match-<id>')` call while a first is still
+  // subscribed (e.g. two mounts of this same route, or a remount racing
+  // its own async removeChannel()) returns THAT already-subscribed
+  // channel rather than a fresh one, and chaining .on() on it throws
+  // "cannot add postgres_changes callbacks... after subscribing". useId()
+  // is stable for this component instance's whole lifetime and distinct
+  // from every other instance's, so two simultaneous mounts — or an old
+  // mount and its replacement — never collide on the same topic. Confirmed
+  // in production 2026-08-28, the app's first live-scored match.
+  const instanceId = useId();
 
   useEffect(() => {
     let cancelled = false;
@@ -47,7 +58,7 @@ export function useRankedMatch(matchId: string, initial: RankedMatchDetail) {
     void refresh();
 
     const channel = supabase
-      .channel(`ranked-match-${matchId}`)
+      .channel(`ranked-match-${matchId}-${instanceId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ranked_matches', filter: `id=eq.${matchId}` }, refresh)
       .on(
         'postgres_changes',
@@ -63,7 +74,7 @@ export function useRankedMatch(matchId: string, initial: RankedMatchDetail) {
       clearInterval(interval);
       void supabase.removeChannel(channel);
     };
-  }, [matchId]);
+  }, [matchId, instanceId]);
 
   return match;
 }
