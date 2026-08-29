@@ -331,11 +331,9 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
               ]}>
               {match.score_a}
             </ThemedText>
-            {match.match_type === 'doubles' ? (
-              <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
-                {labels.a}
-              </ThemedText>
-            ) : null}
+            <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
+              {labels.a}
+            </ThemedText>
           </View>
           <View style={[styles.finalScoreDivider, { backgroundColor: theme.navyForeground }]} />
           <View style={styles.finalScoreCol}>
@@ -351,11 +349,9 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
               ]}>
               {match.score_b}
             </ThemedText>
-            {match.match_type === 'doubles' ? (
-              <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
-                {labels.b}
-              </ThemedText>
-            ) : null}
+            <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
+              {labels.b}
+            </ThemedText>
           </View>
         </View>
         <View style={[styles.winnerRow, styles.navyHairline]}>
@@ -484,7 +480,7 @@ function DisputedView({ match }: { match: RankedMatchDetail }) {
       </ThemedText>
       <View style={[styles.disputedFooter, { borderTopColor: 'rgba(255,255,255,0.35)' }]}>
         <ThemedText type="caption" style={[styles.uppercase, { color: theme.rallyForeground, fontWeight: '700' }]}>
-          All four players have been notified. AIR/Rally support will review this match.
+          All {match.players.length} players have been notified. AIR/Rally support will review this match.
         </ThemedText>
       </View>
     </View>

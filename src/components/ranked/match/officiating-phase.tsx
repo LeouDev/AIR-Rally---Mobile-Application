@@ -118,7 +118,7 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
                 {scorekeeper?.display_name ?? 'Scorekeeper'}
               </ThemedText>
               <ThemedText type="caption" themeColor="mutedForeground">
-                {match.officiating_mode === 'referee' ? 'Not in this match' : 'One of the four players'}
+                {match.officiating_mode === 'referee' ? 'Not in this match' : `One of the ${match.players.length} players`}
               </ThemedText>
             </View>
           </View>
@@ -183,7 +183,7 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
           style={({ pressed }) => [styles.optionCard, { borderColor: theme.border }, pressed && styles.pressed]}>
           <ThemedText type="subtitle">Find referee</ThemedText>
           <ThemedText type="small" themeColor="subtle">
-            A non-playing person calls the score from courtside. All four players must approve.
+            A non-playing person calls the score from courtside. All {match.players.length} players must approve.
           </ThemedText>
         </Pressable>
         <Pressable
@@ -192,7 +192,7 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
           style={({ pressed }) => [styles.optionCard, { borderColor: theme.border }, pressed && styles.pressed]}>
           <ThemedText type="subtitle">Use player scorekeeper</ThemedText>
           <ThemedText type="small" themeColor="subtle">
-            One of the four players manages the official score.
+            One of the {match.players.length} players manages the official score.
           </ThemedText>
         </Pressable>
       </View>

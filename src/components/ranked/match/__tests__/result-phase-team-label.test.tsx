@@ -7,8 +7,12 @@ import type { RankedMatchDetail, RankedMatchParticipant } from '@/lib/ranked';
 
 /**
  * The result screen is where a player sees who they just beat — this pins
- * that the WINNER line and the doubles score-column captions resolve to
- * the team's chosen identity, and that singles never shows a team name.
+ * that the WINNER line and the score-column captions resolve to the
+ * team's chosen identity for doubles, and to the player's own name for
+ * singles (never a custom team/club name) — matching live-scoreboard.tsx's
+ * unconditional rendering of the same teamIdentityLabel() value, so a
+ * singles player doesn't lose the opponent-identity caption they had
+ * throughout the live match the moment the result screen appears.
  */
 
 jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn().mockResolvedValue('file:///x.png') }));
@@ -120,7 +124,7 @@ it('shows the resolved team name below each score column for doubles', async () 
   await screen.findByText('Net Ninjas');
 });
 
-it('never shows a team identity for singles, even if a team name is somehow set', async () => {
+it('shows player names (never a custom team name) under each score column for singles', async () => {
   const match = { ...matchFixture({ match_type: 'singles', team_a_name: 'Should never show' }) };
   const me = participant({ mode: 'singles' });
   const opp = participant({ user_id: 'opp', team: 'b', mode: 'singles', profile: { id: 'opp', display_name: 'Robin', avatar_url: null } });
@@ -129,6 +133,7 @@ it('never shows a team identity for singles, even if a team name is somehow set'
   await render(<ResultPhase match={detail} currentUserId="me" />);
 
   await waitFor(() => expect(screen.getAllByText('Leou').length).toBeGreaterThan(0));
+  expect(screen.getByText('Robin')).toBeTruthy();
   expect(screen.queryByText('Should never show')).toBeNull();
 });
 
