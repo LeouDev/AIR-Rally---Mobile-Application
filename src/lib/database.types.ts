@@ -612,10 +612,10 @@ export type RankedMatch = {
   /** False for a casual result: recorded and confirmed like any match, but
    * apply_ranked_result() skips every player_ranks mutation for everyone in
    * it. Set once at creation, never updated afterward — see
-   * migration 20260810000087. Distinct from a calibrated player being
-   * individually FROZEN in a `rated: true` match with no booking behind it
-   * (20260810000100) — that shows up per-player as a null rating_delta on
-   * an otherwise-rated match, not as `rated: false` on the match itself. */
+   * migration 20260810000087. Distinct from a calibrated player at a
+   * `rated: true` match with no booking behind it, whose rating still
+   * moves but at half rate (20260810000112, superseding 20260810000100's
+   * full freeze) — not as `rated: false` on the match itself. */
   rated: boolean;
   status: RankedMatchStatus;
   officiating_mode: RankedOfficiatingMode | null;

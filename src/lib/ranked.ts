@@ -775,11 +775,12 @@ export type RankedStakes = {
 
 /**
  * What this match means for the CURRENT PLAYER's rating, worded for
- * exactly their situation — not the match's, since 20260810000100's
- * freeze is decided per participant. In a mixed doubles lobby one
- * player can be frozen while their partner still calibrates normally;
- * a single match-level message would be wrong for one of them half the
- * time. Shown before the match starts (the doorway, and the lobby for
+ * exactly their situation — not the match's, since 20260810000112's
+ * unbooked discount is decided per participant. In a mixed doubles
+ * lobby one player can be discounted to half rate while their partner
+ * still calibrates normally (full rate, no booking needed); a single
+ * match-level message would be wrong for one of them half the time.
+ * Shown before the match starts (the doorway, and the lobby for
  * anyone who joined via a link and never saw the doorway) so nobody
  * discovers what a match did to their rating only after playing it.
  *
@@ -813,7 +814,7 @@ export function rankedStakes({
   if (booked === false) {
     return {
       headline: 'Ranked',
-      detail: "Recorded, but your rating won't move — this isn't at a booked court. Book a court to keep climbing.",
+      detail: "Recorded — counts at half rate, since this isn't at a booked court. Book a court to move at full rate.",
       tone: 'warning',
     };
   }

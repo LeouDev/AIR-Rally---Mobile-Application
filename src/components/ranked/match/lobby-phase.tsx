@@ -119,9 +119,9 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
 
       {/* Whoever is looking at this — not only whoever tapped "start" —
           sees what THIS match means for THEIR OWN rating before it's
-          played. The freeze (20260810000100) is decided per participant,
-          so a teammate's own copy can legitimately read differently from
-          theirs on the same match. */}
+          played. The half-rate discount (20260810000112) is decided per
+          participant, so a teammate's own copy can legitimately read
+          differently from theirs on the same match. */}
       <View style={[styles.stakesRow, styles.hairline]}>
         <ThemedText type="caption" style={[styles.stakesHeadline, { color: theme.rally }]}>
           {stakes.headline.toUpperCase()}

@@ -163,7 +163,7 @@ describe('PlayRankedScreen — Ranked-mode explainer', () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
     await render(<PlayRankedScreen />);
 
-    await screen.findByText(/Rating only moves on a booked court\./);
+    await screen.findByText(/Rating moves at half rate without a booked court\./);
     await screen.findByText('Your court not here?');
   });
 

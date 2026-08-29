@@ -7,11 +7,12 @@ import type { RankedMatchParticipant } from '@/lib/ranked';
 import { isMatchBooked } from '@/lib/ranked';
 
 /**
- * The freeze is decided per PARTICIPANT — someone invited into a match
- * never saw the doorway/creation screen, and could open straight into
- * the lobby with no idea whether this counts toward their rating. This
- * pins that the lobby itself fetches bookedness and shows the current
- * viewer's OWN accurate stakes, not a generic one.
+ * The half-rate discount is decided per PARTICIPANT — someone invited
+ * into a match never saw the doorway/creation screen, and could open
+ * straight into the lobby with no idea whether this counts toward
+ * their rating at full or half rate. This pins that the lobby itself
+ * fetches bookedness and shows the current viewer's OWN accurate
+ * stakes, not a generic one.
  */
 
 jest.mock('@/lib/ranked', () => ({
@@ -138,7 +139,7 @@ it('tells a still-calibrating player this counts, before it resolves whether the
   await screen.findByText(/calibration/);
 });
 
-it('warns a calibrated player their rating will not move once bookedness resolves to false', async () => {
+it('warns a calibrated player their rating moves at half rate once bookedness resolves to false', async () => {
   mockIsMatchBooked.mockResolvedValue(false);
   const me = participant({ rank: rank({ is_calibrated: true }) });
   const opp = participant({ user_id: 'opp', team: 'b', is_host: false });
@@ -147,7 +148,7 @@ it('warns a calibrated player their rating will not move once bookedness resolve
     <LobbyPhase match={{ ...matchFixture(), players: [me, opp], scorekeeper: null, team_a_club: null, team_b_club: null }} currentUserId="me" />
   );
 
-  await screen.findByText(/won't move/);
+  await screen.findByText(/half rate/);
   expect(mockIsMatchBooked).toHaveBeenCalledWith('match-1');
 });
 

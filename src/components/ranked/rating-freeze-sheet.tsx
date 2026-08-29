@@ -8,13 +8,15 @@ import { VenueRequestForm } from '@/components/venue-request-form';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-/** Migration 100 freezes rating entirely for a calibrated player outside a
- * booked court — no rating change, no win, no loss, no streak. Founder-
- * approved copy: says the rule plainly, then leads straight into asking
- * for their court, since a player who's just been told "no bookable
- * court" is the single highest-intent moment to capture that request. */
+/** Migration 20260810000112 discounts rating movement to half for a
+ * calibrated player outside a booked court — it used to freeze it
+ * entirely (20260810000100), superseded rather than layered on top.
+ * Leads with the positive case (full rate, on a booked court) before
+ * the discount, then straight into asking for their court, since a
+ * player who's just been told "no bookable court" is the single
+ * highest-intent moment to capture that request. */
 const EXPLANATION =
-  "You've finished calibration — from here, your rating only moves in matches on a court booked through AIR/Rally. You can still play without one; it just won't count.";
+  "You've finished calibration — matches on a court booked through AIR/Rally move your rating at full rate. Without one, it still moves, just at half rate.";
 
 type RatingFreezeSheetProps = {
   visible: boolean;

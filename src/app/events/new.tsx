@@ -208,12 +208,12 @@ export default function NewOpenPlayScreen() {
                   }}
                 />
                 {(() => {
-                  // A booked match never freezes — the freeze
-                  // (20260810000100) only ever applies to an UNBOOKED
-                  // ranked match, and this screen only ever creates
-                  // booked ones. isCalibrated doesn't change which
-                  // message shows here either way, so it's not fetched
-                  // just to word this one line more precisely.
+                  // A booked match never gets discounted — the half-rate
+                  // discount (20260810000112) only ever applies to an
+                  // UNBOOKED ranked match, and this screen only ever
+                  // creates booked ones. isCalibrated doesn't change
+                  // which message shows here either way, so it's not
+                  // fetched just to word this one line more precisely.
                   const stakes = rankedStakes({ rated: mode === 'ranked', booked: true, isCalibrated: true });
                   return (
                     <ThemedText type="caption" themeColor="mutedForeground">

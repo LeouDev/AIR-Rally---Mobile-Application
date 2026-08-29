@@ -143,7 +143,7 @@ export default function PlayRankedScreen() {
                       <CalibrationStatus rank={myRank} surface="navy" />
                       {isCalibrated ? (
                         <ThemedText type="small" style={{ color: `${theme.navyForeground}CC` }}>
-                          Rating only moves on a booked court.{' '}
+                          Rating moves at half rate without a booked court.{' '}
                           <ThemedText
                             type="small"
                             themeColor="primary"

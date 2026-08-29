@@ -26,7 +26,7 @@ describe('rankedStakes', () => {
     const stakes = rankedStakes({ rated: true, booked: false, isCalibrated: false });
     expect(stakes.headline).toBe('Ranked');
     expect(stakes.detail).toContain('calibration');
-    expect(stakes.detail).not.toContain("won't move");
+    expect(stakes.detail).not.toContain('half rate');
   });
 
   it("still counts toward calibration for an unbooked match even if booked status hasn't resolved yet", () => {
@@ -37,17 +37,17 @@ describe('rankedStakes', () => {
     expect(stakes.detail).toContain('calibration');
   });
 
-  it('warns a calibrated player their rating will not move on an unbooked ranked match — the dangerous case', () => {
+  it('warns a calibrated player their rating moves at half rate on an unbooked ranked match — the discounted case', () => {
     const stakes = rankedStakes({ rated: true, booked: false, isCalibrated: true });
     expect(stakes.tone).toBe('warning');
-    expect(stakes.detail).toContain("won't move");
+    expect(stakes.detail).toContain('half rate');
     expect(stakes.detail).toContain('Book a court');
   });
 
   it('gives a calibrated player on a booked match the plain counts-normally message', () => {
     const stakes = rankedStakes({ rated: true, booked: true, isCalibrated: true });
     expect(stakes.tone).toBe('neutral');
-    expect(stakes.detail).not.toContain("won't move");
+    expect(stakes.detail).not.toContain('half rate');
   });
 });
 
