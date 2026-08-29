@@ -15,6 +15,13 @@ import { listMarketplaceVenues } from '@/lib/venues';
  * one tap on "Clear search & filters" restores both at once.
  */
 
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+  useFocusEffect: (cb: () => void) => {
+    const React = jest.requireActual('react');
+    React.useEffect(cb, [cb]);
+  },
+}));
 jest.mock('@/providers/session', () => ({
   useSession: () => ({ session: { user: { id: 'me' } } }),
 }));

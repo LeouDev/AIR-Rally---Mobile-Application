@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
@@ -81,15 +82,22 @@ export default function ExploreScreen() {
     listSurfaceTypes().then(setSurfaceTypes).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!userId) {
-      setFavoriteIds(new Set());
-      return;
-    }
-    listFavoriteVenueIds(userId)
-      .then((ids) => setFavoriteIds(new Set(ids)))
-      .catch(() => {});
-  }, [userId]);
+  // Refetches on every focus, not just mount — Explore is a NativeTabs
+  // tab, which iOS keeps alive across tab switches. A favorite toggled
+  // from venue/[id].tsx (its own independent toggle, one push away from
+  // any card here) would otherwise never be reflected on this screen's
+  // hearts, no matter how many times you left and came back to it.
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) {
+        setFavoriteIds(new Set());
+        return;
+      }
+      listFavoriteVenueIds(userId)
+        .then((ids) => setFavoriteIds(new Set(ids)))
+        .catch(() => {});
+    }, [userId])
+  );
 
   // Debounced search — fires 300ms after the last keystroke. Filter and
   // sort changes apply immediately (the sheet's own Apply button is
