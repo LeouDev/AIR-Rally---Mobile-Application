@@ -76,13 +76,17 @@ export function RankCard() {
             accessibilityRole="button"
             onPress={() => router.push('/ranked/play')}
             style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
-            <ThemedText type="smallBold">Play a game</ThemedText>
+            <ThemedText type="smallBold" numberOfLines={1} adjustsFontSizeToFit>
+              Play a game
+            </ThemedText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push('/ranked/leaderboard')}
             style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
-            <ThemedText type="smallBold">Leaderboard</ThemedText>
+            <ThemedText type="smallBold" numberOfLines={1} adjustsFontSizeToFit>
+              Ladder
+            </ThemedText>
           </Pressable>
         </View>
       </View>
@@ -104,7 +108,7 @@ export function RankCard() {
             styles.actionButton,
             { borderColor: theme.primary, opacity: pressed ? 0.85 : 1 },
           ]}>
-          <ThemedText type="smallBold" style={{ color: theme.primary }}>
+          <ThemedText type="smallBold" style={{ color: theme.primary }} numberOfLines={1} adjustsFontSizeToFit>
             Play a game
           </ThemedText>
         </Pressable>
@@ -125,19 +129,25 @@ export function RankCard() {
           accessibilityRole="button"
           onPress={() => router.push('/ranked/play')}
           style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
-          <ThemedText type="smallBold">Play a game</ThemedText>
+          <ThemedText type="smallBold" numberOfLines={1} adjustsFontSizeToFit>
+            Play a game
+          </ThemedText>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/ranked/leaderboard')}
           style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
-          <ThemedText type="smallBold">Leaderboard</ThemedText>
+          <ThemedText type="smallBold" numberOfLines={1} adjustsFontSizeToFit>
+            Ladder
+          </ThemedText>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/ranked/games')}
           style={({ pressed }) => [styles.actionButton, { borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
-          <ThemedText type="smallBold">My games</ThemedText>
+          <ThemedText type="smallBold" numberOfLines={1} adjustsFontSizeToFit>
+            My games
+          </ThemedText>
         </Pressable>
       </View>
     </View>

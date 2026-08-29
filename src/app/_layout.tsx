@@ -134,7 +134,7 @@ function RootNavigator() {
             signed out, signed in, or (via the recovery code exchange)
             somewhere in between; no single guard covers all of that. */}
         <Stack.Screen name="reset-password" />
-        {/* Unconditional — the Ranked leaderboard is public (ranked_leaderboard's
+        {/* Unconditional — the Ranked ladder is public (ranked_leaderboard's
             own RLS allows anon), same posture as the web's /ranked/leaderboard
             staying outside the account-gated /profile prefix. */}
         <Stack.Screen name="ranked/leaderboard" />

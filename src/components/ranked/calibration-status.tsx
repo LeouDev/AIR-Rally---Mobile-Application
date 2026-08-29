@@ -15,7 +15,7 @@ import { StyleSheet, View } from 'react-native';
  * Two states only, matched to PlayerRank's own two states: calibrating
  * (progress track — no tier or rating shown, that's the whole point of
  * calibration) and calibrated (tier + ARR, using formatRating() so the
- * thousands separator matches the leaderboard). `rank === null` (never
+ * thousands separator matches the ladder). `rank === null` (never
  * played Ranked at all) renders as the calibrating state at 0 of 10 —
  * the same starting point every player has, not an error.
  *

@@ -87,7 +87,7 @@ describe('RankCard — single rating', () => {
     expect(screen.getByText('Volleyer II')).toBeTruthy();
   });
 
-  it('shows the numeric ARR alongside the tier once calibrated, formatted the same way as the leaderboard', async () => {
+  it('shows the numeric ARR alongside the tier once calibrated, formatted the same way as the ladder', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2, rating: 1099 }));
     await render(<RankCard />);
 
