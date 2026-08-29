@@ -109,6 +109,11 @@ export default function PlayRankedScreen() {
   // to ask the server about, unlike the lobby, which re-checks a real
   // match's actual booking once one exists.
   const stakes = rankedStakes({ rated: mode === 'ranked', booked: false, isCalibrated });
+  // Founder-requested: the calibrating card should carry the same navy
+  // surface rank-card.tsx uses for its own calibrating state — only
+  // that state, on this screen. The calibrated branch and Casual keep
+  // the screen's regular muted card.
+  const calibratingCard = mode === 'ranked' && !isCalibrated;
 
   return (
     <ThemedView style={styles.container}>
@@ -133,10 +138,16 @@ export default function PlayRankedScreen() {
                   selected={mode}
                   onSelect={setMode}
                 />
-                <View style={[styles.stakesCard, { backgroundColor: theme.muted, borderColor: theme.border }]}>
+                <View
+                  style={[
+                    styles.stakesCard,
+                    calibratingCard
+                      ? { backgroundColor: theme.navy, borderColor: theme.navy }
+                      : { backgroundColor: theme.muted, borderColor: theme.border },
+                  ]}>
                   {mode === 'ranked' ? (
                     <>
-                      <CalibrationStatus rank={myRank} />
+                      <CalibrationStatus rank={myRank} surface={calibratingCard ? 'navy' : 'default'} />
                       {isCalibrated ? (
                         <ThemedText type="small" themeColor="subtle">
                           Rating only moves on a booked court.{' '}
