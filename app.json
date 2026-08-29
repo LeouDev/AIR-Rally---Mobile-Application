@@ -118,7 +118,7 @@
           "locationWhenInUsePermission": "AIR/Rally uses your location to show courts and open games near you.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false,
+          "motionUsagePermission": "AIR/Rally uses motion data to improve the accuracy of your location when showing nearby courts and open games.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": false
