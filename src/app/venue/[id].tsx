@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
   Linking,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
@@ -107,14 +108,16 @@ export default function VenueDetailScreen() {
     }
   };
 
-  // A separate affordance rather than folding Instagram into the Share
-  // Sheet button above: Stories needs the raw image handed directly to
-  // Instagram's own composer, not routed through the OS share sheet where
-  // Instagram may or may not appear reliably as a destination. iOS only —
-  // the config plugin only declared the instagram-stories query scheme for
-  // iOS, matching Phase 1's "iOS ships first" precedent for this feature.
-  // Silently absent rather than a dead button when no Meta App ID is
-  // configured — see instagramStoriesAvailable() in lib/share.ts.
+  // A separate code path rather than folding Instagram into shareVenue()
+  // above: Stories needs the raw image handed directly to Instagram's own
+  // composer, not routed through the OS share sheet where Instagram may
+  // or may not appear reliably as a destination — see handleSharePress
+  // below for where the two are offered as a choice behind one icon.
+  // iOS only — the config plugin only declared the instagram-stories
+  // query scheme for iOS, matching Phase 1's "iOS ships first" precedent
+  // for this feature. Silently absent rather than a dead option when no
+  // Meta App ID is configured — see instagramStoriesAvailable() in
+  // lib/share.ts.
   const shareVenueToInstagramStory = async () => {
     if (!venue) return;
     const url = venueShareUrl(venue.id);
@@ -125,6 +128,28 @@ export default function VenueDetailScreen() {
       // Capture failed — nothing sensible to hand Instagram without an
       // image; unlike shareCard() there's no meaningful text-only Story.
     }
+  };
+
+  // One header icon, not two — the founder's call on the two-icon
+  // header. Instagram Story survives behind it rather than being
+  // deleted: it's a real, deliberately-declared capability (the
+  // instagram-stories query scheme in app.json), and shareVenueToInstagramStory's
+  // own reasoning above for why it can't just be folded into the OS
+  // share sheet still holds. When Instagram Story is actually offerable,
+  // Share presents the choice; otherwise it goes straight to the OS
+  // share sheet exactly as before.
+  const handleSharePress = () => {
+    if (Platform.OS === 'ios' && instagramStoriesAvailable()) {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancel', 'Share…', 'Instagram Story'], cancelButtonIndex: 0 },
+        (index) => {
+          if (index === 1) shareVenue();
+          else if (index === 2) shareVenueToInstagramStory();
+        }
+      );
+      return;
+    }
+    shareVenue();
   };
 
   // Web renders every photo in a gallery — mirror that here instead of
@@ -158,19 +183,10 @@ export default function VenueDetailScreen() {
           headerRight: venue
             ? () => (
                 <View style={styles.headerActions}>
-                  {Platform.OS === 'ios' && instagramStoriesAvailable() ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Share to Instagram Story"
-                      onPress={shareVenueToInstagramStory}
-                      hitSlop={8}>
-                      <Ionicons name="logo-instagram" size={22} color={theme.primary} />
-                    </Pressable>
-                  ) : null}
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Share this court"
-                    onPress={shareVenue}
+                    onPress={handleSharePress}
                     hitSlop={8}>
                     <Ionicons name="share-outline" size={22} color={theme.primary} />
                   </Pressable>
