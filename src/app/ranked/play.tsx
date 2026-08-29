@@ -109,11 +109,6 @@ export default function PlayRankedScreen() {
   // to ask the server about, unlike the lobby, which re-checks a real
   // match's actual booking once one exists.
   const stakes = rankedStakes({ rated: mode === 'ranked', booked: false, isCalibrated });
-  // Founder-requested: the calibrating card should carry the same navy
-  // surface rank-card.tsx uses for its own calibrating state — only
-  // that state, on this screen. The calibrated branch and Casual keep
-  // the screen's regular muted card.
-  const calibratingCard = mode === 'ranked' && !isCalibrated;
 
   return (
     <ThemedView style={styles.container}>
@@ -138,18 +133,16 @@ export default function PlayRankedScreen() {
                   selected={mode}
                   onSelect={setMode}
                 />
-                <View
-                  style={[
-                    styles.stakesCard,
-                    calibratingCard
-                      ? { backgroundColor: theme.navy, borderColor: theme.navy }
-                      : { backgroundColor: theme.muted, borderColor: theme.border },
-                  ]}>
+                {/* Navy for all three things this card can hold — Casual,
+                    calibrating, and calibrated — per the founder's own
+                    reasoning: toggling Casual/Ranked shouldn't change the
+                    card's colour underneath them. */}
+                <View style={[styles.stakesCard, { backgroundColor: theme.navy, borderColor: theme.navy }]}>
                   {mode === 'ranked' ? (
                     <>
-                      <CalibrationStatus rank={myRank} surface={calibratingCard ? 'navy' : 'default'} />
+                      <CalibrationStatus rank={myRank} surface="navy" />
                       {isCalibrated ? (
-                        <ThemedText type="small" themeColor="subtle">
+                        <ThemedText type="small" style={{ color: `${theme.navyForeground}CC` }}>
                           Rating only moves on a booked court.{' '}
                           <ThemedText
                             type="small"
@@ -167,10 +160,10 @@ export default function PlayRankedScreen() {
                     </>
                   ) : (
                     <>
-                      <ThemedText type="caption" themeColor="mutedForeground" style={styles.stakesHeadline}>
+                      <ThemedText type="caption" style={[styles.stakesHeadline, { color: `${theme.navyForeground}CC` }]}>
                         {stakes.headline.toUpperCase()}
                       </ThemedText>
-                      <ThemedText type="small" themeColor="subtle">
+                      <ThemedText type="small" style={{ color: `${theme.navyForeground}CC` }}>
                         {stakes.detail}
                       </ThemedText>
                     </>
