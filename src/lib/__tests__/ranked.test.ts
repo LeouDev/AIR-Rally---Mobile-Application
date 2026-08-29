@@ -34,6 +34,7 @@ function participant(overrides: Partial<RankedMatchParticipant>): RankedMatchPar
     match_weight: null,
     recency_multiplier: null,
     reliability_modifier: null,
+    rating_discounted: false,
     created_at: '2026-08-21T10:00:00.000Z',
     profile: { id: 'me-1', display_name: 'Galileouuu', avatar_url: null },
     rank: null,

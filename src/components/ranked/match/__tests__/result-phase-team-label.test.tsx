@@ -79,6 +79,7 @@ function participant(overrides: Partial<RankedMatchParticipant> = {}): RankedMat
     match_weight: null,
     recency_multiplier: null,
     reliability_modifier: null,
+    rating_discounted: false,
     created_at: '2026-08-20T00:00:00.000Z',
     profile: { id: 'me', display_name: 'Leou', avatar_url: null },
     rank: null,
