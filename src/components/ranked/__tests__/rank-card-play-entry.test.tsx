@@ -14,7 +14,13 @@ import { getPlayerRank } from '@/lib/ranked';
  * leaderboard link that existed before.
  */
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+  useFocusEffect: (cb: () => void) => {
+    const React = jest.requireActual('react');
+    React.useEffect(cb, [cb]);
+  },
+}));
 jest.mock('@/lib/ranked', () => ({
   ...jest.requireActual('@/lib/ranked'),
   getPlayerRank: jest.fn(),

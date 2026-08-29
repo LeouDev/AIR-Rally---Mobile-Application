@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { CalibrationStatus } from '@/components/ranked/calibration-status';
@@ -28,25 +28,34 @@ export function RankCard() {
   const [loading, setLoading] = useState(userId !== null);
   const [rank, setRank] = useState<PlayerRank | null>(null);
 
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    getPlayerRank(userId)
-      .then((r) => {
-        if (!cancelled) setRank(r);
-      })
-      .catch(() => {
-        // A failed lookup reads the same as "no rank yet" — this card
-        // never gets an error state of its own.
-        if (!cancelled) setRank(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
+  // Refetches on every focus, not just mount — this card is a NativeTabs
+  // tab child, which iOS keeps alive (not unmounted) when you switch
+  // tabs. A player who finishes a ranked match on a different screen and
+  // comes back here would otherwise see whatever calibration/tier/ARR
+  // this card fetched the first time Profile was ever opened this
+  // session, forever.
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      let cancelled = false;
+      setLoading(true);
+      getPlayerRank(userId)
+        .then((r) => {
+          if (!cancelled) setRank(r);
+        })
+        .catch(() => {
+          // A failed lookup reads the same as "no rank yet" — this card
+          // never gets an error state of its own.
+          if (!cancelled) setRank(null);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [userId])
+  );
 
   if (!userId) return null;
 

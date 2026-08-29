@@ -16,7 +16,13 @@ import { getPlayerRank } from '@/lib/ranked';
  * its slot too, at a scale nobody measured by hand.
  */
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+  useFocusEffect: (cb: () => void) => {
+    const React = jest.requireActual('react');
+    React.useEffect(cb, [cb]);
+  },
+}));
 jest.mock('@/lib/ranked', () => ({
   ...jest.requireActual('@/lib/ranked'),
   getPlayerRank: jest.fn(),
