@@ -62,7 +62,8 @@ function throwRanked(error: PostgrestError): never {
  * button before a round trip. The database re-checks regardless.
  * ---------------------------------------------------------------------- */
 
-export const RATING_STARTING_VALUE = 1000;
+/** Mid-Driver, not the tier floor — matches player_ranks.rating's default (web migration 20260810000112). */
+export const RATING_STARTING_VALUE = 1100;
 
 export const RANK_THRESHOLDS = [
   { tier: 1, slug: 'dinker', name: 'Dinker', material: '#c2ad8b', floor: 0, width: 1000 },
