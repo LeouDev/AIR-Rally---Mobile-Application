@@ -12,8 +12,28 @@ import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/th
 import { useTheme } from '@/hooks/use-theme';
 import { calculateSplit, formatShare } from '@/lib/event-split';
 import { listMyEventStatuses, listUpcomingEvents, type EventWithDetails } from '@/lib/events';
-import type { EventAttendeeStatus } from '@/lib/database.types';
+import type { EventAttendeeStatus, RankedMatchStatus } from '@/lib/database.types';
+import { getActiveMatch, opponentNames, type RankedMatchDetail } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
+
+/** What a returning player actually needs to know before tapping back
+ * in — not the internal status name. 'confirmed'/'disputed'/'cancelled'
+ * never reach here; getActiveMatch() only ever returns one of these
+ * four (ACTIVE_MATCH_STATUSES in lib/ranked.ts). */
+function resumeMatchLabel(status: RankedMatchStatus): string {
+  switch (status) {
+    case 'lobby':
+      return 'Waiting in the lobby';
+    case 'officiating':
+      return 'Choosing a scorekeeper';
+    case 'live':
+      return 'Live right now';
+    case 'awaiting_confirmation':
+      return 'Waiting on the result';
+    default:
+      return 'In progress';
+  }
+}
 
 /** Above this, individual slot dots stop reading as a roster and start
  * reading as noise — the "X/Y playing" text alone carries it better. */
@@ -38,6 +58,13 @@ export default function PlayScreen() {
   const [myStatuses, setMyStatuses] = useState<Map<string, EventAttendeeStatus>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  // undefined while loading/no session, null once resolved to "none" —
+  // same two-step shape as everywhere else a fetch decides whether to
+  // render a card at all. Refetched on every focus (not just mount),
+  // the same as `events` below, so logging out and back in — the
+  // founder's own repro — lands on a screen that actually looked again
+  // rather than one holding a stale answer from before the app closed.
+  const [activeMatch, setActiveMatch] = useState<RankedMatchDetail | null | undefined>(undefined);
 
   const load = useCallback(async () => {
     try {
@@ -50,6 +77,22 @@ export default function PlayScreen() {
     } catch {
       setEvents([]);
       setError(true);
+    }
+
+    // Its own try/catch, deliberately outside the one above — a failed
+    // active-match lookup has no business turning into "couldn't load
+    // games" for the Open Play list underneath it, or vice versa.
+    if (!userId) {
+      setActiveMatch(null);
+      return;
+    }
+    try {
+      setActiveMatch(await getActiveMatch(userId));
+    } catch {
+      // A failed lookup here reads the same as "no active match" — this
+      // card never gets an error state of its own, same posture as
+      // RankCard's own Ranked lookup on the Profile tab.
+      setActiveMatch(null);
     }
   }, [userId]);
 
@@ -154,6 +197,31 @@ export default function PlayScreen() {
               <View style={styles.headerRow}>
                 <ThemedText type="title">Play</ThemedText>
               </View>
+
+              {activeMatch ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push({ pathname: '/ranked/[matchId]', params: { matchId: activeMatch.id } })}
+                  style={({ pressed }) => [
+                    styles.resumeCard,
+                    { backgroundColor: theme.navy, borderColor: theme.navy, opacity: pressed ? 0.92 : 1 },
+                  ]}>
+                  <ThemedText type="caption" style={[styles.eyebrow, { color: theme.rally }]}>
+                    Match in progress
+                  </ThemedText>
+                  <ThemedText type="subtitle" style={{ color: theme.navyForeground }}>
+                    {(() => {
+                      const me = activeMatch.players.find((p) => p.user_id === userId);
+                      const opponents = me ? opponentNames(activeMatch.players, me) : null;
+                      return opponents ? `vs ${opponents}` : resumeMatchLabel(activeMatch.status);
+                    })()}
+                  </ThemedText>
+                  <ThemedText type="small" style={{ color: `${theme.navyForeground}CC` }}>
+                    {resumeMatchLabel(activeMatch.status)} — tap to jump back in
+                  </ThemedText>
+                </Pressable>
+              ) : null}
+
               <ThemedText type="small" themeColor="subtle">
                 Ranked or casual, with people you already know. No booking needed.
               </ThemedText>
@@ -231,6 +299,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  resumeCard: {
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    padding: Spacing.four,
+    gap: 4,
+  },
+  eyebrow: {
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
   card: {
     borderRadius: Radius['2xl'],
     borderWidth: 1,
@@ -251,11 +330,6 @@ const styles = StyleSheet.create({
   titleBlock: {
     flexShrink: 1,
     gap: 2,
-  },
-  eyebrow: {
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   title: {
     flexShrink: 1,
