@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 
 import PlayRankedScreen from '@/app/ranked/play';
@@ -8,15 +8,17 @@ import { getPublicProfile } from '@/lib/follows';
 import { getPlayerRank } from '@/lib/ranked';
 
 /**
- * Founder-requested: the calibrating card on the Play doorway should
- * carry the same navy surface rank-card.tsx uses for its own
- * calibrating state — only that state, on this screen. Its own file
- * (rather than folded into play-calibration-card.test.tsx) because it
- * mocks CalibrationStatus to capture the `surface` prop directly — the
- * prop that's easy to pass silently wrong, since a background-only
- * change still renders a card, just with the unfilled progress
- * segments invisible against navy. Pinning "the card renders" would
- * not catch that; pinning `surface="navy"` does.
+ * That slot under the Game type toggle holds three different things —
+ * Casual, Ranked-calibrating, Ranked-calibrated — and the founder's
+ * ask was explicitly about consistency ACROSS the toggle ("whenever I
+ * toggle from casual to rank it has the same style"), not about any
+ * one of the three in isolation. All three get the same navy card
+ * now. Mocks RankBadge specifically (rather than CalibrationStatus, as
+ * the first pass here did) so this exercises the real prop-threading
+ * from play.tsx through CalibrationStatus into the one piece that
+ * doesn't degrade gracefully if missed — RankBadge's `on` prop picks a
+ * DIFFERENT ink-swapped asset, not a tint, so a light-surface badge on
+ * a navy card won't just look slightly off, it'll be the wrong image.
  */
 
 jest.mock('expo-router', () => ({
@@ -47,13 +49,13 @@ jest.mock('@/components/ranked/ranked-party-builder', () => ({
   },
 }));
 
-let capturedSurface: string | undefined;
+let capturedBadgeOn: string | undefined;
 
-jest.mock('@/components/ranked/calibration-status', () => ({
-  CalibrationStatus: ({ surface }: { surface?: string }) => {
-    capturedSurface = surface;
+jest.mock('@/components/ranked/rank-badge', () => ({
+  RankBadge: ({ on }: { on?: string }) => {
+    capturedBadgeOn = on;
     const { Text } = jest.requireActual('react-native');
-    return <Text>CALIBRATION_STATUS</Text>;
+    return <Text>RANK_BADGE</Text>;
   },
 }));
 
@@ -89,44 +91,47 @@ function rankFixture(overrides: Partial<PlayerRank>): PlayerRank {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  capturedSurface = undefined;
+  capturedBadgeOn = undefined;
   mockGetPublicProfile.mockResolvedValue(ME);
 });
 
-it('passes surface="navy" to CalibrationStatus while still calibrating', async () => {
+it('Casual renders on the navy card', async () => {
   mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 3 }));
   const view = await render(<PlayRankedScreen />);
 
-  await screen.findByText('CALIBRATION_STATUS');
-  expect(capturedSurface).toBe('navy');
+  const casualTab = await screen.findByRole('button', { name: 'Casual' });
+  fireEvent.press(casualTab);
+  await screen.findByText('CASUAL');
 
-  // The container itself, not just the child prop — both need to
-  // agree, or the card background and the track's fill/empty colors
-  // would silently disagree with each other.
   const tree = JSON.stringify(view.toJSON());
   expect(tree).toContain(Colors.light.navy);
 });
 
-it('does NOT use the navy surface once calibrated — that branch is unchanged', async () => {
-  mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
-  await render(<PlayRankedScreen />);
+it('Ranked-calibrating renders on the navy card', async () => {
+  mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 3 }));
+  const view = await render(<PlayRankedScreen />);
 
-  await screen.findByText('CALIBRATION_STATUS');
-  expect(capturedSurface).toBe('default');
+  await screen.findByText('3 of 10 calibration matches played');
+  const tree = JSON.stringify(view.toJSON());
+  expect(tree).toContain(Colors.light.navy);
 });
 
-it('does NOT use the navy surface in Casual mode', async () => {
-  // Casual mode doesn't render CalibrationStatus at all — confirms the
-  // navy treatment stays scoped to Ranked's calibrating branch, not
-  // "whatever's selected when not yet calibrated".
+it('Ranked-calibrated renders on the navy card, and the tier badge uses the navy-ink asset', async () => {
+  mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
+  const view = await render(<PlayRankedScreen />);
+
+  await screen.findByText('RANK_BADGE');
+  expect(capturedBadgeOn).toBe('navy');
+
+  const tree = JSON.stringify(view.toJSON());
+  expect(tree).toContain(Colors.light.navy);
+});
+
+it('renders no badge at all while still calibrating — confirms the mock isn\'t just always capturing "navy"', async () => {
   mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: false, calibration_matches: 3 }));
   await render(<PlayRankedScreen />);
-  await screen.findByText('CALIBRATION_STATUS');
+  await screen.findByText('3 of 10 calibration matches played');
 
-  const casualTab = await screen.findByRole('button', { name: 'Casual' });
-  const { fireEvent } = jest.requireActual('@testing-library/react-native');
-  fireEvent.press(casualTab);
-
-  await screen.findByText('CASUAL');
-  expect(screen.queryByText('CALIBRATION_STATUS')).toBeNull();
+  expect(screen.queryByText('RANK_BADGE')).toBeNull();
+  expect(capturedBadgeOn).toBeUndefined();
 });

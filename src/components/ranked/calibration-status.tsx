@@ -58,7 +58,7 @@ export function CalibrationStatus({ rank, surface = 'default' }: { rank: PlayerR
 
   return (
     <View style={styles.row}>
-      <RankBadge tier={rank.tier} size={40} />
+      <RankBadge tier={rank.tier} size={40} on={onNavy ? 'navy' : 'light'} />
       <View style={styles.text}>
         <ThemedText type="caption" style={{ color: mutedColor }}>
           AIR/Rally Rank
