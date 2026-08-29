@@ -64,7 +64,7 @@ export default function LeaderboardScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Leaderboard',
+          title: 'Ladder',
           headerBackButtonDisplayMode: 'minimal',
           // Signed out has nowhere to send a match anyway — the same
           // sign-in-optional posture as this whole screen.
