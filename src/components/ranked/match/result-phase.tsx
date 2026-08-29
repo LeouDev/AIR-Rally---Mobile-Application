@@ -433,30 +433,33 @@ function ConfirmedView({ match, currentUserId }: { match: RankedMatchDetail; cur
               </View>
             </View>
           ) : null}
+          {me.rating_discounted ? (
+            <ThemedText type="caption" style={{ color: impactful ? theme.navyForeground : theme.mutedForeground, opacity: 0.7 }}>
+              Half rate — not a booked court.
+            </ThemedText>
+          ) : null}
         </View>
       ) : me ? (
-        // Not shown for the two cases above — a rank/tier/ARR card would
-        // just be wrong here, since apply_ranked_result() never wrote
-        // one for this player on this match. Silently showing nothing
-        // instead of the card would look like the app forgot, so this
-        // says which of the two reasons it was: 'casual' means nobody's
-        // rating moved because the game type never touches it; 'frozen'
-        // means it WAS a ranked match and this player specifically
-        // didn't move, because they're already calibrated and this
-        // wasn't at a booked court — their opponent, if still
-        // calibrating, may have moved on this very match.
+        // tier_after is null here — apply_ranked_result() never placed
+        // this player ON THIS MATCH, so a rank/tier/ARR card would just
+        // be wrong. Two real cases reach this, not one: a whole casual
+        // match (nobody's rating moves, this isn't personal), or a
+        // still-calibrating player who wasn't placed by this match
+        // either — they DO get a real, undiscounted delta (calibration
+        // never depends on booking), but with no tier yet to show it
+        // against, same as CalibrationStatus's own calibrating state.
+        // Silently showing nothing would look like the app forgot, so
+        // this says which one it was rather than leaving a blank space.
         (() => {
           const impact = ratingImpact(match, me);
           if (impact.kind === 'applied') return null;
           return (
             <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.card }]}>
               <ThemedText type="caption" style={[styles.eyebrow, { color: theme.mutedForeground }]}>
-                {impact.reason === 'casual' ? 'CASUAL' : 'NO RATING IMPACT'}
+                CASUAL
               </ThemedText>
               <ThemedText type="small" themeColor="subtle">
-                {impact.reason === 'casual'
-                  ? "Recorded, but this doesn't affect anyone's rating."
-                  : "Recorded, but your rating didn't move — this wasn't at a booked court. Book a court to keep climbing."}
+                Recorded, but this doesn&apos;t affect anyone&apos;s rating.
               </ThemedText>
             </View>
           );

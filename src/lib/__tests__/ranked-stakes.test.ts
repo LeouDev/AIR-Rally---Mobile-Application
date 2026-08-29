@@ -1,13 +1,14 @@
 import { rankedStakes, ratingImpact } from '@/lib/ranked';
 
 /**
- * 20260810000100's freeze is decided per PARTICIPANT, not per match — in
- * a mixed doubles lobby one player can be frozen while their partner
- * still calibrates normally on the same result. A single match-level
- * message would be right for one of them and wrong for the other half
- * the time, so these pure helpers take the CURRENT PLAYER's own
- * calibration state, not just the match's rated flag. That distinction
- * is the entire point of this file.
+ * 20260810000112's half-rate discount is decided per PARTICIPANT, not
+ * per match — in a mixed doubles lobby one player can be discounted
+ * while their partner still calibrates normally (full rate) on the
+ * same result. A single match-level message would be right for one of
+ * them and wrong for the other half the time, so these pure helpers
+ * take the CURRENT PLAYER's own calibration state, not just the
+ * match's rated flag. That distinction is the entire point of this
+ * file.
  */
 
 describe('rankedStakes', () => {
@@ -52,24 +53,21 @@ describe('rankedStakes', () => {
 });
 
 describe('ratingImpact', () => {
-  it('reports "casual" for an unrated match, even if this player somehow has a delta', () => {
-    // Should never happen server-side (087's early-out never writes one),
-    // but the classifier's OWN precedence — rated flag before delta — is
+  it('reports "none" for an unrated match, even if this player somehow has rating_discounted set', () => {
+    // Should never happen server-side (087's early-out never writes
+    // one), but the classifier's OWN precedence — rated flag first — is
     // what this test pins, not a claim about server behavior.
-    expect(ratingImpact({ rated: false }, { rating_delta: 5 })).toEqual({ kind: 'none', reason: 'casual' });
+    expect(ratingImpact({ rated: false }, { rating_discounted: true })).toEqual({ kind: 'none' });
   });
 
-  it('reports "frozen" for a rated match where this player has no delta', () => {
-    expect(ratingImpact({ rated: true }, { rating_delta: null })).toEqual({ kind: 'none', reason: 'frozen' });
+  it('reports "applied", not discounted, for a rated match at a booked court', () => {
+    expect(ratingImpact({ rated: true }, { rating_discounted: false })).toEqual({ kind: 'applied', discounted: false });
   });
 
-  it('reports "applied" for a rated match where this player has a real delta', () => {
-    expect(ratingImpact({ rated: true }, { rating_delta: -8 })).toEqual({ kind: 'applied' });
-  });
-
-  it('does not conflate a frozen player with a casual match — the two must stay distinguishable', () => {
-    const frozen = ratingImpact({ rated: true }, { rating_delta: null });
-    const casual = ratingImpact({ rated: false }, { rating_delta: null });
-    expect(frozen).not.toEqual(casual);
+  it('reports "applied", discounted, for a calibrated player rated at an unbooked court', () => {
+    // 20260810000100's full freeze (a null rating_delta) is retired —
+    // 20260810000112 supersedes it with a half-rate discount instead of
+    // a skip, so every rated participant gets a real delta now.
+    expect(ratingImpact({ rated: true }, { rating_discounted: true })).toEqual({ kind: 'applied', discounted: true });
   });
 });

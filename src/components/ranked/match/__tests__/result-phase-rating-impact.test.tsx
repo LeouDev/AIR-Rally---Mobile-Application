@@ -6,13 +6,20 @@ import type { RankedMatch } from '@/lib/database.types';
 import type { RankedMatchDetail, RankedMatchParticipant } from '@/lib/ranked';
 
 /**
- * Before this, both cases below rendered NOTHING where the rank/tier/ARR
- * card normally goes — `me.tier_after !== null` is false for both, since
- * apply_ranked_result() never writes it for either. A silent gap where
- * a card usually is reads as the app forgetting, not as a deliberate
- * "this one doesn't count." These pin that the two cases say which of
- * two DIFFERENT reasons it was, since a frozen player played a real
- * ranked match — telling them it was "casual" would be false.
+ * A casual match renders NOTHING where the rank/tier/ARR card normally
+ * goes — `me.tier_after !== null` is false, since apply_ranked_result()
+ * never writes it for anyone in a `rated: false` match. A silent gap
+ * where a card usually is reads as the app forgetting, not as a
+ * deliberate "this one doesn't count," so the fallback says CASUAL
+ * rather than showing nothing.
+ *
+ * A discounted player is different: 20260810000100's old full freeze (a
+ * null rating_delta AND null tier_after on an otherwise-rated match) is
+ * retired — 20260810000112 supersedes it, and every rated participant
+ * gets a real, normal tier/rating snapshot now, just at half size when
+ * they were already calibrated and the match had no booking behind it.
+ * So a discounted player hits the NORMAL rank/ARR card above, not this
+ * fallback — with an extra caption saying it was halved.
  */
 
 jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn().mockResolvedValue('file:///x.png') }));
@@ -105,16 +112,6 @@ describe('ResultPhase — ConfirmedView rating-impact messaging', () => {
     expect(screen.getByText("Recorded, but this doesn't affect anyone's rating.")).toBeTruthy();
   });
 
-  it("labels an individually FROZEN player differently from casual — they played a real ranked match", async () => {
-    // rated: true, but this player's row has no delta — the frozen shape.
-    const me = participant({ rating_delta: null, tier_after: null });
-    await render(<ResultPhase match={detail(matchFixture({ rated: true }), me)} currentUserId="me" />);
-
-    await screen.findByText('NO RATING IMPACT');
-    expect(screen.queryByText('CASUAL')).toBeNull();
-    expect(screen.getByText(/book a court/i)).toBeTruthy();
-  });
-
   it('shows the normal rank card, not the no-impact message, when a real delta was applied', async () => {
     const me = participant({
       tier_before: 3,
@@ -130,5 +127,25 @@ describe('ResultPhase — ConfirmedView rating-impact messaging', () => {
     await screen.findByText('RANK UP');
     expect(screen.queryByText('CASUAL')).toBeNull();
     expect(screen.queryByText('NO RATING IMPACT')).toBeNull();
+    expect(screen.queryByText(/half rate/i)).toBeNull();
+  });
+
+  it('shows the normal rank card WITH a half-rate caption for a discounted player — not the fallback card', async () => {
+    const me = participant({
+      tier_before: 3,
+      pips_before: 5,
+      tier_after: 3,
+      pips_after: 1,
+      rating_before: 1190,
+      rating_after: 1194,
+      rating_delta: 4,
+      rating_discounted: true,
+    });
+    await render(<ResultPhase match={detail(matchFixture({ rated: true }), me)} currentUserId="me" />);
+
+    await screen.findByText('RANK IMPACT');
+    expect(screen.queryByText('CASUAL')).toBeNull();
+    expect(screen.queryByText('NO RATING IMPACT')).toBeNull();
+    expect(screen.getByText(/half rate/i)).toBeTruthy();
   });
 });

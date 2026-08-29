@@ -244,7 +244,7 @@ function HistoryRow({ summary }: { summary: RankedMatchSummary }) {
   const theme = useTheme();
   // Same distinction as the result screen: a whole casual match reads
   // differently from an otherwise-rated match this player was
-  // individually frozen in — see ratingImpact()'s own comment.
+  // individually discounted in — see ratingImpact()'s own comment.
   const impact = ratingImpact(summary.match, summary.me);
   return (
     <Pressable
@@ -259,9 +259,8 @@ function HistoryRow({ summary }: { summary: RankedMatchSummary }) {
           vs {opponentTeamLabel(summary)}
         </ThemedText>
         <View style={styles.badgeRow}>
-          {impact.kind === 'none' ? (
-            <Badge label={impact.reason === 'casual' ? 'Casual' : 'No rating impact'} tone="neutral" />
-          ) : null}
+          {impact.kind === 'none' ? <Badge label="Casual" tone="neutral" /> : null}
+          {impact.kind === 'applied' && impact.discounted ? <Badge label="Half rate" tone="neutral" /> : null}
           <Badge label={summary.won ? 'Won' : 'Lost'} tone={summary.won ? 'success' : 'destructive'} />
         </View>
       </View>

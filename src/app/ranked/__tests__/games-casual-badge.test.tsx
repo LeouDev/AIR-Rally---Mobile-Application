@@ -6,11 +6,12 @@ import type { RankedMatch, RankedMatchPlayer } from '@/lib/database.types';
 import { getPlayerRank, listRecentMatches, type RankedMatchSummary } from '@/lib/ranked';
 
 /**
- * The same casual-vs-frozen distinction as the result screen — a whole
- * casual match reads differently from an otherwise-rated match this
- * player was individually frozen in. History has to say which, same as
- * the result screen does, or a frozen match reads as an unremarkable
- * loss/win with no explanation for why it never moved the rating.
+ * The same casual-vs-discounted distinction as the result screen — a
+ * whole casual match reads differently from an otherwise-rated match
+ * this player was individually discounted to half rate in. History has
+ * to say which, same as the result screen does, or a discounted match
+ * reads as an unremarkable loss/win with no explanation for the
+ * smaller-than-usual rating change.
  */
 
 jest.mock('expo-router', () => ({
@@ -131,13 +132,17 @@ it('badges a casual match as Casual in history', async () => {
   await screen.findByText('Casual');
 });
 
-it('badges a frozen (rated but unbooked-and-calibrated) match as No rating impact, not Casual', async () => {
+it('badges a discounted (rated but unbooked-and-calibrated) match as Half rate, not Casual', async () => {
+  // rating_discounted is the real signal now — a discounted player
+  // still gets a normal, real (just smaller) delta and tier snapshot;
+  // 20260810000100's old "null delta on an otherwise-rated match"
+  // shape for a frozen player can no longer occur at all.
   mockListRecentMatches.mockResolvedValue([
-    summaryFixture({ match: matchFixture({ rated: true }), me: meFixture({ rating_delta: null, tier_after: null }) }),
+    summaryFixture({ match: matchFixture({ rated: true }), me: meFixture({ rating_discounted: true, rating_delta: 4 }) }),
   ]);
   await render(<GamesScreen />);
 
-  await screen.findByText('No rating impact');
+  await screen.findByText('Half rate');
   expect(screen.queryByText('Casual')).toBeNull();
 });
 

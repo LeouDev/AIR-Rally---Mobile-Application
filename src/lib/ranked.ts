@@ -415,34 +415,32 @@ export function myMatchResult(
 }
 
 export type RatingImpact =
-  | { kind: 'applied' }
-  | { kind: 'none'; reason: 'casual' | 'frozen' };
+  | { kind: 'applied'; discounted: boolean }
+  | { kind: 'none' };
 
 /**
  * Whether THIS result screen should show a rank/tier/ARR-delta block at
- * all, and why not when it shouldn't. Two cases produce the identical
- * symptom — rating_delta is null on this player's row — for different
- * reasons, and they read differently to the player:
+ * all — 'none' means the whole match was rated: false, nobody's rating
+ * moved, this isn't personal, it's what the game type meant from the
+ * start.
  *
- *   'casual' — the whole match was rated: false. Nobody's rating moved;
- *   this isn't personal, it's what the game type meant from the start.
- *
- *   'frozen' — the match WAS rated, but 20260810000100 skipped this
- *   participant specifically because they were already calibrated and
- *   the match had no booking behind it. Their opponent, if still
- *   calibrating, may have a real delta on the SAME match — this is
- *   personal, not a property of the game.
- *
- * Conflating the two would tell a frozen player "this was casual," which
- * is false — they played a ranked match, it just didn't move them.
+ * 20260810000100's full freeze (a calibrated participant's rating
+ * simply never moving on an unbooked rated match) is retired, not
+ * renamed — 20260810000112 supersedes it with a half-rate discount
+ * instead of a skip, so a confirmed match's delta is never null for a
+ * rated participant anymore. `discounted` carries what 'frozen' used
+ * to: true when this specific player's delta was halved because they
+ * were already calibrated and the match had no booking behind it. Per
+ * participant, not per match — a still-calibrating teammate on the
+ * SAME match moves at full rate regardless of booking, so read it off
+ * the player's own row (rating_discounted), never derived client-side.
  */
 export function ratingImpact(
   match: Pick<RankedMatch, 'rated'>,
-  me: Pick<RankedMatchPlayer, 'rating_delta'>
+  me: Pick<RankedMatchPlayer, 'rating_discounted'>
 ): RatingImpact {
-  if (!match.rated) return { kind: 'none', reason: 'casual' };
-  if (me.rating_delta === null) return { kind: 'none', reason: 'frozen' };
-  return { kind: 'applied' };
+  if (!match.rated) return { kind: 'none' };
+  return { kind: 'applied', discounted: me.rating_discounted };
 }
 
 /** Display names of everyone on the opposing team, "&"-joined for doubles. */
