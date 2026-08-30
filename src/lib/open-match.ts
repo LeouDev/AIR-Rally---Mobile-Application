@@ -266,4 +266,25 @@ export async function listOpenMatchesForCity(citySlug: string): Promise<OpenMatc
   return rows.map((r, i) => ({ ...r, acceptedCount: counts[i] }));
 }
 
+/** The viewer's OWN request on this open match, or null if they've never
+ * requested to join it. open_match_join_requests is host-or-self only
+ * under RLS (per the api-contract memo) — this filters to `user_id =
+ * userId` explicitly rather than relying on RLS alone to narrow a
+ * broader select, so a caller can't accidentally widen this later by
+ * dropping the filter and still compile. Terminal statuses ('declined'
+ * | 'withdrawn' | 'kicked') are returned too, not just 'pending' /
+ * 'accepted' — the caller decides what each means for its own UI (see
+ * matchStatusLabel's own doc comment on reading 'declined' correctly:
+ * check the PARENT open_matches.status for whether it means "full"). */
+export async function getMyJoinRequest(openMatchId: string, userId: string): Promise<OpenMatchJoinRequest | null> {
+  const { data, error } = await supabase
+    .from('open_match_join_requests')
+    .select('*')
+    .eq('open_match_id', openMatchId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as OpenMatchJoinRequest | null;
+}
+
 export { RankedError };

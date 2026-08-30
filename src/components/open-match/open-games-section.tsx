@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar } from '@/components/post-card';
 import { ThemedText } from '@/components/themed-text';
+import { OpenMatchDetailSheet } from '@/components/open-match/open-match-detail-sheet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { expiresInLabel, listOpenMatchesForCity, type OpenMatchListing } from '@/lib/open-match';
@@ -15,8 +16,10 @@ import { expiresInLabel, listOpenMatchesForCity, type OpenMatchListing } from '@
  * plus serves the player who opens the app wanting a game right now
  * rather than waiting for a notification that may have already fired.
  *
- * Read-only for now — tapping a row will open the join flow once that
- * exists; there is no onPress yet because there is nowhere to send one.
+ * Tapping a row opens OpenMatchDetailSheet — the viewer-side request/
+ * withdraw flow. Host-side management (accept/decline/kick) is a
+ * separate screen, reached from wherever a host manages their OWN
+ * open match, not from here.
  *
  * Callers MUST pass `key={citySlug}` alongside the prop when citySlug
  * can change while mounted (e.g. after the city picker). That's what
@@ -25,11 +28,12 @@ import { expiresInLabel, listOpenMatchesForCity, type OpenMatchListing } from '@
  * this effect, which the app's stricter react-hooks lint (no
  * synchronous setState in an effect body) doesn't allow anyway.
  */
-export function OpenGamesSection({ citySlug }: { citySlug: string | null }) {
+export function OpenGamesSection({ citySlug, currentUserId }: { citySlug: string | null; currentUserId: string }) {
   const theme = useTheme();
   // undefined = not fetched yet, [] = fetched and genuinely empty.
   const [games, setGames] = useState<OpenMatchListing[] | undefined>(undefined);
   const [error, setError] = useState(false);
+  const [selectedGame, setSelectedGame] = useState<OpenMatchListing | null>(null);
 
   useEffect(() => {
     // Nothing to reset here: the component returns null below whenever
@@ -78,8 +82,12 @@ export function OpenGamesSection({ citySlug }: { citySlug: string | null }) {
               key={game.id}
               accessibilityRole="button"
               accessibilityLabel={`${game.host?.display_name ?? 'A player'}'s open game`}
-              disabled
-              style={[styles.row, i < games.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.hairline }]}>
+              onPress={() => setSelectedGame(game)}
+              style={({ pressed }) => [
+                styles.row,
+                i < games.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.hairline },
+                pressed && styles.pressed,
+              ]}>
               <Avatar profile={game.host} size={40} />
               <View style={styles.rowText}>
                 <ThemedText type="smallBold" numberOfLines={1}>
@@ -93,6 +101,15 @@ export function OpenGamesSection({ citySlug }: { citySlug: string | null }) {
           ))}
         </View>
       )}
+
+      {selectedGame ? (
+        <OpenMatchDetailSheet
+          visible
+          onClose={() => setSelectedGame(null)}
+          openMatch={selectedGame}
+          currentUserId={currentUserId}
+        />
+      ) : null}
     </View>
   );
 }
@@ -122,5 +139,8 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
     minWidth: 0,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });
