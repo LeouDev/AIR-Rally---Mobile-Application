@@ -287,6 +287,14 @@ export function matchStatusLabel(match: Pick<RankedMatch, 'status'>): string {
       return 'Disputed';
     case 'cancelled':
       return 'Cancelled';
+    default:
+      // A status value this build doesn't know about — the server can
+      // add one at any time, and this switch has no way to reject an
+      // unrecognized string at runtime the way its TypeScript type
+      // pretends it does. A new column is invisible to an old client; a
+      // new enum value it switches on is not. Degrade to a neutral
+      // label instead of returning undefined.
+      return 'Match update pending';
   }
 }
 

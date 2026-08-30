@@ -55,6 +55,11 @@ function statusBadge(status: BookingStatus): { tone: 'success' | 'warning' | 'ne
       return { tone: 'neutral', label: 'Completed' };
     case 'cancelled':
       return { tone: 'neutral', label: 'Cancelled' };
+    default:
+      // A status this build doesn't recognize — the server can add one
+      // at any time. Without this, `badge` below is undefined and
+      // `badge.label` crashes the whole list, not just this row.
+      return { tone: 'neutral', label: 'Status pending' };
   }
 }
 

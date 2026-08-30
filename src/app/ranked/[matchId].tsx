@@ -120,6 +120,23 @@ function LiveMatch({
           </ThemedText>
         </View>
       );
+    default:
+      // A status this build doesn't know about — the server can add a
+      // new one at any time (see matchStatusLabel()'s own default), and
+      // a build already in the store can't be taught it after the fact.
+      // Render something instead of nothing: returning undefined here
+      // is a React "nothing was returned from render" crash, not a
+      // missing label.
+      return (
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <ThemedText type="subtitle" style={styles.centerText}>
+            Can&apos;t show this match yet
+          </ThemedText>
+          <ThemedText type="small" themeColor="subtle" style={styles.centerText}>
+            Update AIR/Rally to see its current status.
+          </ThemedText>
+        </View>
+      );
   }
 }
 
