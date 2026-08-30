@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Avatar } from '@/components/post-card';
 import { ThemedText } from '@/components/themed-text';
@@ -11,6 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 import type { PublicProfile, RankedOfficiatingMode } from '@/lib/database.types';
 import { searchPublicProfiles } from '@/lib/follows';
 import {
+  cancelMatch,
   listRefereeCandidates,
   officiatingTally,
   proposeOfficiating,
@@ -101,6 +102,30 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
     }
   };
 
+  const doCancel = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await cancelMatch(match.id);
+    } catch (err) {
+      show(err instanceof RankedError ? err.message : "That didn't go through. Try again.", 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Unlike the lobby's bare, unconfirmed cancel link: by officiating,
+  // every player has already readied up, not just tapped into a match
+  // that might still be forming. A stray tap here ends something
+  // everyone already agreed to, so it gets a confirmation the lobby
+  // doesn't need.
+  const confirmCancel = () => {
+    Alert.alert('Cancel this match?', 'Everyone already readied up to play. Cancelling ends it for everyone — nothing is recorded against anyone’s rank, and this can’t be undone.', [
+      { text: 'Keep match', style: 'cancel' },
+      { text: 'Cancel match', style: 'destructive', onPress: doCancel },
+    ]);
+  };
+
   if (proposed) {
     const scorekeeper = match.scorekeeper ?? match.players.find((p) => p.user_id === match.scorekeeper_id)?.profile ?? null;
     const tally = officiatingTally(match.players);
@@ -167,6 +192,11 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
               onPress={() => (match.officiating_mode === 'referee' ? setView('scorekeeper') : openRefereePicker())}
               disabled={busy}
             />
+            <Pressable accessibilityRole="button" onPress={confirmCancel} disabled={busy} hitSlop={8} style={styles.cancelLink}>
+              <ThemedText type="caption" themeColor="mutedForeground">
+                Cancel match
+              </ThemedText>
+            </Pressable>
           </View>
         ) : null}
       </View>
@@ -195,6 +225,13 @@ export function OfficiatingPhase({ match, currentUserId }: { match: RankedMatchD
             One of the {match.players.length} players manages the official score.
           </ThemedText>
         </Pressable>
+        {me ? (
+          <Pressable accessibilityRole="button" onPress={confirmCancel} disabled={busy} hitSlop={8} style={styles.cancelLink}>
+            <ThemedText type="caption" themeColor="mutedForeground">
+              Cancel match
+            </ThemedText>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -403,6 +440,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     alignSelf: 'flex-start',
+  },
+  cancelLink: {
+    alignSelf: 'flex-start',
+    paddingTop: Spacing.one,
   },
   list: {
     borderWidth: 2,
