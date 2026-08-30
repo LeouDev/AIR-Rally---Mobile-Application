@@ -74,6 +74,7 @@
     "moduleNameMapper": {
       "\\.css$": "<rootDir>/jest-style-stub.js",
       "^@/assets/(.*)$": "<rootDir>/assets/$1"
-    }
+    },
+    "resolver": "react-native-worklets/jest/resolver.js"
   }
 }

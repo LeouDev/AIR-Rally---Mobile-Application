@@ -1,14 +1,16 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { EnvironmentBanner } from '@/components/environment-banner';
 import { ErrorScreen } from '@/components/error-screen';
+import { SplashOverlay } from '@/components/splash-overlay';
 import { ToastProvider } from '@/components/ui/toast';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationObserver } from '@/lib/notifications-runtime';
 import { initSentry } from '@/lib/sentry';
+import { markSplashTiming } from '@/lib/splash-timing';
 import { SessionProvider, useSession } from '@/providers/session';
 
 SplashScreen.preventAutoHideAsync();
@@ -59,22 +61,31 @@ function RootNavigator() {
   // flash a signed-in user through (tabs) before possibly yanking them
   // back to complete-signup a moment later.
   const settled = isLoaded && (session === null || needsAgreement !== null);
+  const [overlayFinished, setOverlayFinished] = useState(false);
 
+  // Temporary — see splash-timing.ts. T2: session restore (and
+  // agreement-status resolution) finished.
   useEffect(() => {
-    if (settled) SplashScreen.hideAsync();
+    if (settled) markSplashTiming('t2_settled');
   }, [settled]);
 
-  // Hold the navigator itself — not just the splash — until the persisted
-  // session is restored. If the Stack mounts while `session` is still null
-  // only because storage hasn't been read yet, expo-router evaluates the
-  // Protected guards as signed-out, redirects a cold deep link into a
-  // guarded route (venue/booking/owner) over to sign-in, and loses the
-  // original target — so once the session loads it lands on Explore, not
-  // where the link pointed. Returning null keeps the initial URL pending
-  // (the splash is still up) until the guards can be evaluated correctly
-  // once, letting the deep link resolve where it asked.
-  if (!settled) return null;
+  // The native splash hides the instant the JS animated one is ready to
+  // take over — not gated on `settled` the way it used to be. The JS
+  // overlay covers the same ground the native splash did, so there's
+  // nothing to wait for here; waiting would just add a blank frame
+  // between the two.
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
 
+  // Hold the NAVIGATOR itself — not just the splash — until the persisted
+  // session is restored. If the Stack mounted while `session` is still
+  // null only because storage hasn't been read yet, expo-router would
+  // evaluate the Protected guards as signed-out, redirect a cold deep
+  // link into a guarded route (venue/booking/owner) over to sign-in, and
+  // lose the original target — so once the session loads it lands on
+  // Explore, not where the link pointed. `settled` below gates the Stack
+  // exactly as before; only what's visible underneath changed.
   const navigationTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
     dark: isDark,
@@ -90,55 +101,66 @@ function RootNavigator() {
   };
 
   return (
-    <ThemeProvider value={navigationTheme}>
-      {/* Overlay, not a sibling row — renders nothing at all on a
-          correctly-configured production build. */}
-      <EnvironmentBanner />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={session !== null && needsAgreement === false}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="venue/[id]" />
-          <Stack.Screen name="booking/[id]/index" />
-          <Stack.Screen name="booking/[id]/reschedule" />
-          <Stack.Screen name="owner/index" />
-          <Stack.Screen name="events/[id]" />
-          <Stack.Screen name="events/new" />
-          <Stack.Screen name="court-side/index" />
-          <Stack.Screen name="court-side/[postId]" />
-          <Stack.Screen name="court-side/club/[clubId]" />
-          <Stack.Screen name="player/[userId]" />
-          <Stack.Screen name="credits/index" />
-          <Stack.Screen name="clubs/index" />
-          <Stack.Screen name="clubs/[id]" />
-          <Stack.Screen name="clubs/new" />
-          <Stack.Screen name="favorites/index" />
-          <Stack.Screen name="blocked/index" />
-          <Stack.Screen name="account-settings" />
-          <Stack.Screen name="support/index" />
-          <Stack.Screen name="ranked/[matchId]" />
-          <Stack.Screen name="ranked/games" />
-          <Stack.Screen name="ranked/new" />
-          <Stack.Screen name="ranked/play" />
-        </Stack.Protected>
-        <Stack.Protected guard={session !== null && needsAgreement === true}>
-          <Stack.Screen name="complete-signup" />
-        </Stack.Protected>
-        <Stack.Protected guard={session === null}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
-        {/* Unconditional — reachable from sign-up (signed out) AND
+    <>
+      {/* The overlay stays in this SAME position (a fixed sibling,
+          never swapped for the subtree it sits beside) whether or not
+          `settled` is true yet — `ready` is the only thing that changes
+          about it. Returning a differently-shaped tree before/after
+          `settled` would unmount and remount it right as it needs to
+          keep animating, resetting its in-flight state. */}
+      {settled ? (
+        <ThemeProvider value={navigationTheme}>
+          {/* Overlay, not a sibling row — renders nothing at all on a
+              correctly-configured production build. */}
+          <EnvironmentBanner />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Protected guard={session !== null && needsAgreement === false}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="venue/[id]" />
+              <Stack.Screen name="booking/[id]/index" />
+              <Stack.Screen name="booking/[id]/reschedule" />
+              <Stack.Screen name="owner/index" />
+              <Stack.Screen name="events/[id]" />
+              <Stack.Screen name="events/new" />
+              <Stack.Screen name="court-side/index" />
+              <Stack.Screen name="court-side/[postId]" />
+              <Stack.Screen name="court-side/club/[clubId]" />
+              <Stack.Screen name="player/[userId]" />
+              <Stack.Screen name="credits/index" />
+              <Stack.Screen name="clubs/index" />
+              <Stack.Screen name="clubs/[id]" />
+              <Stack.Screen name="clubs/new" />
+              <Stack.Screen name="favorites/index" />
+              <Stack.Screen name="blocked/index" />
+              <Stack.Screen name="account-settings" />
+              <Stack.Screen name="support/index" />
+              <Stack.Screen name="ranked/[matchId]" />
+              <Stack.Screen name="ranked/games" />
+              <Stack.Screen name="ranked/new" />
+              <Stack.Screen name="ranked/play" />
+            </Stack.Protected>
+            <Stack.Protected guard={session !== null && needsAgreement === true}>
+              <Stack.Screen name="complete-signup" />
+            </Stack.Protected>
+            <Stack.Protected guard={session === null}>
+              <Stack.Screen name="(auth)" />
+            </Stack.Protected>
+            {/* Unconditional — reachable from sign-up (signed out) AND
             complete-signup (signed in, agreement pending), the two places
             that link to it. Neither guard above covers both states. */}
-        <Stack.Screen name="legal/[doc]" />
-        {/* Unconditional — a password-recovery deep link can land while
+            <Stack.Screen name="legal/[doc]" />
+            {/* Unconditional — a password-recovery deep link can land while
             signed out, signed in, or (via the recovery code exchange)
             somewhere in between; no single guard covers all of that. */}
-        <Stack.Screen name="reset-password" />
-        {/* Unconditional — the Ranked ladder is public (ranked_leaderboard's
+            <Stack.Screen name="reset-password" />
+            {/* Unconditional — the Ranked ladder is public (ranked_leaderboard's
             own RLS allows anon), same posture as the web's /ranked/leaderboard
             staying outside the account-gated /profile prefix. */}
-        <Stack.Screen name="ranked/leaderboard" />
-      </Stack>
-    </ThemeProvider>
+            <Stack.Screen name="ranked/leaderboard" />
+          </Stack>
+        </ThemeProvider>
+      ) : null}
+      {!overlayFinished ? <SplashOverlay ready={settled} onFinished={() => setOverlayFinished(true)} /> : null}
+    </>
   );
 }
