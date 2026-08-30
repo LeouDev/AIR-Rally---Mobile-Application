@@ -1,6 +1,19 @@
 import type { PublicProfile } from '@/lib/database.types';
-import { RankedError, throwRanked } from '@/lib/ranked';
+import { RANKED_MAX_PARTY_ARR_SPREAD, RankedError, throwRanked } from '@/lib/ranked';
 import { supabase } from '@/lib/supabase';
+
+/** Open Match's own name for the same value the party builder enforces
+ * — one global cap (350), founder-confirmed 2026-08-31 after an
+ * earlier, wrongly-settled reading briefly treated this as two
+ * separate caps (see open-match-design memory for the full sequence).
+ * Kept as a distinct constant rather than importing
+ * RANKED_MAX_PARTY_ARR_SPREAD directly at every call site: the two are
+ * separately decidable even though currently equal, so a future change
+ * to one shouldn't silently move the other. Derived from the shared
+ * constant, not a duplicated literal, so they can't drift apart by
+ * accident the way the design memo's own history just showed they can
+ * on purpose. */
+export const OPEN_MATCH_MAX_SPREAD = RANKED_MAX_PARTY_ARR_SPREAD;
 
 /** database.types.ts is generated from PRODUCTION's schema, and these
  * RPCs exist on staging only (116 hasn't been applied to production
@@ -99,6 +112,30 @@ export function matchStatusLabel(status: OpenMatchStatus): string {
       // commit here instead of retrofitted later.
       return 'Unavailable';
   }
+}
+
+/** One hour from created_at, per the design — a fixed window, not a
+ * countdown the client owns. This previews it; the actual expiry is
+ * still whatever scheduled job the backend runs, and a stale local
+ * clock reading "5m left" on a row the server already expired just
+ * means the join attempt fails with a real error a moment later, same
+ * as any other optimistic client-side preview in this app. */
+export const OPEN_MATCH_EXPIRY_MINUTES = 60;
+
+/** Minutes remaining before this open match's broadcast expires,
+ * clamped to 0 — never negative, so a caller can treat 0 as "expired"
+ * without a separate sign check. */
+export function minutesUntilExpiry(createdAt: string, now: Date = new Date()): number {
+  const elapsedMs = now.getTime() - new Date(createdAt).getTime();
+  const elapsedMinutes = Math.floor(elapsedMs / 60000);
+  return Math.max(0, OPEN_MATCH_EXPIRY_MINUTES - elapsedMinutes);
+}
+
+/** "Expires in 43m" / "Expires in 1m" / "Expiring now" — never "Expires
+ * in 0m", which reads as a bug rather than as imminent. */
+export function expiresInLabel(createdAt: string, now: Date = new Date()): string {
+  const remaining = minutesUntilExpiry(createdAt, now);
+  return remaining === 0 ? 'Expiring now' : `Expires in ${remaining}m`;
 }
 
 /** The curated Philippine city list — 25 rows, founder-approved. Render
