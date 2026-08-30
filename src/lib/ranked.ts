@@ -268,6 +268,36 @@ export function isFinishedGame(match: Pick<RankedMatch, 'score_a' | 'score_b' | 
   return high >= match.target_score && high - low >= match.win_by;
 }
 
+/**
+ * The three-number call a scorekeeper reads aloud in side-out doubles —
+ * "0-0-2" — serving score, receiving score, then which of the serving
+ * team's two turns this is. Only doubles + scoring_mode 'side_out' has a
+ * server_number at all (null otherwise, per that column's own comment);
+ * callers should gate on match_type/scoring_mode before using this.
+ *
+ * The first two numbers are SERVING then RECEIVING, not team A then team
+ * B — the order flips with match.serving_team. Rendering score_a/score_b
+ * unconditionally would be correct only while A is serving and silently
+ * wrong the rest of the time (5-3 with B serving reads as "3-5-1", not
+ * "5-3-1") — confirmed against d0's own callDoublesScore() in
+ * scripts/verify-side-out-scoring.ts, which this mirrors.
+ *
+ * server_number stores 1 for the game's opening service turn, but that
+ * turn is CALLED "2" (there's no first server on it, which is exactly
+ * why losing it is an immediate side-out) — so the opening-turn branch
+ * below never reads server_number at all, which is also what makes a
+ * freshly-live match's null server_number safe: first_service_turn_used
+ * is false there too, same as any other opening turn.
+ */
+export function calledServerScore(
+  match: Pick<RankedMatch, 'score_a' | 'score_b' | 'serving_team' | 'server_number' | 'first_service_turn_used'>
+): string {
+  const servingScore = match.serving_team === 'a' ? match.score_a : match.score_b;
+  const receivingScore = match.serving_team === 'a' ? match.score_b : match.score_a;
+  const calledServer = !match.first_service_turn_used ? 2 : match.server_number;
+  return `${servingScore}-${receivingScore}-${calledServer}`;
+}
+
 export const RANKED_DISPUTE_REASONS = ['Incorrect score', 'Wrong winner', 'Wrong player', 'Other'] as const;
 export type RankedDisputeReason = (typeof RANKED_DISPUTE_REASONS)[number];
 
@@ -457,6 +487,33 @@ export function opponentNames(players: readonly RankedMatchParticipant[], me: Pi
     .filter((p) => p.team !== me.team)
     .map((p) => p.profile?.display_name ?? 'a player')
     .join(' & ');
+}
+
+/**
+ * A player's first name, with a last initial appended ONLY when it
+ * collides with someone else's first name among `allPlayers` — "Juan D."
+ * vs "Juan R.", plain "Juan" when nobody else in the match shares it.
+ * Two Juans or two Marias in a Philippine doubles match is common, not
+ * an edge case, and first-name-only silently merges two different
+ * people into one label — confirmed live: the scoreboard showed
+ * "QA · QA" for a whole match. Disambiguates against the WHOLE match's
+ * players, not just one team, so an opponent sharing a name gets the
+ * same treatment as a teammate sharing one. Founder's own call on the
+ * fallback: last initial over a full surname.
+ */
+export function disambiguatedFirstName(
+  player: Pick<RankedMatchParticipant, 'user_id' | 'profile'>,
+  allPlayers: readonly Pick<RankedMatchParticipant, 'user_id' | 'profile'>[]
+): string {
+  const name = player.profile?.display_name;
+  if (!name) return '—';
+  const [firstName, ...rest] = name.trim().split(/\s+/);
+  const collides = allPlayers.some(
+    (p) => p.user_id !== player.user_id && p.profile?.display_name?.trim().split(/\s+/)[0] === firstName
+  );
+  if (!collides) return firstName;
+  const lastInitial = rest.length > 0 ? rest[rest.length - 1][0] : undefined;
+  return lastInitial ? `${firstName} ${lastInitial}.` : firstName;
 }
 
 async function attachParticipants(players: RankedMatchPlayer[]): Promise<RankedMatchParticipant[]> {

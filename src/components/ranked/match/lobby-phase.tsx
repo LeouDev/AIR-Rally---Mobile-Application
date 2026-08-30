@@ -10,6 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import type { RankedTeam } from '@/lib/database.types';
 import {
   cancelMatch,
+  disambiguatedFirstName,
   isMatchBooked,
   matchBalance,
   rankedStakes,
@@ -67,7 +68,7 @@ export function LobbyPhase({ match, currentUserId }: { match: RankedMatchDetail;
   // own constraints, enforced server-side — this just doesn't offer it
   // outside that window), and only to a player actually on that team.
   const canEditTeams = match.match_type === 'doubles' && match.status === 'lobby' && me !== undefined;
-  const firstNames = (team: typeof teamA) => team.map((p) => p.profile?.display_name?.split(' ')[0] ?? '—').join(' · ');
+  const firstNames = (team: typeof teamA) => team.map((p) => disambiguatedFirstName(p, match.players)).join(' · ');
   const teamALabel = teamIdentityLabel({
     matchType: match.match_type,
     teamName: match.team_a_name,

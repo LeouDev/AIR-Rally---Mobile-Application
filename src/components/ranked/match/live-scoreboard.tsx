@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
+  calledServerScore,
+  disambiguatedFirstName,
   isFinishedGame,
   recordPoint,
   RankedError,
@@ -55,7 +57,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
       .finally(() => setPending(null));
   };
 
-  const firstNames = (team: typeof teamA) => team.map((p) => p.profile?.display_name?.split(' ')[0] ?? '—').join(' · ');
+  const firstNames = (team: typeof teamA) => team.map((p) => disambiguatedFirstName(p, match.players)).join(' · ');
   // Doubles shows the team's chosen identity; singles shows the player's
   // name — the founder's own rule, keyed on match type inside
   // teamIdentityLabel() itself, not duplicated here.
@@ -104,6 +106,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
         </ThemedText>
         <ThemedText type="caption" style={{ color: theme.rally, fontWeight: '700' }}>
           SERVING: TEAM {match.serving_team.toUpperCase()}
+          {match.match_type === 'doubles' && match.scoring_mode === 'side_out' ? ` · ${calledServerScore(match)}` : ''}
         </ThemedText>
       </View>
 

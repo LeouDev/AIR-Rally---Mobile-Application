@@ -12,6 +12,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   confirmationTally,
+  disambiguatedFirstName,
   formatRating,
   formatRatingDelta,
   myMatchResult,
@@ -35,7 +36,7 @@ import { shareCard } from '@/lib/share';
 function teamLabels(match: RankedMatchDetail) {
   const teamA = match.players.filter((p) => p.team === 'a');
   const teamB = match.players.filter((p) => p.team === 'b');
-  const firstNames = (team: typeof teamA) => team.map((p) => p.profile?.display_name?.split(' ')[0] ?? '—').join(' · ');
+  const firstNames = (team: typeof teamA) => team.map((p) => disambiguatedFirstName(p, match.players)).join(' · ');
   return {
     a: teamIdentityLabel({ matchType: match.match_type, teamName: match.team_a_name, club: match.team_a_club, playerNames: firstNames(teamA) }).label,
     b: teamIdentityLabel({ matchType: match.match_type, teamName: match.team_b_name, club: match.team_b_club, playerNames: firstNames(teamB) }).label,
