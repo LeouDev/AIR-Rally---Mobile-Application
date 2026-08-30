@@ -188,7 +188,20 @@ export default function VenueDetailScreen() {
                     accessibilityLabel="Share this court"
                     onPress={handleSharePress}
                     hitSlop={8}>
-                    <Ionicons name="share-outline" size={22} color={theme.primary} />
+                    {/* Matches the back chevron's actual rendered color,
+                        not headerTintColor's nominal theme.primary — on
+                        this react-native-screens version the native
+                        chevron doesn't honor headerTintColor (32
+                        confirmed live, navy chevron next to an orange
+                        icon set from the same value). Forcing the
+                        chevron orange would mean fighting a native
+                        rendering path we can't see; matching the one
+                        icon we DO control to what's actually on screen
+                        is the one-line fix. Scoped to this screen only —
+                        booking/[id].tsx, booking/[id]/reschedule.tsx,
+                        and owner/index.tsx have the same headerTintColor
+                        pattern but weren't asked about. */}
+                    <Ionicons name="share-outline" size={22} color={theme.navy} />
                   </Pressable>
                 </View>
               )
