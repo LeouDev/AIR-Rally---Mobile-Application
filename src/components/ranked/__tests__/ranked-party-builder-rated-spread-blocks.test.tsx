@@ -64,7 +64,7 @@ beforeEach(() => {
   mockCreate.mockResolvedValue('match-1');
 });
 
-it('a 400-ARR-gap party is blocked when rated (over the 250 cap)', async () => {
+it('a 400-ARR-gap party is blocked when rated (over the 350 cap)', async () => {
   mockGetPlayerRank.mockImplementation(async (id: string) =>
     id === HOST.id ? rank({ user_id: HOST.id, rating: 1000 }) : rank({ user_id: ROBIN.id, rating: 1400 })
   );

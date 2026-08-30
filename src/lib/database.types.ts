@@ -1000,7 +1000,7 @@ export type Database = {
         Args: Record<string, never>;
         Returns: undefined;
       };
-      /** Widest ARR gap among the calibrated players in a proposed party. Ranked parties must stay within 250 ARR of each other. */
+      /** Widest ARR gap among the calibrated players in a proposed party. Ranked parties must stay within 350 ARR of each other. */
       ranked_party_spread: {
         Args: { p_user_ids: string[] };
         Returns: number;

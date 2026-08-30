@@ -49,7 +49,10 @@ export class RankedError extends Error {
 
 const RANKED_RULE_SQLSTATE = 'AR001';
 
-function throwRanked(error: PostgrestError): never {
+/** Shared with lib/open-match.ts — the AR001 SQLSTATE convention is
+ * ranked-domain-wide, not party-builder-specific; open-match RPCs use
+ * the identical code for the identical reason (f3, 2026-08-31). */
+export function throwRanked(error: PostgrestError): never {
   if (error.code === RANKED_RULE_SQLSTATE) throw new RankedError(error.message);
   throw error;
 }
@@ -79,8 +82,8 @@ export const RANKED_TIER_COUNT = RANK_THRESHOLDS.length;
 export const RANKED_PIPS_PER_TIER = 5;
 /** Matches c_calibration_matches in apply_ranked_result(). */
 export const RANKED_CALIBRATION_MATCHES = 10;
-/** The party-spread cap — a ranked doubles party's members must all sit within this many ARR points of each other. */
-export const RANKED_MAX_PARTY_ARR_SPREAD = 250;
+/** The party-spread cap — a ranked doubles party's members must all sit within this many ARR points of each other. Raised 250 -> 350, founder decision 2026-08-31, applying everywhere (not an Open-Match-only value) — see 20260810000117_raise_party_spread_cap.sql in the web repo. */
+export const RANKED_MAX_PARTY_ARR_SPREAD = 350;
 
 export type RankedTierInfo = (typeof RANK_THRESHOLDS)[number];
 
