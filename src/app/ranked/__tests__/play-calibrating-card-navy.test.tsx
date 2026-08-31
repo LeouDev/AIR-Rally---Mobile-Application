@@ -42,8 +42,8 @@ jest.mock('@/providers/session', () => ({
   useSession: () => ({ session: { user: { id: 'me' } } }),
 }));
 
-jest.mock('@/components/ranked/ranked-party-builder', () => ({
-  RankedPartyBuilder: () => {
+jest.mock('@/components/ranked/ranked-direct-invite', () => ({
+  RankedDirectInvite: () => {
     const { View } = jest.requireActual('react-native');
     return <View />;
   },

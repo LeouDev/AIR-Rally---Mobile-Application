@@ -21,9 +21,11 @@ import { getPlayerRank } from '@/lib/ranked';
  * freezes their rating outside a booked court (still no booking exists
  * here by construction) — as a compact tappable line on the screen, and
  * as a "Find match" gate the first time via RatingFreezeSheet's confirm
- * mode (RankedPartyBuilder's `confirmBeforeCreate`). Both are pinned
- * here: the line's copy/visibility, and that the confirm hook only
- * reaches RankedPartyBuilder for a calibrated Ranked-mode player.
+ * mode (RankedDirectInvite's `confirmBeforeCreate`, since the surgery
+ * that removed the singles/doubles toggle replaced RankedPartyBuilder
+ * with RankedDirectInvite here). Both are pinned here: the line's
+ * copy/visibility, and that the confirm hook only reaches
+ * RankedDirectInvite for a calibrated Ranked-mode player.
  */
 
 jest.mock('expo-router', () => ({
@@ -49,8 +51,8 @@ jest.mock('@/providers/session', () => ({
 
 let capturedConfirmBeforeCreate: (() => Promise<boolean>) | undefined;
 
-jest.mock('@/components/ranked/ranked-party-builder', () => ({
-  RankedPartyBuilder: ({ confirmBeforeCreate }: { confirmBeforeCreate?: () => Promise<boolean> }) => {
+jest.mock('@/components/ranked/ranked-direct-invite', () => ({
+  RankedDirectInvite: ({ confirmBeforeCreate }: { confirmBeforeCreate?: () => Promise<boolean> }) => {
     capturedConfirmBeforeCreate = confirmBeforeCreate;
     const { View } = jest.requireActual('react-native');
     return <View />;
@@ -185,7 +187,7 @@ describe('PlayRankedScreen — Ranked-mode explainer', () => {
     await screen.findByText('freeze-sheet:me:info');
   });
 
-  it('passes confirmBeforeCreate to RankedPartyBuilder only for a calibrated Ranked-mode player', async () => {
+  it('passes confirmBeforeCreate to RankedDirectInvite only for a calibrated Ranked-mode player', async () => {
     mockGetPlayerRank.mockResolvedValue(rankFixture({ is_calibrated: true, tier: 3, pips: 2 }));
     await render(<PlayRankedScreen />);
 

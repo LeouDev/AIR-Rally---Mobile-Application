@@ -240,6 +240,26 @@ export function matchBalance(teamARatings: number[], teamBRatings: number[]): Ma
   return { bars, label: BALANCE_LABELS[bars - 1], gap: Math.round(gap) };
 }
 
+/** Client-side mirror of the same pairing rule Open Match's server-side
+ * conversion uses at 4 accepted (see the open-match-design memory,
+ * point 3): sort by rating, {lowest, highest} vs the two middle —
+ * verified numerically there to always minimize the team-rating gap
+ * (e.g. 1000/1100/1200/1400 gives a 100-point gap; the other two
+ * pairings give 300 and 500). Duplicated here rather than shared
+ * because create_ranked_match's contract always expected a pre-split
+ * roster — the server's own splitting logic lives inside a conversion
+ * path with no client-callable entry point for an arbitrary roster.
+ * If the server's pairing rule ever changes, this needs updating too. */
+export function splitDoublesTeamsByRating<T extends { id: string; rating: number }>(
+  players: readonly [T, T, T, T]
+): { teamA: [T, T]; teamB: [T, T] } {
+  const sorted = [...players].sort((a, b) => a.rating - b.rating);
+  return {
+    teamA: [sorted[0], sorted[3]],
+    teamB: [sorted[1], sorted[2]],
+  };
+}
+
 export type OfficiatingTally = { approved: number; total: number; unanimous: boolean };
 
 export function officiatingTally(players: readonly (Pick<RankedMatchPlayer, 'officiating_vote'>)[]): OfficiatingTally {

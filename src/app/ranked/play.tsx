@@ -4,16 +4,17 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalibrationStatus } from '@/components/ranked/calibration-status';
-import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
+import { RankedDirectInvite } from '@/components/ranked/ranked-direct-invite';
 import { RatingFreezeSheet } from '@/components/ranked/rating-freeze-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
-import type { PlayerRank, PublicProfile, RankedMatchType } from '@/lib/database.types';
+import type { PlayerRank, PublicProfile } from '@/lib/database.types';
 import { getPublicProfile } from '@/lib/follows';
 import { acknowledgeUnbookedPlay, getUnbookedPlayAcknowledged } from '@/lib/profile';
 import { getPlayerRank, rankedStakes } from '@/lib/ranked';
@@ -27,10 +28,12 @@ type GameMode = 'casual' | 'ranked';
  * subtracted or added even if you lose or win," ranked's first ten
  * matches are calibration and need no booking either (067's own DB
  * comment: "the ladder does not require [event/court]... four people
- * on any court can play one"). Everything a booking-gated match already
- * needed (a real party, singles/doubles) still applies — this only
- * removes the booking precondition, via RankedPartyBuilder's own
- * already-correct handling of a null eventId/courtId.
+ * on any court can play one"). Two ways to fill a match, format derived
+ * from who shows up rather than a toggle (Open Match design, 2026-08-31):
+ * broadcast to the city via Find match, or invite specific players via
+ * RankedDirectInvite — the latter still creates the match directly
+ * (create_ranked_match, via RankedDirectInvite's own null eventId/
+ * courtId handling), same as the old slot-based builder did.
  *
  * NOT a replacement for the booked flow at events/new.tsx — a player
  * who's booked a court still starts a game from that booking, same as
@@ -45,7 +48,6 @@ export default function PlayRankedScreen() {
   const { ref: scrollRef, props: keyboardProps, scrollFocusedIntoView } = useKeyboardAwareScroll<ScrollView>();
 
   const [mode, setMode] = useState<GameMode>('ranked');
-  const [matchType, setMatchType] = useState<RankedMatchType>('singles');
   const [host, setHost] = useState<PublicProfile | null | undefined>(undefined);
   const [myRank, setMyRank] = useState<PlayerRank | null | undefined>(undefined);
   const [freezeSheetVisible, setFreezeSheetVisible] = useState(false);
@@ -172,26 +174,24 @@ export default function PlayRankedScreen() {
               </View>
 
               <View style={styles.block}>
-                <ThemedText type="smallBold">Singles or doubles?</ThemedText>
-                <SegmentedControl
-                  options={[
-                    { value: 'singles', label: 'Singles' },
-                    { value: 'doubles', label: 'Doubles' },
-                  ]}
-                  selected={matchType}
-                  onSelect={setMatchType}
-                />
+                <ThemedText type="smallBold">Broadcast to your city</ThemedText>
+                <ThemedText type="small" themeColor="subtle">
+                  Post a game and let nearby players request to join — no need to know who&apos;s coming yet.
+                </ThemedText>
+                <Button title="Find match" onPress={() => router.push('/open-match/new')} />
               </View>
 
-              <RankedPartyBuilder
-                key={`${matchType}-${mode}`}
-                host={host}
-                matchType={matchType}
-                rated={mode === 'ranked'}
-                onSearchFocus={scrollFocusedIntoView}
-                onCreated={(matchId) => router.replace({ pathname: '/ranked/[matchId]', params: { matchId } })}
-                confirmBeforeCreate={mode === 'ranked' && isCalibrated ? confirmBeforeUnbookedMatch : undefined}
-              />
+              <View style={[styles.block, styles.sectionDivider, { borderTopColor: theme.border }]}>
+                <ThemedText type="smallBold">Or invite players you know</ThemedText>
+                <RankedDirectInvite
+                  key={mode}
+                  host={host}
+                  rated={mode === 'ranked'}
+                  onSearchFocus={scrollFocusedIntoView}
+                  onCreated={(matchId) => router.replace({ pathname: '/ranked/[matchId]', params: { matchId } })}
+                  confirmBeforeCreate={mode === 'ranked' && isCalibrated ? confirmBeforeUnbookedMatch : undefined}
+                />
+              </View>
             </>
           )}
         </ScrollView>
@@ -220,6 +220,11 @@ const styles = StyleSheet.create({
   },
   block: {
     gap: Spacing.two,
+  },
+  sectionDivider: {
+    borderTopWidth: 1,
+    paddingTop: Spacing.four,
+    marginTop: Spacing.two,
   },
   stakesCard: {
     borderRadius: Radius.lg,

@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OpenGamesSection } from '@/components/open-match/open-games-section';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +14,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { calculateSplit, formatShare } from '@/lib/event-split';
 import { listMyEventStatuses, listUpcomingEvents, type EventWithDetails } from '@/lib/events';
 import type { EventAttendeeStatus, RankedMatchStatus } from '@/lib/database.types';
+import { getMyCity } from '@/lib/open-match';
 import { getActiveMatch, opponentNames, type RankedMatchDetail } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
@@ -65,6 +67,11 @@ export default function PlayScreen() {
   // founder's own repro — lands on a screen that actually looked again
   // rather than one holding a stale answer from before the app closed.
   const [activeMatch, setActiveMatch] = useState<RankedMatchDetail | null | undefined>(undefined);
+  // undefined while loading/no session, null once resolved to "not set
+  // yet" — same two-step shape as activeMatch above. OpenGamesSection
+  // itself renders nothing for a null citySlug, so this never needs its
+  // own error state.
+  const [citySlug, setCitySlug] = useState<string | null | undefined>(undefined);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +91,7 @@ export default function PlayScreen() {
     // games" for the Open Play list underneath it, or vice versa.
     if (!userId) {
       setActiveMatch(null);
+      setCitySlug(null);
       return;
     }
     try {
@@ -93,6 +101,11 @@ export default function PlayScreen() {
       // card never gets an error state of its own, same posture as
       // RankCard's own Ranked lookup on the Profile tab.
       setActiveMatch(null);
+    }
+    try {
+      setCitySlug(await getMyCity(userId));
+    } catch {
+      setCitySlug(null);
     }
   }, [userId]);
 
@@ -227,6 +240,12 @@ export default function PlayScreen() {
               </ThemedText>
               <Button title="Start a game" onPress={() => router.push('/ranked/play')} />
 
+              {userId && citySlug !== undefined ? (
+                <View style={styles.openGamesWrapper}>
+                  <OpenGamesSection key={citySlug} citySlug={citySlug} currentUserId={userId} />
+                </View>
+              ) : null}
+
               <View style={[styles.sectionDivider, { borderTopColor: theme.border }]}>
                 <ThemedText type="subtitle">Open Play</ThemedText>
                 <ThemedText type="small" themeColor="subtle">
@@ -287,6 +306,9 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.two,
     marginBottom: Spacing.two,
+  },
+  openGamesWrapper: {
+    marginTop: Spacing.two,
   },
   sectionDivider: {
     borderTopWidth: 1,
