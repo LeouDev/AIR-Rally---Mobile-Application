@@ -94,7 +94,14 @@ export function OpenGamesSection({ citySlug, currentUserId }: { citySlug: string
                   {game.host?.display_name ?? 'A player'}&apos;s game
                 </ThemedText>
                 <ThemedText type="caption" themeColor="mutedForeground">
-                  {game.acceptedCount} {game.acceptedCount === 1 ? 'player' : 'players'} in · {expiresInLabel(game.scheduled_at)}
+                  {game.acceptedCount} {game.acceptedCount === 1 ? 'player' : 'players'} in
+                  {/* Migration 120: reaching 4 accepted no longer converts
+                      the match or changes its status — it stays 'open'
+                      until the real match is created at scheduled_at or a
+                      manual host start, which can now be days out. Without
+                      this, a full match reads exactly like a joinable one
+                      right up until the server rejects the request. */}
+                  {game.acceptedCount >= 4 ? ' · Full' : ''} · {expiresInLabel(game.scheduled_at)}
                 </ThemedText>
               </View>
             </Pressable>

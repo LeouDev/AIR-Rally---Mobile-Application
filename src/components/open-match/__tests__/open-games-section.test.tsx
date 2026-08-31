@@ -68,6 +68,21 @@ it('lists a real open game with the host, headcount, and expiry', async () => {
   expect(screen.getByText(/Expires in/)).toBeTruthy();
 });
 
+it('labels a game full at 4 accepted — migration 120 leaves status \'open\' the whole time, so the count is the only signal', async () => {
+  mockListOpenMatchesForCity.mockResolvedValue([game({ acceptedCount: 4, status: 'open' })]);
+  await render(<OpenGamesSection citySlug="mandaue" currentUserId="me" />);
+
+  await screen.findByText(/4 players in · Full/);
+});
+
+it('does not label a 2-accepted singles-startable game as full', async () => {
+  mockListOpenMatchesForCity.mockResolvedValue([game({ acceptedCount: 2, status: 'open' })]);
+  await render(<OpenGamesSection citySlug="mandaue" currentUserId="me" />);
+
+  await screen.findByText(/2 players in/);
+  expect(screen.queryByText(/Full/)).toBeNull();
+});
+
 it('singularizes the headcount for exactly one player', async () => {
   mockListOpenMatchesForCity.mockResolvedValue([game({ acceptedCount: 1 })]);
   await render(<OpenGamesSection citySlug="mandaue" currentUserId="me" />);
