@@ -139,7 +139,7 @@ function OpenMatchDetailSheetBody({
               </ThemedText>
               <ThemedText type="small" themeColor="subtle">
                 {openMatch.acceptedCount} {openMatch.acceptedCount === 1 ? 'player' : 'players'} in ·{' '}
-                {expiresInLabel(openMatch.created_at)}
+                {expiresInLabel(openMatch.scheduled_at)}
               </ThemedText>
             </View>
           </View>

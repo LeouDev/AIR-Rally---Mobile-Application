@@ -94,7 +94,7 @@ export function OpenGamesSection({ citySlug, currentUserId }: { citySlug: string
                   {game.host?.display_name ?? 'A player'}&apos;s game
                 </ThemedText>
                 <ThemedText type="caption" themeColor="mutedForeground">
-                  {game.acceptedCount} {game.acceptedCount === 1 ? 'player' : 'players'} in · {expiresInLabel(game.created_at)}
+                  {game.acceptedCount} {game.acceptedCount === 1 ? 'player' : 'players'} in · {expiresInLabel(game.scheduled_at)}
                 </ThemedText>
               </View>
             </Pressable>

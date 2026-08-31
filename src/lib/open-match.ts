@@ -15,14 +15,14 @@ import { supabase } from '@/lib/supabase';
  * on purpose. */
 export const OPEN_MATCH_MAX_SPREAD = RANKED_MAX_PARTY_ARR_SPREAD;
 
-/** database.types.ts is generated from PRODUCTION's schema, and these
- * RPCs exist on staging only (116 hasn't been applied to production
- * yet — see the module doc). supabase.rpc()'s generic is a closed
- * union of production's function names, so TypeScript rejects a real,
- * live, verified RPC name it simply hasn't been told about yet. One
- * narrow cast here instead of nine at each call site; delete this
- * (and the `as any`s it enables) once types are regenerated after the
- * production migration ships. */
+/** database.types.ts is generated from a snapshot of the schema and
+ * hasn't been regenerated since 116 shipped to production (let alone
+ * 119, still staging-only — see the module doc). supabase.rpc()'s
+ * generic is a closed union of whatever function names were known at
+ * generation time, so TypeScript rejects a real, live, verified RPC
+ * name it simply hasn't been told about yet. One narrow cast here
+ * instead of nine at each call site; delete this (and the `as any`s it
+ * enables) once types are regenerated. */
 const rpc = supabase.rpc.bind(supabase) as unknown as (
   fn: string,
   params?: Record<string, unknown>
@@ -30,15 +30,18 @@ const rpc = supabase.rpc.bind(supabase) as unknown as (
 
 /**
  * Open Match — the "find 2-4 people who all have the app" broadcast
- * flow. Backend: migrations 115 (cities, profiles.city_slug) and 116
- * (open_matches, open_match_join_requests, RPCs), STAGING ONLY as of
- * writing — the founder deliberately held production until this UI
- * exists. Design and every decision: the open-match-design memory.
- * Contract this file builds against: the open-match-api-contract
- * memory, verified directly against the live staging schema (not
- * taken from the memo's shorthand) — every RPC below takes a single
- * `p_`-prefixed parameter, which the memo's own signatures don't show;
- * confirmed via PostgREST's "perhaps you meant" hint on each one.
+ * flow. Backend: migrations 115 (cities, profiles.city_slug), 116
+ * (open_matches, open_match_join_requests, RPCs), 117 (rank-gap cap)
+ * and 118 (get_open_match_public) are LIVE ON PRODUCTION as of
+ * 2026-08-31. Migration 119 (scheduled_at + venue, expiry moved to be
+ * relative to scheduled_at) is STAGING ONLY as of writing, awaiting the
+ * founder's word for production. Design and every decision: the
+ * open-match-design memory. Contract this file builds against: the
+ * open-match-api-contract memory, verified directly against the live
+ * staging schema (not taken from the memo's shorthand) — every RPC
+ * below takes a single `p_`-prefixed parameter, which the memo's own
+ * signatures don't show; confirmed via PostgREST's "perhaps you meant"
+ * hint on each one.
  *
  * Two systems meet at exactly one call: once exactly 2 or exactly 4
  * join requests are accepted, the relevant RPC calls the EXISTING
@@ -70,6 +73,19 @@ export type OpenMatch = {
   target_city: string;
   status: OpenMatchStatus;
   created_at: string;
+  /** Migration 119 — when this game is actually happening, not when it
+   * was posted. Expiry is now relative to this, not created_at: a
+   * Tuesday broadcast for Saturday stays 'open' and browsable the whole
+   * time instead of dying in an hour under the old rule. */
+  scheduled_at: string;
+  /** Migration 119 — optional FK to a listed venue. Display-only, unlike
+   * target_city: nothing normalizes or filters on venue, so a typo or an
+   * unlisted court (the founder's own "Nomads Pickleball" isn't in
+   * venues) never blocks posting. */
+  venue_id: string | null;
+  /** Migration 119 — free-text venue name for anywhere not in `venues`.
+   * Never matched or canonicalized, the opposite of target_city. */
+  venue_label: string | null;
   /** Set only once status = 'converted' — the real ranked_matches row this became. */
   converted_match_id: string | null;
 };
@@ -114,28 +130,34 @@ export function matchStatusLabel(status: OpenMatchStatus): string {
   }
 }
 
-/** One hour from created_at, per the design — a fixed window, not a
- * countdown the client owns. This previews it; the actual expiry is
- * still whatever scheduled job the backend runs, and a stale local
+/** Migration 119: expiry moved from a fixed 60-minute window after
+ * created_at to exactly scheduled_at, no grace period —
+ * expire_stale_open_matches() sweeps status='open' and scheduled_at <=
+ * now() straight to 'expired'. A Tuesday broadcast for a Saturday game
+ * now stays open and browsable the whole time it's posted, instead of
+ * dying in an hour under the old rule. This previews that; the actual
+ * expiry is still whatever the backend sweep decides, and a stale local
  * clock reading "5m left" on a row the server already expired just
  * means the join attempt fails with a real error a moment later, same
  * as any other optimistic client-side preview in this app. */
-export const OPEN_MATCH_EXPIRY_MINUTES = 60;
-
-/** Minutes remaining before this open match's broadcast expires,
- * clamped to 0 — never negative, so a caller can treat 0 as "expired"
- * without a separate sign check. */
-export function minutesUntilExpiry(createdAt: string, now: Date = new Date()): number {
-  const elapsedMs = now.getTime() - new Date(createdAt).getTime();
-  const elapsedMinutes = Math.floor(elapsedMs / 60000);
-  return Math.max(0, OPEN_MATCH_EXPIRY_MINUTES - elapsedMinutes);
+export function minutesUntilExpiry(scheduledAt: string, now: Date = new Date()): number {
+  const remainingMs = new Date(scheduledAt).getTime() - now.getTime();
+  return Math.max(0, Math.floor(remainingMs / 60000));
 }
 
-/** "Expires in 43m" / "Expires in 1m" / "Expiring now" — never "Expires
- * in 0m", which reads as a bug rather than as imminent. */
-export function expiresInLabel(createdAt: string, now: Date = new Date()): string {
-  const remaining = minutesUntilExpiry(createdAt, now);
-  return remaining === 0 ? 'Expiring now' : `Expires in ${remaining}m`;
+/** "Expires in 43m" / "Expires in 6h" / "Expires in 3d" / "Expiring
+ * now" — scales with how far out scheduled_at is, since a match can now
+ * be posted days ahead of when it's actually happening; a pure minute
+ * count would read "Expires in 4320m" for a Tuesday-to-Saturday post.
+ * Never "Expires in 0m", which reads as a bug rather than as imminent. */
+export function expiresInLabel(scheduledAt: string, now: Date = new Date()): string {
+  const minutes = minutesUntilExpiry(scheduledAt, now);
+  if (minutes === 0) return 'Expiring now';
+  if (minutes < 60) return `Expires in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `Expires in ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `Expires in ${days}d`;
 }
 
 /** The curated Philippine city list — 25 rows, founder-approved. Render
@@ -179,12 +201,43 @@ export async function openMatchAcceptedCount(openMatchId: string): Promise<numbe
   return data ?? 0;
 }
 
-/** Host creates a broadcast for their own registered city. Returns the
- * new open match's id, mirroring createRankedMatch()'s own convention
- * — not independently confirmed against a real signed-in call from
- * this session; flag if the RPC's actual return shape differs. */
-export async function createOpenMatch(citySlug: string): Promise<string> {
-  const { data, error } = await rpc('create_open_match', { p_city_slug: citySlug });
+/** Migration 119's own guard against clock skew: the server rejects
+ * p_scheduled_at <= now() with 'Pick a time in the future.', computed
+ * server-side. A "post right now" tap that builds `new Date()`
+ * client-side can still land in the past by the time the request
+ * reaches the server — network latency, not a bug in the guard, which
+ * is intentional and won't loosen. createOpenMatch() below pushes any
+ * imminent timestamp forward by this margin so a genuine "now" request
+ * never hits that rejection; a real future schedule (5pm Saturday)
+ * passes through unchanged since it's already well past the buffer. */
+const SCHEDULE_FORWARD_BUFFER_MS = 5000;
+
+/** Host creates a broadcast for their own registered city, for a
+ * specific scheduled time — required as of migration 119, which dropped
+ * the old one-argument signature with no shim (nothing had ever called
+ * it beyond staging tests). Venue is optional and display-only, unlike
+ * city: `venueId` is for a listed `venues` row, `venueLabel` is free
+ * text for anywhere else (the founder's own "Nomads Pickleball" isn't
+ * in the venues table) — neither is normalized or matched against.
+ * Returns the new open match's id, mirroring createRankedMatch()'s own
+ * convention — not independently confirmed against a real signed-in
+ * call from this session; flag if the RPC's actual return shape
+ * differs. */
+export async function createOpenMatch(
+  citySlug: string,
+  scheduledAt: Date,
+  venue?: { id?: string; label?: string }
+): Promise<string> {
+  const safeScheduledAt =
+    scheduledAt.getTime() <= Date.now() + SCHEDULE_FORWARD_BUFFER_MS
+      ? new Date(Date.now() + SCHEDULE_FORWARD_BUFFER_MS)
+      : scheduledAt;
+  const { data, error } = await rpc('create_open_match', {
+    p_city_slug: citySlug,
+    p_scheduled_at: safeScheduledAt.toISOString(),
+    p_venue_id: venue?.id ?? null,
+    p_venue_label: venue?.label ?? null,
+  });
   if (error) throwRanked(error);
   return data as string;
 }
