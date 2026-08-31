@@ -244,7 +244,13 @@ export async function createOpenMatch(
 
 /** Any signed-in player whose OWN profiles.city_slug matches the open
  * match's target city — checked server-side, not trusted from how they
- * arrived at the screen. Rejects with the founder's exact copy if the
+ * arrived at the screen. Migration 120 (live on production): auto-
+ * accepts on a passing rank-gap check (no host review step exists
+ * anymore) under a row lock on the parent open_matches row, so two
+ * simultaneous requests can't each pass individually but overshoot the
+ * cap together. A resolved call means accepted; a rejected call means
+ * the check failed and NOTHING was written — there is no 'pending'
+ * outcome to represent. Rejects with the founder's exact copy when the
  * hypothetical roster (current accepted + this requester) exceeds the
  * open-match rank-gap cap; ranked_party_spread() already returns 0
  * (never errors) when nobody involved is calibrated yet. */
@@ -253,45 +259,51 @@ export async function requestToJoinOpenMatch(openMatchId: string): Promise<void>
   if (error) throwRanked(error);
 }
 
-/** Host only. At exactly 4 accepted this auto-converts inside the RPC —
- * calls create_ranked_match() unchanged, no separate "start doubles" call exists. */
-export async function acceptJoinRequest(requestId: string): Promise<void> {
-  const { error } = await rpc('accept_join_request', { p_request_id: requestId });
-  if (error) throwRanked(error);
-}
-
-/** Host only. */
-export async function declineJoinRequest(requestId: string): Promise<void> {
-  const { error } = await rpc('decline_join_request', { p_request_id: requestId });
-  if (error) throwRanked(error);
-}
-
 /** Host only — removes an already-accepted request. Lands as 'kicked',
- * not 'declined', so the requester's own history shows they WERE in. */
+ * not 'declined', so the requester's own history shows they WERE in.
+ * Unchanged by migration 120: auto-accept removed the host's ability
+ * to gatekeep who gets IN, not their ability to correct a mistake
+ * afterward. */
 export async function kickAcceptedPlayer(requestId: string): Promise<void> {
   const { error } = await rpc('kick_accepted_player', { p_request_id: requestId });
   if (error) throwRanked(error);
 }
 
-/** The requester's own row only. */
+/** The requester's own row only. Migration 120: only ever operates on
+ * an 'accepted' row now ("leave a match you already joined") — there's
+ * nothing 'pending' left for it to cancel. */
 export async function withdrawJoinRequest(requestId: string): Promise<void> {
   const { error } = await rpc('withdraw_join_request', { p_request_id: requestId });
   if (error) throwRanked(error);
 }
 
-/** Host only. */
+/** Host only. Migration 120: cascades every currently-`accepted`
+ * request to `declined` — the ONLY path to that status now (see
+ * open-match-detail-sheet.tsx's own comment on what 'declined' means
+ * post-120). */
 export async function cancelOpenMatch(openMatchId: string): Promise<void> {
   const { error } = await rpc('cancel_open_match', { p_open_match_id: openMatchId });
   if (error) throwRanked(error);
 }
 
 /** Host only, exactly 2 accepted (including the host) — singles doesn't
- * auto-convert the way 4-accepted doubles does, since the host may
- * still want to wait for a doubles partner. At exactly 3, no start is
- * possible at all (enforced inside whatever RPC would finalize it, not
- * a separate status) — the host's only moves are kick one or wait for a 4th. */
+ * auto-convert the way 4-accepted doubles used to before migration 120.
+ * Post-120, reaching 4 accepted no longer converts immediately either
+ * (see startOpenMatchFull below) — it just closes the match to further
+ * requests. The real ranked_matches row is created at scheduled_at (a
+ * cron, resolve_open_matches_at_kickoff) or by the host starting early
+ * via this RPC or startOpenMatchFull. At exactly 3, no start is
+ * possible at all — the host's only moves are kick one or wait for a 4th. */
 export async function startOpenMatchSingles(openMatchId: string): Promise<void> {
   const { error } = await rpc('start_open_match_singles', { p_open_match_id: openMatchId });
+  if (error) throwRanked(error);
+}
+
+/** Host only, exactly 4 accepted — migration 120's new counterpart to
+ * startOpenMatchSingles, letting a full doubles match start before its
+ * scheduled kickoff instead of waiting for the cron sweep. */
+export async function startOpenMatchFull(openMatchId: string): Promise<void> {
+  const { error } = await rpc('start_open_match_full', { p_open_match_id: openMatchId });
   if (error) throwRanked(error);
 }
 

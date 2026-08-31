@@ -82,19 +82,25 @@ function OpenMatchDetailSheetBody({
     };
   }, [openMatch.id, currentUserId]);
 
+  // Migration 120: request_to_join_open_match auto-accepts on a passing
+  // rank-gap check — there is no host review step and no 'pending' row
+  // is ever created. A resolved call means accepted; a rejected call
+  // means the check failed and nothing was written at all. Confirmed
+  // directly against the deployed function, not inferred from the
+  // memo's shorthand.
   const request = async () => {
     if (busy) return;
     setBusy(true);
     try {
       await requestToJoinOpenMatch(openMatch.id);
       setMyRequest({
-        id: 'pending-local',
+        id: 'accepted-local',
         open_match_id: openMatch.id,
         user_id: currentUserId,
-        status: 'pending',
+        status: 'accepted',
         created_at: new Date().toISOString(),
       });
-      show('Request sent.', 'success');
+      show("You're in!", 'success');
     } catch (err) {
       // Stays open — a closed sheet after a failed request would look
       // identical to one that went through.
@@ -104,13 +110,16 @@ function OpenMatchDetailSheetBody({
     }
   };
 
-  const withdraw = async () => {
+  // withdraw_join_request now only ever operates on an 'accepted' row —
+  // "leave a match you already joined," not "cancel a pending ask"
+  // (there's nothing pending left to cancel post-120).
+  const leave = async () => {
     if (busy || !myRequest) return;
     setBusy(true);
     try {
       await withdrawJoinRequest(myRequest.id);
       setMyRequest({ ...myRequest, status: 'withdrawn' });
-      show('Request withdrawn.', 'success');
+      show('You left this game.', 'success');
     } catch (err) {
       show(err instanceof RankedError ? err.message : "That didn't go through. Try again.", 'error');
     } finally {
@@ -153,13 +162,7 @@ function OpenMatchDetailSheetBody({
               Loading…
             </ThemedText>
           ) : (
-            <RequestStatusBody
-              myRequest={myRequest}
-              openMatch={openMatch}
-              busy={busy}
-              onRequest={request}
-              onWithdraw={withdraw}
-            />
+            <RequestStatusBody myRequest={myRequest} busy={busy} onRequest={request} onLeave={leave} />
           )}
         </View>
       </SafeAreaView>
@@ -170,19 +173,26 @@ function OpenMatchDetailSheetBody({
 /** A real switch, not an if/else chain — JoinRequestStatus is server-
  * controlled and this app was already bitten once tonight by an
  * if/else-style status handler with no fallback (c3e772b). Written
- * with a default: from this first commit rather than retrofitted. */
+ * with a default: from this first commit rather than retrofitted.
+ *
+ * No 'pending' case: migration 120 made it unreachable for any row
+ * created after it shipped (auto-accept on a passing check, a
+ * synchronous rejection on a failing one — nothing is ever left
+ * waiting on a host). It falls through to default rather than being
+ * deleted from JoinRequestStatus's type, since a pre-120 row could in
+ * principle still hold it — default's generic copy is honest either
+ * way, unlike leaving the old "waiting on the host" text in place,
+ * which would now be actively wrong. */
 function RequestStatusBody({
   myRequest,
-  openMatch,
   busy,
   onRequest,
-  onWithdraw,
+  onLeave,
 }: {
   myRequest: OpenMatchJoinRequest | null;
-  openMatch: OpenMatchListing;
   busy: boolean;
   onRequest: () => void;
-  onWithdraw: () => void;
+  onLeave: () => void;
 }) {
   if (myRequest === null) {
     return <Button title="Request to join" onPress={onRequest} disabled={busy} loading={busy} />;
@@ -191,20 +201,14 @@ function RequestStatusBody({
   switch (myRequest.status) {
     case 'withdrawn':
       return <Button title="Request to join" onPress={onRequest} disabled={busy} loading={busy} />;
-    case 'pending':
-      return (
-        <View style={styles.stackSmall}>
-          <ThemedText type="small" themeColor="subtle">
-            Waiting on the host to respond.
-          </ThemedText>
-          <Button title="Withdraw request" variant="outline" onPress={onWithdraw} disabled={busy} loading={busy} />
-        </View>
-      );
     case 'accepted':
       return (
-        <ThemedText type="smallBold" themeColor="primary">
-          You&apos;re in — this becomes a real match once enough players join.
-        </ThemedText>
+        <View style={styles.stackSmall}>
+          <ThemedText type="smallBold" themeColor="primary">
+            You&apos;re in.
+          </ThemedText>
+          <Button title="Leave game" variant="outline" onPress={onLeave} disabled={busy} loading={busy} />
+        </View>
       );
     case 'kicked':
       return (
@@ -213,11 +217,16 @@ function RequestStatusBody({
         </ThemedText>
       );
     case 'declined':
-      // "This match is full" reads off the PARENT's status, never a
-      // per-request reason — see matchStatusLabel's own doc comment.
+      // Migration 120: the only path here now is cancel_open_match's
+      // cascade — every 'accepted' row flips to 'declined' when the
+      // host cancels the whole match. It no longer means "the host
+      // turned you down" (auto-accept removed that entirely) or "you
+      // lost the race for the last slot" (the row lock in
+      // request_to_join_open_match means that race can't happen — the
+      // loser never gets a row at all). One meaning, one message.
       return (
         <ThemedText type="small" themeColor="subtle">
-          {openMatch.status === 'converted' ? 'This match is full.' : 'The host declined your request.'}
+          This game was cancelled by the host.
         </ThemedText>
       );
     default:
