@@ -16,7 +16,30 @@ import type { RankedMatchParticipant } from '@/lib/ranked';
  * the pressed button reports itself busy (Button's own accessibilityState
  * distinguishes "busy" — has a spinner — from plain "disabled") while the
  * guard still blocks the other three from being pressed at all.
+ *
+ * Reported a SECOND time after this looked fixed: the first fix only
+ * scoped `loading` (the spinner) to the pressed button — it never scoped
+ * the DIMMED STYLE, which Button derives from `disabled || loading`
+ * app-wide, and every button here shares `disabled={busy}`. So the
+ * spinner was right but all four still visually dimmed together, which
+ * from the founder's side is indistinguishable from the original bug.
+ * The test above never caught this because it only asserted
+ * accessibilityState (the functional props) — never the actual style
+ * array, which is the one thing that would have failed against the
+ * half-fixed version. The style-checking tests below are what's new.
  */
+
+/** True if the flattened style array (Pressable's function-style prop
+ * resolves to one, mixed with `false` for falsy conditional entries)
+ * contains the dimmed-look object Button applies via `showDisabledStyle
+ * && styles.disabled`. This is the assertion the original fix's test
+ * suite never had — accessibilityState.disabled being true is correct
+ * and expected for the blocked-but-not-visually-dimmed buttons, so
+ * that alone can't tell a fixed render from a half-fixed one. */
+function looksDimmed(element: { props: { style?: unknown } }): boolean {
+  const flat = (Array.isArray(element.props.style) ? element.props.style : [element.props.style]).flat(Infinity);
+  return flat.some((s) => typeof s === 'object' && s !== null && (s as { opacity?: number }).opacity === 0.5);
+}
 
 jest.mock('@/lib/ranked', () => ({
   ...jest.requireActual('@/lib/ranked'),
@@ -134,7 +157,36 @@ it('only the pressed button reports itself busy — the other three are disabled
   expect(undo.props.accessibilityState.disabled).toBe(true);
   expect(submit.props.accessibilityState.disabled).toBe(true);
 
+  // The actual second report: pointB and Undo (6-6, so Undo has no
+  // reason of its own to look unavailable) must NOT visually dim just
+  // because pointA's RPC is in flight — functionally blocked, not
+  // visually touched. Submit SHOULD still look dimmed here, but for its
+  // OWN reason (the game isn't finished at 6-6), independent of busy.
+  expect(looksDimmed(pointB)).toBe(false);
+  expect(looksDimmed(undo)).toBe(false);
+  expect(looksDimmed(submit)).toBe(true);
+
   await act(async () => {
     resolveRecordPoint();
   });
+});
+
+it('Undo still looks dimmed at 0-0 even while nothing is busy — its own condition, not the shared guard', async () => {
+  const me = participant();
+  const opp = participant({ user_id: 'opp', team: 'b', profile: { id: 'opp', display_name: 'Robin', avatar_url: null } });
+  const match = {
+    ...matchFixture({ score_a: 0, score_b: 0 }),
+    players: [me, opp],
+    scorekeeper: null,
+    team_a_club: null,
+    team_b_club: null,
+  };
+
+  await render(<LiveScoreboard match={match} currentUserId="me" />);
+
+  expect(looksDimmed(screen.getByLabelText('Undo'))).toBe(true);
+  // Nothing is busy here — pointA/pointB have no reason of their own to
+  // be unavailable, so they read as normal, pressable buttons.
+  expect(looksDimmed(screen.getByLabelText('Team A won the rally'))).toBe(false);
+  expect(looksDimmed(screen.getByLabelText('Team B won the rally'))).toBe(false);
 });

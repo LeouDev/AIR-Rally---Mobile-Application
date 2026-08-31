@@ -10,6 +10,19 @@ type ButtonProps = Omit<PressableProps, 'children'> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'destructive';
   loading?: boolean;
   icon?: ReactNode;
+  /** Whether the dimmed/disabled STYLE applies — defaults to the same
+   * value as `disabled || loading`, matching every existing call site's
+   * behavior unchanged. Pass `false` explicitly to keep a button looking
+   * normal while it's still functionally blocked from being pressed —
+   * the shape a shared "an action is in flight" guard needs: `disabled`
+   * on every button in a group so none of them double-fire, but only
+   * the one actually loading (or one that's unavailable for its OWN
+   * reason) should visibly dim. Without this, a group of buttons that
+   * all share one `busy` flag all dim together the instant ANY of them
+   * is pressed — confirmed live: the founder reported all four scoring
+   * buttons dimming on a single tap, twice, because a previous fix only
+   * scoped the spinner (`loading`) and never the dimming. */
+  disabledAppearance?: boolean;
 };
 
 /**
@@ -21,9 +34,10 @@ type ButtonProps = Omit<PressableProps, 'children'> & {
  * actions (account deletion) — never a plain-text Pressable for these,
  * so they read as a real, deliberate control.
  */
-export function Button({ title, variant = 'primary', loading, icon, disabled, style, ...rest }: ButtonProps) {
+export function Button({ title, variant = 'primary', loading, icon, disabled, disabledAppearance, style, ...rest }: ButtonProps) {
   const theme = useTheme();
   const isDisabled = disabled || loading;
+  const showDisabledStyle = disabledAppearance ?? isDisabled;
 
   const background =
     variant === 'primary'
@@ -64,7 +78,7 @@ export function Button({ title, variant = 'primary', loading, icon, disabled, st
         styles.base,
         { backgroundColor: state.pressed ? pressedBackground : background },
         variant === 'outline' && { borderWidth: 1, borderColor: theme.input },
-        isDisabled && styles.disabled,
+        showDisabledStyle && styles.disabled,
         typeof style === 'function' ? style(state) : style,
       ]}
       {...rest}>

@@ -122,6 +122,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
             title="Team A won the rally"
             onPress={() => run('pointA', () => recordPoint(match.id, 'a'))}
             disabled={busy}
+            disabledAppearance={false}
             loading={pending === 'pointA'}
           />
           <Button
@@ -129,6 +130,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
             variant="outline"
             onPress={() => run('pointB', () => recordPoint(match.id, 'b'))}
             disabled={busy}
+            disabledAppearance={false}
             loading={pending === 'pointB'}
           />
           <View style={styles.actionRow}>
@@ -138,6 +140,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
                 variant="outline"
                 onPress={() => run('undo', () => undoPoint(match.id))}
                 disabled={busy || (match.score_a === 0 && match.score_b === 0)}
+                disabledAppearance={match.score_a === 0 && match.score_b === 0}
                 loading={pending === 'undo'}
               />
             </View>
@@ -147,6 +150,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
                 variant="outline"
                 onPress={() => run('submit', () => submitResult(match.id))}
                 disabled={busy || !finished}
+                disabledAppearance={!finished}
                 loading={pending === 'submit'}
               />
             </View>
