@@ -111,6 +111,21 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget('/support')).toBe('/support');
   });
 
+  // create_open_match (migration 119) stamps '/ranked/open/<id>' on the
+  // broadcast notification sent to everyone in the host's city — the
+  // feature's entire discovery path. With no mapping this fell through to
+  // the Alerts tab the user was already on: the tap that's supposed to
+  // bring people INTO Open Match appeared to do nothing. Shipped live on
+  // build-16 production for ~20 minutes before this fix.
+  it('sends an open-match broadcast link to the Play tab, not the Alerts tab it dead-ended on', () => {
+    // The discriminating assertion: pin what the OLD/broken behavior
+    // actually was, so a regression back to "unmapped, falls through to
+    // notifications" fails here specifically rather than only failing to
+    // match the new mapping (which a still-unreachable case would also do).
+    expect(resolveNotificationTarget('/ranked/open/3bff1573-28a8-44b5-87bb-3077743b7290')).not.toBe('/(tabs)/notifications');
+    expect(resolveNotificationTarget('/ranked/open/3bff1573-28a8-44b5-87bb-3077743b7290')).toBe('/(tabs)/play');
+  });
+
   it('still lands somewhere real for a link this app genuinely has no screen for', () => {
     // Clubs detail exists here, but an unmapped web-only surface must
     // not resolve to a route that does not exist.

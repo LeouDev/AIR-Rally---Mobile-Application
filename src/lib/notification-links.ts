@@ -74,5 +74,16 @@ export function resolveNotificationTarget(url: string | null | undefined, type?:
   // to land on instead of Alerts.
   if (effectiveUrl.startsWith('/court-side')) return '/court-side';
 
+  // Open Match's broadcast notification (create_open_match, migration 119)
+  // stamps '/ranked/open/<id>' — the feature's entire discovery path, since
+  // creating an open match is what notifies everyone in the city. There is
+  // no dedicated open-match detail ROUTE in this app (the join flow is a
+  // sheet opened from a row tap, not a screen reachable by id), so this
+  // fell through to Alerts — the same "appeared to do nothing" shape as
+  // the /support case above, except this one breaks the tap that's
+  // supposed to bring people INTO the feature. The Play tab is where the
+  // open-games list actually lives; land there rather than invent a route.
+  if (effectiveUrl.startsWith('/ranked/open')) return '/(tabs)/play';
+
   return '/(tabs)/notifications';
 }
