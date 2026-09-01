@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { EnvironmentBanner } from '@/components/environment-banner';
 import { ErrorScreen } from '@/components/error-screen';
 import { ToastProvider } from '@/components/ui/toast';
+import { UpdatePrompt } from '@/components/update-prompt';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationObserver } from '@/lib/notifications-runtime';
@@ -94,6 +95,11 @@ function RootNavigator() {
       {/* Overlay, not a sibling row — renders nothing at all on a
           correctly-configured production build. */}
       <EnvironmentBanner />
+      {/* App-wide, not per-screen — unlike the Play tab's own foreground
+          refresh, an update check is ONE network call regardless of how
+          many screens exist, so there's no request-burst cost to placing
+          it here instead of scoping it narrowly. */}
+      <UpdatePrompt />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={session !== null && needsAgreement === false}>
           <Stack.Screen name="(tabs)" />
