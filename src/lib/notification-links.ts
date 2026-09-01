@@ -10,12 +10,55 @@ import type { Href } from 'expo-router';
  * never needs this: the webhook already resolves a full url server-side,
  * via the web repo's notificationHref(), before the payload reaches the
  * phone.
+ *
+ * CTO audit, 2026-09-01: parsed every `insert into public.notifications`
+ * across all migrations, keyed by type, kept only each type's
+ * HIGHEST-numbered migration (a later trigger replaces an earlier one's
+ * definition). 16 of 42 notification types have no link_url at all in
+ * their current definition — this map is the only thing standing
+ * between one of those and a silent dead end. Every entry below this
+ * comment was added from that audit; the three above it predate it.
  */
-const TYPE_FALLBACK: Record<string, string> = {
+export const TYPE_FALLBACK: Record<string, string> = {
   post_liked: '/court-side',
   post_reshared: '/court-side',
   post_mention: '/court-side',
+  // Nothing about a booking's specific id survives to this layer without
+  // a link_url — landing on the Bookings tab lets the player find the
+  // one the notification meant themselves, honest rather than precise.
+  booking_cancelled: '/(tabs)/bookings',
+  booking_created: '/(tabs)/bookings',
+  booking_received: '/(tabs)/bookings',
+  reschedule_completed: '/(tabs)/bookings',
+  credits_added: '/credits',
+  // Owner-facing: a venue's approval/rejection or a review lands on the
+  // owner dashboard, the same destination payout and list-your-court
+  // events already use above — there's no per-notification venue id to
+  // route more precisely to without a link_url.
+  venue_approved: '/owner',
+  venue_rejected: '/owner',
+  review_received: '/owner',
+  // clubs/index.tsx lists the viewer's own memberships ("myClubs") — the
+  // same reasoning as the bookings tab above: no club id survives
+  // without a link_url, so land where they can find the one that
+  // changed themselves rather than guess which of possibly several.
+  club_approved: '/clubs',
+  club_join_request: '/clubs',
+  club_membership_approved: '/clubs',
+  club_suspended: '/clubs',
 };
+
+/** Notification types with NO link_url and deliberately no TYPE_FALLBACK
+ * entry either — the Alerts tab is the honest destination, not an
+ * unwritten accident like the other 13 (now fixed above) turned out to
+ * be. Exists so the enumeration test below can tell "considered and
+ * decided" apart from "nobody has looked at this yet" — the second is
+ * exactly how the venue/Open-Match/support dead-ends shipped. */
+export const INTENTIONALLY_UNROUTED = new Set<string>([
+  // Confirms an email address changed — there is nothing to open; the
+  // fact of the notification IS the whole message.
+  'email_confirmed',
+]);
 
 /**
  * Maps a notification's link (the web app's own URL vocabulary — see the
