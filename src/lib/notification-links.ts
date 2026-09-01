@@ -85,5 +85,26 @@ export function resolveNotificationTarget(url: string | null | undefined, type?:
   // open-games list actually lives; land there rather than invent a route.
   if (effectiveUrl.startsWith('/ranked/open')) return '/(tabs)/play';
 
+  // 'venue_requested_listed' (migration 099) stamps '/venues/<id>' —
+  // PLURAL, matching the web app's own route, while this app's screen is
+  // singular (src/app/venue/[id].tsx) — the same web/app path-naming
+  // mismatch as every other instance of this bug, which is why "the path
+  // looks right" is never enough. This is the highest-intent tap in the
+  // notification vocabulary: someone requested a court be listed, waited,
+  // got told it's live, and the tap dead-ended on the Alerts tab they
+  // were already on. Extracted the same way bookingMatch/eventMatch are
+  // above; falls through to Alerts (not a /venue/[id] with an undefined
+  // param) if the id somehow doesn't parse as a uuid.
+  const venueMatch = effectiveUrl.match(/^\/venues\/([0-9a-f-]{36})/i);
+  if (venueMatch) {
+    return { pathname: '/venue/[id]', params: { id: venueMatch[1] } };
+  }
+
+  // Admin notifications (migration 101: '/admin/payouts', '/admin/payouts/
+  // <id>') are a deliberate no-op, not an oversight — admins work on the
+  // web, and this app has no admin screens at all. Alerts is the honest
+  // destination here, unlike every case above this comment.
+  if (effectiveUrl.startsWith('/admin')) return '/(tabs)/notifications';
+
   return '/(tabs)/notifications';
 }

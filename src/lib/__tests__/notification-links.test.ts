@@ -126,6 +126,34 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget('/ranked/open/3bff1573-28a8-44b5-87bb-3077743b7290')).toBe('/(tabs)/play');
   });
 
+  // venue_requested_listed (migration 099) stamps '/venues/<id>' — plural,
+  // matching the web app's own route, while this app's screen is singular
+  // (src/app/venue/[id].tsx). The highest-intent tap in the notification
+  // vocabulary: someone requested a court, waited, got told it's live, and
+  // the tap dead-ended on the Alerts tab they were already on.
+  it('opens the specific venue when a listing notification carries its id, not the plural web path', () => {
+    expect(resolveNotificationTarget('/venues/3bff1573-28a8-44b5-87bb-3077743b7290')).not.toBe('/(tabs)/notifications');
+    expect(resolveNotificationTarget('/venues/3bff1573-28a8-44b5-87bb-3077743b7290')).toEqual({
+      pathname: '/venue/[id]',
+      params: { id: '3bff1573-28a8-44b5-87bb-3077743b7290' },
+    });
+  });
+
+  it('falls through to Alerts rather than a /venue/[id] with an undefined param when the id does not parse as a uuid', () => {
+    expect(resolveNotificationTarget('/venues/not-a-uuid')).toBe('/(tabs)/notifications');
+  });
+
+  // migration 101's admin notifications ('/admin/payouts', '/admin/payouts/
+  // <id>') are a deliberate no-op — admins work on the web, this app has
+  // no admin screens. Written down as a decision, not left to be
+  // rediscovered as an accident the way the other four cases were.
+  it('leaves admin notifications on Alerts — deliberate, this app has no admin screens', () => {
+    expect(resolveNotificationTarget('/admin/payouts')).toBe('/(tabs)/notifications');
+    expect(resolveNotificationTarget('/admin/payouts/3bff1573-28a8-44b5-87bb-3077743b7290')).toBe(
+      '/(tabs)/notifications'
+    );
+  });
+
   it('still lands somewhere real for a link this app genuinely has no screen for', () => {
     // Clubs detail exists here, but an unmapped web-only surface must
     // not resolve to a route that does not exist.
