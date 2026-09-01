@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   calledServerScore,
+  cancelMatch,
   disambiguatedFirstName,
   isFinishedGame,
   recordPoint,
@@ -25,7 +26,7 @@ import {
  * the CourtDiagram (this app has no SVG-rendering library) — the serving
  * side is still called out in the score row and the status line below.
  */
-type ScoreAction = 'pointA' | 'pointB' | 'undo' | 'submit';
+type ScoreAction = 'pointA' | 'pointB' | 'undo' | 'submit' | 'cancel';
 
 export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDetail; currentUserId: string }) {
   const theme = useTheme();
@@ -42,6 +43,7 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
   const [error, setError] = useState<string | null>(null);
 
   const isScorekeeper = match.scorekeeper_id === currentUserId;
+  const me = match.players.find((p) => p.user_id === currentUserId);
   const teamA = match.players.filter((p) => p.team === 'a');
   const teamB = match.players.filter((p) => p.team === 'b');
   const finished = isFinishedGame(match);
@@ -55,6 +57,29 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
         setError(err instanceof RankedError ? err.message : "That didn't go through. Try again.");
       })
       .finally(() => setPending(null));
+  };
+
+  // cancel_ranked_match() has always permitted cancelling from 'lobby',
+  // 'officiating', or 'live', by any participant — this app just never
+  // offered the affordance on the live scoreboard (48add7e added it to
+  // officiating only, deliberately leaving live for a later call since
+  // walking out of a match already being scored is a different act from
+  // cancelling one that never started). QA found a real production
+  // match stuck live with real rally data for 46+ hours — migration 114
+  // deliberately exempts a live match with recorded rallies from its
+  // stale-lobby sweep, so nothing else ever recovers it. Confirmed
+  // first, unlike the point/undo/submit actions above: unlike those,
+  // this one ends the match for everyone, and by 'live' every player
+  // has already readied up and started scoring.
+  const confirmCancel = () => {
+    Alert.alert(
+      'Cancel this match?',
+      'This match is already being scored. Cancelling ends it for everyone — nothing is recorded against anyone’s rank, and this can’t be undone.',
+      [
+        { text: 'Keep match', style: 'cancel' },
+        { text: 'Cancel match', style: 'destructive', onPress: () => run('cancel', () => cancelMatch(match.id)) },
+      ]
+    );
   };
 
   const firstNames = (team: typeof teamA) => team.map((p) => disambiguatedFirstName(p, match.players)).join(' · ');
@@ -161,6 +186,20 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
           Watching live — only {match.scorekeeper?.display_name ?? 'the scorekeeper'} can record points.
         </ThemedText>
       )}
+
+      {me ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cancel match"
+          onPress={confirmCancel}
+          disabled={busy}
+          hitSlop={8}
+          style={styles.cancelLink}>
+          <ThemedText type="caption" style={{ color: theme.navyForeground, opacity: 0.6 }}>
+            Cancel match
+          </ThemedText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -232,6 +271,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   watching: {
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.four,
+  },
+  cancelLink: {
+    alignSelf: 'flex-start',
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.four,
   },
