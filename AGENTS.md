@@ -55,6 +55,12 @@ npx eas update --branch production --platform ios --environment production \
   *blocks*. `git status --porcelain` only proves the tree is clean — it says nothing about which
   branch you are on. A publish has already gone out from a feature branch someone else had checked
   out in the shared worktree.
+- **An inspection has no business writing to the shared worktree at all.** Three separate incidents
+  in one night came from the same root cause — acting in a directory other sessions read from,
+  without checking its state first. To look at another branch's content, read individual files
+  (`git show <branch>:<path>`) or use a disposable worktree (`git worktree add`) for anything wider.
+  Never a checkout that touches tracked files in place — even a momentary one, even with nothing
+  committed, is a window where every other session reading this tree sees something false.
 - **Verify from the served manifest afterwards, not from CLI output.** Use full 40-character
   runtime strings and check byte counts are non-zero, so an empty response can't pose as
   "unaffected".
