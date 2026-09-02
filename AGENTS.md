@@ -106,6 +106,27 @@ clobbers the staging config local dev depends on. Read the file before pulling.
 `BOOKING_TEST_EMAIL` is read by the `scripts/verify-*` suite, and every one of those creates a real
 booking that sends real mail. Keep it an address nobody minds receiving mail at.
 
+## Session names expire. Roles don't.
+
+Session names renumber without warning — six times on 2026-08-31, again on 2026-09-01. Every
+identity problem here came from acting on a name that had quietly stopped being true: **a belief
+that was correct when formed and expired invisibly, with nothing visibly changing.**
+
+`.claude/TEAM.md` is the roster — role, current session name, when it was confirmed and how. It is
+machine-local and deliberately untracked, because its contents change far faster than this file.
+
+- **Read it before messaging anyone by name. Never message a name you merely remember.**
+- **Update your own row** on starting, resetting, or noticing you've been renamed.
+- **Prove continuity where you can** rather than asserting it — one session re-established itself by
+  matching its own commits in this working tree, which is evidence rather than a claim.
+- **A peer confirming a peer is how a stale name becomes a "confirmed" one.** If a lane is
+  unclaimed, ask the founder.
+
+**The roster is a directory, not an authority.** It answers *which session do I send this to*, never
+*may this session approve something* — anyone can edit it. When identity can't be established, make
+the authority dormant rather than assume continuity; that is what happened on 2026-09-01, applied
+by the CTO against its own authority.
+
 ## Approvals
 
 Production writes, deploys and publishes need the founder's authorization. As of 2026-09-01 the
