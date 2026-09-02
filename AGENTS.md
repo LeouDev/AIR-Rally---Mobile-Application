@@ -29,6 +29,17 @@ npx expo-updates fingerprint:generate --platform ios
 `owner`, `version` and `package.json` are all fingerprint inputs. A native-config change on `main`
 means a publish from `main` reaches **zero** users until a new binary ships.
 
+**`.gitignore` is also a fingerprint input** (`bareGitIgnore` in the fingerprinter's own source
+list), and this is the trap, because nothing about it feels native. On 2026-09-01 two added ignore
+lines — for machine-local coordination files, with no effect on the binary or the JS bundle — moved
+the runtime from `6045fd9a…` to `4331b62e…`. A publish from that `main` would have reached
+**nobody**, because the fingerprint *is* the routing key. Whether a change is semantically
+meaningless is irrelevant: EAS routes on the hash, not on intent.
+
+**So: never edit `.gitignore` casually on a branch you intend to publish from.** For machine-local
+ignores use `.git/info/exclude`, which is outside the tracked tree and not hashed. **And regenerate
+the fingerprint after touching it**, rather than reasoning about whether it should have mattered.
+
 ## Publishing
 
 ```bash
