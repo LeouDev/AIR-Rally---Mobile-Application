@@ -7,8 +7,22 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import type { RankedMatchStatus } from '@/lib/database.types';
 import { getActiveMatch } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
+
+/** getActiveMatch() also matches 'awaiting_confirmation' — a submitted
+ * result waiting on the other side to confirm, which migration 114
+ * deliberately never sweeps ("sweeping destroys a real result and a
+ * real rating change"), so it can sit indefinitely. Blocking the prompt
+ * on that status would permanently deny it to whoever's opponent never
+ * confirms, and that player is exactly the one most likely running a
+ * stale bundle. Only the phases where a modal actually intrudes on
+ * something happening right now count here: live scoring (non-
+ * negotiable), officiating (seconds from starting), and the lobby
+ * (bounded — migration 114 sweeps it after an hour, unlike
+ * awaiting_confirmation). */
+const INTRUSIVE_MATCH_STATUSES = new Set<RankedMatchStatus>(['lobby', 'officiating', 'live']);
 
 /**
  * expo-updates' own defaults (app.json's `updates` block sets only
@@ -23,10 +37,11 @@ import { useSession } from '@/providers/session';
  *
  * Renders nothing on a build with no update available, in dev (Updates
  * APIs behave differently — and can throw — outside a published
- * bundle), or while the viewer has a ranked match in progress: reloading
- * mid-lobby/officiating/live/awaiting-confirmation would yank them out
- * of whatever phase they're in, a worse disruption than staying one
- * version behind a while longer. Same overlay posture as
+ * bundle), or while the viewer has a ranked match in an INTRUSIVE
+ * phase (see INTRUSIVE_MATCH_STATUSES above — deliberately narrower
+ * than "any active match"): reloading mid-lobby/officiating/live would
+ * yank them out of whatever phase they're in, a worse disruption than
+ * staying one version behind a while longer. Same overlay posture as
  * EnvironmentBanner — pinned above the content, never shifting a pixel
  * of the screens beneath it — but interactive, so `pointerEvents`
  * differs (box-none, not none).
@@ -62,7 +77,17 @@ export function UpdatePrompt() {
 
       if (userId) {
         const active = await getActiveMatch(userId).catch(() => null);
-        if (active) return;
+        // Deliberately NOT "any active match" — getActiveMatch() also
+        // matches 'awaiting_confirmation', which migration 114 never
+        // sweeps (a submitted result waiting on the other side to
+        // confirm can sit forever). Blocking on that would permanently
+        // deny the prompt to whoever's opponent never confirms — and
+        // that's exactly the player most likely running a stale bundle
+        // and most in need of the update. Only block on the phases
+        // where a modal actually intrudes on something happening right
+        // now: live scoring, officiating (seconds from starting), and
+        // the lobby (bounded — migration 114 sweeps it after an hour).
+        if (active && INTRUSIVE_MATCH_STATUSES.has(active.status)) return;
       }
 
       await Updates.fetchUpdateAsync();

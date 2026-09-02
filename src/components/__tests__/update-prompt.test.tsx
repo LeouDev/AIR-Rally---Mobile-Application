@@ -116,18 +116,38 @@ it('does not show the prompt when no update is available', async () => {
   expect(view.queryByText('Update ready')).toBeNull();
 });
 
-it('never checks for an update, let alone prompts, while the viewer has a ranked match in progress', async () => {
+it.each(['live', 'officiating', 'lobby'] as const)(
+  'never fetches or prompts while the viewer has a %s match — a modal would intrude on it',
+  async (status) => {
+    mockCheck.mockResolvedValue({ isAvailable: true } as never);
+    mockGetActiveMatch.mockResolvedValue({ id: 'match-1', status } as never);
+    const view = await render(<Wrapper><UpdatePrompt /></Wrapper>);
+
+    await foreground();
+
+    // The check itself is allowed to run (it's how the app would know an
+    // update exists at all) — what must never happen is fetching it or
+    // showing the prompt while one of these phases is active.
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(view.queryByText('Update ready')).toBeNull();
+  }
+);
+
+// The discriminating case: getActiveMatch() also matches
+// 'awaiting_confirmation', a status migration 114 deliberately never
+// sweeps — a naive "block on any active match" guard would deny this
+// player the prompt forever, not just during the match. A test that
+// only checks the live/officiating/lobby blocking cases above would
+// pass against that naive version too; this is the one that catches it.
+it('DOES prompt when the viewer\'s only active match is awaiting_confirmation — nothing is happening on court', async () => {
   mockCheck.mockResolvedValue({ isAvailable: true } as never);
-  mockGetActiveMatch.mockResolvedValue({ id: 'match-1', status: 'live' } as never);
+  mockGetActiveMatch.mockResolvedValue({ id: 'match-1', status: 'awaiting_confirmation' } as never);
   const view = await render(<Wrapper><UpdatePrompt /></Wrapper>);
 
   await foreground();
 
-  // The check itself is allowed to run (it's how the app would know an
-  // update exists at all) — what must never happen is fetching it or
-  // showing the prompt while a match is active.
-  expect(mockFetch).not.toHaveBeenCalled();
-  expect(view.queryByText('Update ready')).toBeNull();
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+  expect(view.getByText('Update ready')).toBeTruthy();
 });
 
 it('does NOT check on an inactive-only blip that never reached background (control-centre, notification shade)', async () => {
