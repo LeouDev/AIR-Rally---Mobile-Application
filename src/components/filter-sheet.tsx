@@ -194,9 +194,11 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
         <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
           <View style={styles.header}>
             <ThemedText type="subtitle">Filters</ThemedText>
+            {/* "Cancel", not "Done": this discards the draft — only Apply
+                saves — and on iOS a top-right "Done" means confirm. */}
             <Pressable accessibilityRole="button" onPress={onClose} hitSlop={8}>
               <ThemedText type="smallBold" themeColor="primary">
-                Done
+                Cancel
               </ThemedText>
             </Pressable>
           </View>

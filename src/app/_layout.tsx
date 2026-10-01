@@ -36,6 +36,19 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return <ErrorScreen error={error} retry={retry} />;
 }
 
+/**
+ * Rendered beside the Stack, never above RootNavigator's `!settled`
+ * gate. The tap that cold-starts the app resolves in milliseconds, while
+ * the navigator waits on a network round trip (session + agreement
+ * check); routing before any navigator exists makes expo-router throw
+ * "Attempted to navigate before mounting the Root Layout component", so
+ * the tap never reached its screen.
+ */
+function NotificationObserver() {
+  useNotificationObserver();
+  return null;
+}
+
 export default function RootLayout() {
   return (
     <SessionProvider>
@@ -51,8 +64,6 @@ function RootNavigator() {
   const isDark = scheme === 'dark';
   const palette = Colors[isDark ? 'dark' : 'light'];
   const { session, isLoaded, needsAgreement } = useSession();
-
-  useNotificationObserver();
 
   // A session exists but its agreement status isn't known yet — same
   // "hold the navigator" reasoning as !isLoaded below, one level deeper:
@@ -100,6 +111,7 @@ function RootNavigator() {
           many screens exist, so there's no request-burst cost to placing
           it here instead of scoping it narrowly. */}
       <UpdatePrompt />
+      <NotificationObserver />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={session !== null && needsAgreement === false}>
           <Stack.Screen name="(tabs)" />

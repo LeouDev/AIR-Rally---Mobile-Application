@@ -40,6 +40,9 @@ export default function RescheduleScreen() {
   const [courtId, setCourtId] = useState<string | null>(null);
   const [localDate, setLocalDate] = useState<string | null>(null);
   const [slots, setSlots] = useState<AvailableSlot[] | null>(null);
+  // Same split as BookingPanel: a failed read must not read as "Nothing
+  // open on this court that day".
+  const [slotsError, setSlotsError] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -73,6 +76,7 @@ export default function RescheduleScreen() {
     const seq = ++slotSeq.current;
     setSlots(null);
     setSelectedSlot(null);
+    setSlotsError(false);
     // Duration is fixed to the original booking's — V1 lets you change
     // when and which court, not how long.
     getAvailableSlots(courtId, localDate, options.originalDurationMinutes)
@@ -80,7 +84,10 @@ export default function RescheduleScreen() {
         if (seq === slotSeq.current) setSlots(rows);
       })
       .catch(() => {
-        if (seq === slotSeq.current) setSlots([]);
+        if (seq === slotSeq.current) {
+          setSlots([]);
+          setSlotsError(true);
+        }
       });
   }, [courtId, localDate, options]);
 
@@ -189,7 +196,11 @@ export default function RescheduleScreen() {
               selectedSlot={selectedSlot}
               onSelect={(slot, selected) => setSelectedSlot(selected ? null : slot)}
               timezone={options.venueTimezone}
-              emptyMessage="Nothing open on this court that day — try another date or court."
+              emptyMessage={
+                slotsError
+                  ? "Couldn't load times. Check your connection and reselect a date."
+                  : 'Nothing open on this court that day — try another date or court.'
+              }
             />
 
             {selectedSlot && difference !== null ? (

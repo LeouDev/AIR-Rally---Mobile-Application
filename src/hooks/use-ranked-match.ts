@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { getMatch, type RankedMatchDetail } from '@/lib/ranked';
 import { supabase } from '@/lib/supabase';
@@ -35,6 +35,18 @@ const FALLBACK_POLL_MS = 5000;
  */
 export function useRankedMatch(matchId: string, initial: RankedMatchDetail) {
   const [match, setMatch] = useState<RankedMatchDetail>(initial);
+  // Realtime events, the backstop poll and the scorekeeper's own taps all
+  // refetch independently, and getMatch() is several sequential round
+  // trips, so an older read can land after a newer one. Only the
+  // latest-STARTED read may write, or the score visibly rolls back a
+  // point on every phone — and a scorekeeper "correcting" that records
+  // an extra one.
+  const latestRead = useRef(0);
+  const refresh = useCallback(async () => {
+    const read = ++latestRead.current;
+    const fresh = await getMatch(matchId).catch(() => null);
+    if (fresh && read === latestRead.current) setMatch(fresh);
+  }, [matchId]);
   // Supabase dedupes channels by topic string across the whole client — a
   // second `.channel('ranked-match-<id>')` call while a first is still
   // subscribed (e.g. two mounts of this same route, or a remount racing
@@ -48,13 +60,6 @@ export function useRankedMatch(matchId: string, initial: RankedMatchDetail) {
   const instanceId = useId();
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function refresh() {
-      const fresh = await getMatch(matchId).catch(() => null);
-      if (fresh && !cancelled) setMatch(fresh);
-    }
-
     void refresh();
 
     const channel = supabase
@@ -70,11 +75,12 @@ export function useRankedMatch(matchId: string, initial: RankedMatchDetail) {
     const interval = setInterval(() => void refresh(), FALLBACK_POLL_MS);
 
     return () => {
-      cancelled = true;
       clearInterval(interval);
       void supabase.removeChannel(channel);
     };
-  }, [matchId, instanceId]);
+  }, [matchId, instanceId, refresh]);
 
-  return match;
+  // `refresh` lets a screen wait for its own write to show up — see
+  // LiveScoreboard's `onChanged`.
+  return [match, refresh] as const;
 }

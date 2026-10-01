@@ -72,6 +72,9 @@ export default function PlayScreen() {
   // itself renders nothing for a null citySlug, so this never needs its
   // own error state.
   const [citySlug, setCitySlug] = useState<string | null | undefined>(undefined);
+  // Bumped by every load() so OpenGamesSection refetches on focus and
+  // pull-to-refresh along with everything else on this screen.
+  const [openGamesRefresh, setOpenGamesRefresh] = useState(0);
 
   // Its own function, separate from `load` below, specifically so it can
   // also be wired to app-foreground (see the AppState effect further
@@ -92,6 +95,7 @@ export default function PlayScreen() {
   }, [userId]);
 
   const load = useCallback(async () => {
+    setOpenGamesRefresh((n) => n + 1);
     try {
       const rows = await listUpcomingEvents(50);
       setEvents(rows);
@@ -298,7 +302,12 @@ export default function PlayScreen() {
 
               {userId && citySlug !== undefined ? (
                 <View style={styles.openGamesWrapper}>
-                  <OpenGamesSection key={citySlug} citySlug={citySlug} currentUserId={userId} />
+                  <OpenGamesSection
+                    key={citySlug}
+                    citySlug={citySlug}
+                    currentUserId={userId}
+                    refreshToken={openGamesRefresh}
+                  />
                 </View>
               ) : null}
 

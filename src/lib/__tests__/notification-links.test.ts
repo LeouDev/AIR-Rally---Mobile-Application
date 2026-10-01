@@ -30,15 +30,17 @@ describe('resolveNotificationTarget', () => {
     });
   });
 
-  it('sends credit and profile links to Profile', () => {
-    expect(resolveNotificationTarget('/profile/credits')).toBe('/(tabs)/profile');
+  it('sends credit links to the Credits screen and other profile links to Profile', () => {
+    // credits_added's push url — this app has its own Credits screen now.
+    expect(resolveNotificationTarget('/profile/credits')).toBe('/credits');
+    expect(resolveNotificationTarget('/profile/rank')).toBe('/(tabs)/profile');
   });
 
-  it('lands web-only surfaces on Alerts instead of a dead end', () => {
-    // Clubs has no mobile screen yet — routing to a nonexistent path would
-    // strand the user. (Court Side used to be in this list too, until it
-    // shipped a real screen — see the /court-side test below.)
-    expect(resolveNotificationTarget('/clubs')).toBe('/(tabs)/notifications');
+  it('sends club links to the Clubs screen, which this app now has', () => {
+    expect(resolveNotificationTarget('/clubs')).toBe('/clubs');
+  });
+
+  it('lands an unparseable event link on Alerts instead of a dead end', () => {
     expect(resolveNotificationTarget('/events/abc')).toBe('/(tabs)/notifications');
   });
 

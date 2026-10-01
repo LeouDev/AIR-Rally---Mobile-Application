@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { LoadError } from '@/components/load-error';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,6 +54,10 @@ export function VenueReviews({ venueId }: { venueId: string }) {
   const userId = session?.user.id ?? null;
 
   const [reviews, setReviews] = useState<ReviewWithAuthor[] | null>(null);
+  // A failed read used to set reviews to [] — "No reviews yet" for a
+  // venue that has them. Kept apart so it can say so and retry.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [eligibility, setEligibility] = useState<{ eligible: boolean; bookingId: string | null } | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [rating, setRating] = useState(0);
@@ -66,7 +71,7 @@ export function VenueReviews({ venueId }: { venueId: string }) {
     mounted.current = true;
     listReviewsByVenue(venueId)
       .then((rows) => mounted.current && setReviews(rows))
-      .catch(() => mounted.current && setReviews([]));
+      .catch(() => mounted.current && setLoadFailed(true));
     if (userId) {
       getReviewEligibility(userId, venueId)
         .then((e) => mounted.current && setEligibility(e))
@@ -75,7 +80,7 @@ export function VenueReviews({ venueId }: { venueId: string }) {
     return () => {
       mounted.current = false;
     };
-  }, [venueId, userId]);
+  }, [venueId, userId, attempt]);
 
   const alreadyReviewed = userId != null && reviews?.some((r) => r.user_id === userId);
 
@@ -155,7 +160,15 @@ export function VenueReviews({ venueId }: { venueId: string }) {
         </View>
       ) : null}
 
-      {reviews === null ? (
+      {reviews === null && loadFailed ? (
+        <LoadError
+          title="Couldn't load reviews"
+          onRetry={() => {
+            setLoadFailed(false);
+            setAttempt((n) => n + 1);
+          }}
+        />
+      ) : reviews === null ? (
         <Skeleton height={80} radius={Radius.xl} />
       ) : reviews.length === 0 ? (
         <ThemedText type="small" themeColor="subtle">

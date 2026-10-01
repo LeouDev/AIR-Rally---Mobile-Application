@@ -2,6 +2,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
+import { LoadError } from '@/components/load-error';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +76,9 @@ export default function OwnerScreen() {
   const { session } = useSession();
   const { highlight } = useLocalSearchParams<{ highlight?: string }>();
   const [venues, setVenues] = useState<OwnedVenue[] | null>(null);
+  // A failed read used to set venues to [] — telling an owner "No venues
+  // on this account". Kept apart so it can say so and offer a retry.
+  const [venuesFailed, setVenuesFailed] = useState(false);
   const [venueId, setVenueId] = useState<string | null>(null);
   const [earnings, setEarnings] = useState<OwnerEarnings | null>(null);
   const [analytics, setAnalytics] = useState<OwnerAnalytics | null>(null);
@@ -101,17 +105,18 @@ export default function OwnerScreen() {
     [highlight]
   );
 
-  useEffect(() => {
+  const loadVenues = useCallback(() => {
     listMyVenues()
       .then((rows) => {
         setVenues(rows);
         setVenueId((current) => current ?? rows[0]?.id ?? null);
       })
-      .catch(() => {
-        setVenues([]);
-        setError(true);
-      });
+      .catch(() => setVenuesFailed(true));
   }, []);
+
+  useEffect(() => {
+    loadVenues();
+  }, [loadVenues]);
 
   useEffect(() => {
     if (!session?.user.id) return;
@@ -159,7 +164,15 @@ export default function OwnerScreen() {
         }}
       />
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
-        {venues === null ? (
+        {venues === null && venuesFailed ? (
+          <LoadError
+            title="Couldn't load your venues"
+            onRetry={() => {
+              setVenuesFailed(false);
+              loadVenues();
+            }}
+          />
+        ) : venues === null ? (
           <View style={styles.stack}>
             <Skeleton height={44} radius={Radius.pill} />
             <Skeleton height={110} radius={Radius.xl} />

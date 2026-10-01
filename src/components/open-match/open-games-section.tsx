@@ -28,12 +28,26 @@ import { expiresInLabel, listOpenMatchesForCity, type OpenMatchListing } from '@
  * this effect, which the app's stricter react-hooks lint (no
  * synchronous setState in an effect body) doesn't allow anyway.
  */
-export function OpenGamesSection({ citySlug, currentUserId }: { citySlug: string | null; currentUserId: string }) {
+export function OpenGamesSection({
+  citySlug,
+  currentUserId,
+  refreshToken = 0,
+}: {
+  citySlug: string | null;
+  currentUserId: string;
+  /** Bump to refetch in place — the Play tab does on every focus and
+   * pull-to-refresh. Without it the list loaded once per app session,
+   * since `key={citySlug}` only remounts on a city change. */
+  refreshToken?: number;
+}) {
   const theme = useTheme();
   // undefined = not fetched yet, [] = fetched and genuinely empty.
   const [games, setGames] = useState<OpenMatchListing[] | undefined>(undefined);
   const [error, setError] = useState(false);
   const [selectedGame, setSelectedGame] = useState<OpenMatchListing | null>(null);
+  // Closing a game's sheet refetches too: joining or leaving just
+  // changed its player count.
+  const [sheetClosedCount, setSheetClosedCount] = useState(0);
 
   useEffect(() => {
     // Nothing to reset here: the component returns null below whenever
@@ -45,7 +59,9 @@ export function OpenGamesSection({ citySlug, currentUserId }: { citySlug: string
     let cancelled = false;
     listOpenMatchesForCity(citySlug)
       .then((result) => {
-        if (!cancelled) setGames(result);
+        if (cancelled) return;
+        setGames(result);
+        setError(false);
       })
       .catch(() => {
         if (!cancelled) setError(true);
@@ -53,7 +69,7 @@ export function OpenGamesSection({ citySlug, currentUserId }: { citySlug: string
     return () => {
       cancelled = true;
     };
-  }, [citySlug]);
+  }, [citySlug, refreshToken, sheetClosedCount]);
 
   if (!citySlug) return null;
 
@@ -61,7 +77,7 @@ export function OpenGamesSection({ citySlug, currentUserId }: { citySlug: string
     <View style={styles.stack}>
       <ThemedText type="smallBold">Open games near you</ThemedText>
 
-      {error ? (
+      {error && games === undefined ? (
         <ThemedText type="small" themeColor="destructive">
           Couldn&apos;t load open games. Pull to retry.
         </ThemedText>
@@ -112,7 +128,10 @@ export function OpenGamesSection({ citySlug, currentUserId }: { citySlug: string
       {selectedGame ? (
         <OpenMatchDetailSheet
           visible
-          onClose={() => setSelectedGame(null)}
+          onClose={() => {
+            setSelectedGame(null);
+            setSheetClosedCount((n) => n + 1);
+          }}
           openMatch={selectedGame}
           currentUserId={currentUserId}
         />

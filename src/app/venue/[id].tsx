@@ -17,6 +17,7 @@ import {
 import { captureRef } from 'react-native-view-shot';
 
 import { BookingPanel } from '@/components/booking-panel';
+import { LoadError } from '@/components/load-error';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,9 @@ export default function VenueDetailScreen() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const [venue, setVenue] = useState<VenueDetail | null | undefined>(undefined);
+  // Failed ≠ "isn't available": a dropped request must not read as delisted.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [isFavorite, setIsFavorite] = useState<boolean | undefined>(undefined);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [galleryWidth, setGalleryWidth] = useState(0);
@@ -50,12 +54,12 @@ export default function VenueDetailScreen() {
         if (!cancelled) setVenue(detail);
       })
       .catch(() => {
-        if (!cancelled) setVenue(null);
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, attempt]);
 
   useEffect(() => {
     if (!id || !userId) {
@@ -214,7 +218,15 @@ export default function VenueDetailScreen() {
         </View>
       ) : null}
       <ScrollView contentContainerStyle={styles.scroll}>
-        {venue === undefined ? (
+        {venue === undefined && loadFailed ? (
+          <LoadError
+            title="Couldn't load this venue"
+            onRetry={() => {
+              setLoadFailed(false);
+              setAttempt((n) => n + 1);
+            }}
+          />
+        ) : venue === undefined ? (
           <View style={styles.section}>
             <Skeleton height={200} radius={Radius.xl} />
             <Skeleton height={28} width="60%" radius={Radius.sm} />

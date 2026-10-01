@@ -253,10 +253,13 @@ export async function createOpenMatch(
  * outcome to represent. Rejects with the founder's exact copy when the
  * hypothetical roster (current accepted + this requester) exceeds the
  * open-match rank-gap cap; ranked_party_spread() already returns 0
- * (never errors) when nobody involved is calibrated yet. */
-export async function requestToJoinOpenMatch(openMatchId: string): Promise<void> {
-  const { error } = await rpc('request_to_join_open_match', { p_open_match_id: openMatchId });
+ * (never errors) when nobody involved is calibrated yet. Resolves to the
+ * new join request's id — the one withdraw_join_request needs if the
+ * player leaves before anything refetches. */
+export async function requestToJoinOpenMatch(openMatchId: string): Promise<string> {
+  const { data, error } = await rpc('request_to_join_open_match', { p_open_match_id: openMatchId });
   if (error) throwRanked(error);
+  return data as string;
 }
 
 /** Host only — removes an already-accepted request. Lands as 'kicked',
@@ -317,18 +320,30 @@ export type OpenMatchListing = OpenMatch & {
  * 'open'. No dedicated RPC (per the api-contract memo); a plain select
  * plus a per-row accepted-count call, since the count has no column to
  * select directly. Other requesters' identities are never exposed here
- * — only the host (via the profiles join) and a count. */
+ * — only the host and a count.
+ *
+ * Hosts come from public_profiles, not a profiles embed: profiles' own
+ * RLS is own-row-only, so the embed nulled every host but the viewer and
+ * every game read "A player's game". Same trap reviews.ts documents. */
 export async function listOpenMatchesForCity(citySlug: string): Promise<OpenMatchListing[]> {
   const { data, error } = await supabase
     .from('open_matches')
-    .select('*, host:profiles!open_matches_host_id_fkey(id, display_name, avatar_url)')
+    .select('*')
     .eq('target_city', citySlug)
     .eq('status', 'open')
     .order('created_at', { ascending: false });
   if (error) throw error;
-  const rows = (data ?? []) as (OpenMatch & { host: PublicProfile | null })[];
-  const counts = await Promise.all(rows.map((r) => openMatchAcceptedCount(r.id).catch(() => 1)));
-  return rows.map((r, i) => ({ ...r, acceptedCount: counts[i] }));
+  const rows = (data ?? []) as OpenMatch[];
+  if (rows.length === 0) return [];
+
+  const hostIds = Array.from(new Set(rows.map((r) => r.host_id)));
+  const [{ data: hosts, error: hostsError }, counts] = await Promise.all([
+    supabase.from('public_profiles').select('id, display_name, avatar_url').in('id', hostIds),
+    Promise.all(rows.map((r) => openMatchAcceptedCount(r.id).catch(() => 1))),
+  ]);
+  if (hostsError) throw hostsError;
+  const hostsById = new Map((hosts ?? []).map((h) => [h.id, h as PublicProfile]));
+  return rows.map((r, i) => ({ ...r, host: hostsById.get(r.host_id) ?? null, acceptedCount: counts[i] }));
 }
 
 /** The viewer's OWN request on this open match, or null if they've never
@@ -342,11 +357,16 @@ export async function listOpenMatchesForCity(citySlug: string): Promise<OpenMatc
  * matchStatusLabel's own doc comment on reading 'declined' correctly:
  * check the PARENT open_matches.status for whether it means "full"). */
 export async function getMyJoinRequest(openMatchId: string, userId: string): Promise<OpenMatchJoinRequest | null> {
+  // Newest row only: there is deliberately no unique (open_match_id,
+  // user_id) — join, leave, join again leaves two rows, and a bare
+  // maybeSingle() then errors and strands the sheet with no Leave button.
   const { data, error } = await supabase
     .from('open_match_join_requests')
     .select('*')
     .eq('open_match_id', openMatchId)
     .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data as OpenMatchJoinRequest | null;

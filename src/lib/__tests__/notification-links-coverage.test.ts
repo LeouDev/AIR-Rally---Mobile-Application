@@ -56,6 +56,9 @@ const TYPES_WITH_NO_LINK_URL = [
   'club_membership_approved',
   'club_suspended',
   'email_confirmed',
+  // 20260810000124_notify_on_owner_application_approved.sql — shipped
+  // after the audit above, and dead-ended until this was added.
+  'owner_application_approved',
 ];
 
 describe('every known link_url prefix resolves to a real destination', () => {
@@ -74,6 +77,15 @@ describe('every type with no link_url is either routed or explicitly documented 
   it.each(TYPES_WITH_NO_LINK_URL)('%s has a TYPE_FALLBACK entry or is in INTENTIONALLY_UNROUTED', (type) => {
     const covered = type in TYPE_FALLBACK || INTENTIONALLY_UNROUTED.has(type);
     expect(covered).toBe(true);
+  });
+
+  // The assertion the one above can't make: having an entry is not the
+  // same as landing somewhere. Twelve entries once sat in TYPE_FALLBACK
+  // pointing at paths the resolver had no case for, so every one of
+  // those taps resolved back to Alerts — while the membership check
+  // above stayed green.
+  it.each(Object.keys(TYPE_FALLBACK))('%s, tapped from Alerts, actually leaves Alerts', (type) => {
+    expect(resolveNotificationTarget(null, type)).not.toBe('/(tabs)/notifications');
   });
 
   it('a type with neither is not silently safe — it dead-ends on Alerts same as an unmapped link_url', () => {

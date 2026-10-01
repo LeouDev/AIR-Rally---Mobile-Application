@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadError } from '@/components/load-error';
 import { Avatar, PostCard } from '@/components/post-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -32,6 +33,8 @@ export default function MyClubScreen() {
   const { show } = useToast();
 
   const [club, setClub] = useState<ClubWithViewerState | null | undefined>(undefined);
+  // Failed ≠ "isn't available" — see LoadError.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [myProfile, setMyProfile] = useState<PublicProfile | null>(null);
   const [posts, setPosts] = useState<PostWithAuthor[] | null>(null);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
@@ -43,6 +46,7 @@ export default function MyClubScreen() {
     try {
       const clubResult = await getClubForViewer(clubId, userId);
       setClub(clubResult);
+      setLoadFailed(false);
       if (!clubResult?.viewerRole) return;
 
       const [{ posts: rows }, profileResult] = await Promise.all([
@@ -55,9 +59,14 @@ export default function MyClubScreen() {
         setLikedIds(new Set(await listLikedPostIds(userId, rows.map((r) => r.id))));
       }
     } catch {
-      setClub(null);
+      setLoadFailed(true);
     }
   }, [clubId, userId]);
+
+  const retry = () => {
+    setLoadFailed(false);
+    load();
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -111,7 +120,9 @@ export default function MyClubScreen() {
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         {/* See [postId].tsx — same swap, same reason. */}
         <View style={styles.flex}>
-          {club === undefined ? (
+          {club === undefined && loadFailed ? (
+            <LoadError title="Couldn't load this club" onRetry={retry} />
+          ) : club === undefined ? (
             <View style={styles.block}>
               <Skeleton height={100} radius={Radius.xl} />
             </View>
@@ -178,7 +189,9 @@ export default function MyClubScreen() {
                 />
               )}
               ListEmptyComponent={
-                posts === null ? (
+                posts === null && loadFailed ? (
+                  <LoadError title="Couldn't load this club's posts" onRetry={retry} />
+                ) : posts === null ? (
                   <View style={styles.skeletons}>
                     <Skeleton height={140} radius={Radius.xl} />
                   </View>

@@ -1,8 +1,9 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
+import { LoadError } from '@/components/load-error';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
@@ -28,34 +29,58 @@ export default function BookingStatusScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [booking, setBooking] = useState<BookingWithCourt | null | undefined>(undefined);
-  const pollUntil = useRef(Date.now() + POLL_BUDGET_MS);
+  // A failed read is not "not found" — on the money screen, seconds
+  // after paying, that copy reads as a lost booking.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const pollGen = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  useEffect(() => {
+  // Restartable, with a fresh budget each time: "Complete payment" and
+  // pull-to-refresh both need to watch again after an earlier poll's
+  // budget ran out (a QR Ph payment can take longer than one budget). A
+  // new poll supersedes any earlier one via `pollGen`, so two never run
+  // side by side. Resolves once the first read lands.
+  const poll = useCallback(async () => {
     if (!id) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const gen = ++pollGen.current;
+    clearTimeout(timer.current);
+    const deadline = Date.now() + POLL_BUDGET_MS;
 
     const tick = async () => {
-      try {
-        const row = await getBookingWithCourt(id);
-        if (cancelled) return;
+      const row = await getBookingWithCourt(id).catch(() => undefined);
+      if (gen !== pollGen.current) return;
+      if (row === undefined) {
+        setLoadFailed(true);
+      } else {
+        setLoadFailed(false);
         setBooking(row);
-        // A pending booking is a payment racing the webhook — keep
-        // watching until it resolves or the budget runs out.
-        if (row?.status === 'pending' && Date.now() < pollUntil.current) {
-          timer = setTimeout(tick, POLL_INTERVAL_MS);
-        }
-      } catch {
-        if (!cancelled) setBooking((prev) => (prev === undefined ? null : prev));
+      }
+      // A pending booking is a payment racing the webhook — keep
+      // watching until it resolves or the budget runs out. A dropped
+      // request is no answer at all, so it keeps watching too.
+      if ((row === undefined || row?.status === 'pending') && Date.now() < deadline) {
+        timer.current = setTimeout(tick, POLL_INTERVAL_MS);
       }
     };
-    tick();
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
+    await tick();
   }, [id]);
+
+  const stopPolling = useCallback(() => {
+    pollGen.current++;
+    clearTimeout(timer.current);
+  }, []);
+
+  useEffect(() => {
+    void poll();
+    return stopPolling;
+  }, [poll, stopPolling]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await poll();
+    setRefreshing(false);
+  };
 
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -114,7 +139,9 @@ export default function BookingStatusScreen() {
       return;
     }
     await WebBrowser.openAuthSessionAsync(resumePaymentUrl, 'airrally://payment-return');
-    // Whatever way the sheet closed, the poll above resolves the truth.
+    // Whatever way the sheet closed, a fresh poll resolves the truth —
+    // the first one's budget may have run out while they were paying.
+    void poll();
   };
 
   const performCancel = async () => {
@@ -144,8 +171,18 @@ export default function BookingStatusScreen() {
           headerStyle: { backgroundColor: theme.background },
         }}
       />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {booking === undefined ? (
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        {booking === undefined && loadFailed ? (
+          <LoadError
+            title="Couldn't load this booking"
+            onRetry={() => {
+              setLoadFailed(false);
+              void poll();
+            }}
+          />
+        ) : booking === undefined ? (
           <View style={styles.stack}>
             <Skeleton height={120} radius={Radius.xl} />
             <Skeleton height={200} radius={Radius.xl} />
@@ -338,7 +375,9 @@ export default function BookingStatusScreen() {
               <Button title="Reschedule" variant="ghost" onPress={() => {}} disabled />
             ) : null}
 
-            <Button title="See my bookings" onPress={() => router.replace('/(tabs)/bookings')} />
+            {/* dismissTo, not replace: replace stacks a second tab bar on top
+                of this screen's history (see tab-return-navigation.test). */}
+            <Button title="See my bookings" onPress={() => router.dismissTo('/(tabs)/bookings')} />
           </View>
         )}
       </ScrollView>

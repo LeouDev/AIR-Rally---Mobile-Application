@@ -31,14 +31,22 @@ function openFromNotification(response: Notifications.NotificationResponse): voi
     | null;
   const url = data?.url ?? data?.body?.url;
   console.log('[notifications] tap ->', JSON.stringify(url ?? null));
-  router.push(resolveNotificationTarget(url));
+  const target = resolveNotificationTarget(url);
+  // A tab is dismissed BACK to, not pushed: pushing it from a screen
+  // stacked above the tabs builds a second tab bar under that screen.
+  if (typeof target === 'string' && target.startsWith('/(tabs)')) {
+    router.dismissTo(target);
+  } else {
+    router.push(target);
+  }
 }
 
 /**
  * Routes notification taps — both while the app runs and the tap that
- * cold-started it (fetched once via getLastNotificationResponseAsync;
- * the root layout only mounts the navigator after the session loads, so
- * by the time this effect runs the router can accept the push).
+ * cold-started it (fetched once via getLastNotificationResponseAsync).
+ * Call it only from a component that mounts together with the navigator
+ * (the root layout's NotificationObserver): the cold-start lookup
+ * resolves in milliseconds, and routing before a navigator exists throws.
  */
 export function useNotificationObserver(): void {
   useEffect(() => {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadError } from '@/components/load-error';
 import { RankedPartyBuilder } from '@/components/ranked/ranked-party-builder';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -55,6 +56,10 @@ export default function NewOpenPlayScreen() {
   const { bookingId: requestedBookingId } = useLocalSearchParams<{ bookingId?: string }>();
 
   const [bookings, setBookings] = useState<HostableBooking[] | null>(null);
+  // A failed read used to set bookings to [] — "You need a court first"
+  // to a player who has one. Kept apart so it can say so and retry.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -81,8 +86,8 @@ export default function NewOpenPlayScreen() {
         const firstAvailable = rows.find((b) => !b.existingEventId);
         setBookingId(requested?.bookingId ?? firstAvailable?.bookingId ?? null);
       })
-      .catch(() => setBookings([]));
-  }, [userId, requestedBookingId]);
+      .catch(() => setLoadFailed(true));
+  }, [userId, requestedBookingId, attempt]);
 
   useEffect(() => {
     if (!userId) return;
@@ -144,7 +149,15 @@ export default function NewOpenPlayScreen() {
             Start a match on a court you&apos;ve booked. You pay the venue; splitting it is between you and them.
           </ThemedText>
 
-          {bookings === null ? (
+          {bookings === null && loadFailed ? (
+            <LoadError
+              title="Couldn't load your bookings"
+              onRetry={() => {
+                setLoadFailed(false);
+                setAttempt((n) => n + 1);
+              }}
+            />
+          ) : bookings === null ? (
             <View style={styles.block}>
               <Skeleton height={80} radius={Radius.xl} />
               <Skeleton height={80} radius={Radius.xl} />
@@ -161,7 +174,7 @@ export default function NewOpenPlayScreen() {
                   end for a player with no venue near them. Playing needs
                   no booking; only Open Play does. */}
               <Button title="Start a game without a court" onPress={() => router.push('/ranked/play')} />
-              <Button title="Find a court" variant="outline" onPress={() => router.push('/(tabs)')} />
+              <Button title="Find a court" variant="outline" onPress={() => router.dismissTo('/(tabs)')} />
             </View>
           ) : available.length === 0 ? (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>

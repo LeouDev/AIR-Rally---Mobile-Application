@@ -81,7 +81,7 @@ beforeEach(() => {
 it('renders a fallback card instead of crashing on a status this build does not recognize', async () => {
   const fixture = matchFixture();
   mockGetMatch.mockResolvedValue(fixture);
-  mockUseRankedMatch.mockReturnValue(fixture);
+  mockUseRankedMatch.mockReturnValue([fixture, jest.fn()]);
 
   await render(<RankedMatchScreen />);
 

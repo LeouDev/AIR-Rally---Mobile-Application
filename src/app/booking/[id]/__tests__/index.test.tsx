@@ -1,6 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { StyleSheet } from 'react-native';
+
+import { router } from 'expo-router';
 
 import BookingStatusScreen from '@/app/booking/[id]/index';
 import type { BookingWithCourt } from '@/lib/bookings';
@@ -21,7 +23,7 @@ import { getBookingWithCourt } from '@/lib/bookings';
  */
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), replace: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() },
   Stack: { Screen: () => null },
   useLocalSearchParams: () => ({ id: 'booking-1' }),
 }));
@@ -177,5 +179,17 @@ describe('BookingStatusScreen — a credit-final booking cannot be rescheduled e
 
     await screen.findByText('BGC Smash Pickleball · Rooftop Court');
     expect(screen.queryByLabelText('Reschedule')).toBeNull();
+  });
+});
+
+describe('BookingStatusScreen — leaving for the Bookings tab', () => {
+  it('"See my bookings" returns to the existing tabs instead of stacking a second tab bar', async () => {
+    mockGetBooking.mockResolvedValue(bookingFixture({}));
+    await render(<BookingStatusScreen />);
+
+    await fireEvent.press(await screen.findByText('See my bookings'));
+
+    expect(router.dismissTo).toHaveBeenCalledWith('/(tabs)/bookings');
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });

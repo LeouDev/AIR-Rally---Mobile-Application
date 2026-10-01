@@ -18,7 +18,7 @@ import { getPublicProfile } from '@/lib/follows';
  */
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), replace: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn(), dismissTo: jest.fn() },
   Stack: { Screen: () => null },
   useLocalSearchParams: () => ({}),
 }));
@@ -57,5 +57,6 @@ it('keeps Find a court as the secondary way out', async () => {
 
   await fireEvent.press(await screen.findByLabelText('Find a court'));
 
-  expect(mockPush).toHaveBeenCalledWith('/(tabs)');
+  // Back to the existing tabs, not a second tab bar pushed on top.
+  expect(router.dismissTo).toHaveBeenCalledWith('/(tabs)');
 });

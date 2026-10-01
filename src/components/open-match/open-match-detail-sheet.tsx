@@ -66,6 +66,10 @@ function OpenMatchDetailSheetBody({
   // undefined = not fetched yet, null = never requested.
   const [myRequest, setMyRequest] = useState<OpenMatchJoinRequest | null | undefined>(undefined);
   const [loadError, setLoadError] = useState(false);
+  // Shown inside the sheet: the app's toasts render in the root view,
+  // underneath this page-sheet Modal, so an error toast here was never
+  // seen — a rejected join (rank gap, game full) looked like nothing.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -91,10 +95,14 @@ function OpenMatchDetailSheetBody({
   const request = async () => {
     if (busy) return;
     setBusy(true);
+    setActionError(null);
     try {
-      await requestToJoinOpenMatch(openMatch.id);
+      // The real row id, not a placeholder: "Leave game" right after
+      // joining withdraws by this id, and a placeholder failed the
+      // server's uuid cast on every tap.
+      const requestId = await requestToJoinOpenMatch(openMatch.id);
       setMyRequest({
-        id: 'accepted-local',
+        id: requestId,
         open_match_id: openMatch.id,
         user_id: currentUserId,
         status: 'accepted',
@@ -104,7 +112,7 @@ function OpenMatchDetailSheetBody({
     } catch (err) {
       // Stays open — a closed sheet after a failed request would look
       // identical to one that went through.
-      show(err instanceof RankedError ? err.message : "That didn't go through. Try again.", 'error');
+      setActionError(err instanceof RankedError ? err.message : "That didn't go through. Try again.");
     } finally {
       setBusy(false);
     }
@@ -116,12 +124,13 @@ function OpenMatchDetailSheetBody({
   const leave = async () => {
     if (busy || !myRequest) return;
     setBusy(true);
+    setActionError(null);
     try {
       await withdrawJoinRequest(myRequest.id);
       setMyRequest({ ...myRequest, status: 'withdrawn' });
       show('You left this game.', 'success');
     } catch (err) {
-      show(err instanceof RankedError ? err.message : "That didn't go through. Try again.", 'error');
+      setActionError(err instanceof RankedError ? err.message : "That didn't go through. Try again.");
     } finally {
       setBusy(false);
     }
@@ -164,6 +173,11 @@ function OpenMatchDetailSheetBody({
           ) : (
             <RequestStatusBody myRequest={myRequest} busy={busy} onRequest={request} onLeave={leave} />
           )}
+          {actionError ? (
+            <ThemedText type="small" themeColor="destructive">
+              {actionError}
+            </ThemedText>
+          ) : null}
         </View>
       </SafeAreaView>
     </ThemedView>

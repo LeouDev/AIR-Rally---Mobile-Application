@@ -147,7 +147,7 @@ export default function NewOpenMatchScreen() {
         label: selectedVenue ? undefined : venueQuery.trim() || undefined,
       });
       show('Game posted — players nearby will be notified.', 'success');
-      router.replace('/(tabs)/play');
+      router.dismissTo('/(tabs)/play');
     } catch (e) {
       show(e instanceof RankedError ? e.message : "That didn't go through. Try again.", 'error');
     } finally {

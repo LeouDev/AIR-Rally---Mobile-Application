@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadError } from '@/components/load-error';
 import { LiveScoreboard } from '@/components/ranked/match/live-scoreboard';
 import { LobbyPhase } from '@/components/ranked/match/lobby-phase';
 import { OfficiatingPhase } from '@/components/ranked/match/officiating-phase';
@@ -33,6 +34,10 @@ export default function RankedMatchScreen() {
 
   // undefined = still loading, null = resolved to no match.
   const [initial, setInitial] = useState<RankedMatchDetail | null | undefined>(undefined);
+  // A failed read is not "Match not found" — a player standing on a
+  // court with weak signal must get a retry, not a deleted-looking match.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!matchId) return;
@@ -42,12 +47,12 @@ export default function RankedMatchScreen() {
         if (!cancelled) setInitial(match);
       })
       .catch(() => {
-        if (!cancelled) setInitial(null);
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [matchId]);
+  }, [matchId, attempt]);
 
   return (
     <ThemedView style={styles.container}>
@@ -63,7 +68,15 @@ export default function RankedMatchScreen() {
       />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <ScrollView contentContainerStyle={styles.scroll}>
-          {initial === undefined ? (
+          {initial === undefined && loadFailed ? (
+            <LoadError
+              title="Couldn't load this match"
+              onRetry={() => {
+                setLoadFailed(false);
+                setAttempt((n) => n + 1);
+              }}
+            />
+          ) : initial === undefined ? (
             <View style={styles.stack}>
               <Skeleton height={280} radius={Radius.xl} />
               <Skeleton height={140} radius={Radius.xl} />
@@ -96,7 +109,7 @@ function LiveMatch({
   currentUserId: string;
 }) {
   const theme = useTheme();
-  const match = useRankedMatch(matchId, initial);
+  const [match, refresh] = useRankedMatch(matchId, initial);
 
   switch (match.status) {
     case 'lobby':
@@ -104,7 +117,7 @@ function LiveMatch({
     case 'officiating':
       return <OfficiatingPhase match={match} currentUserId={currentUserId} />;
     case 'live':
-      return <LiveScoreboard match={match} currentUserId={currentUserId} />;
+      return <LiveScoreboard match={match} currentUserId={currentUserId} onChanged={refresh} />;
     case 'awaiting_confirmation':
     case 'confirmed':
     case 'disputed':
