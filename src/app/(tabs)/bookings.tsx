@@ -18,7 +18,6 @@ import {
   listMyBookings,
   type BookingWithCourt,
 } from '@/lib/bookings';
-import { syncBookingReminders } from '@/lib/booking-reminders';
 import { listHostableBookings } from '@/lib/events';
 import { useSession } from '@/providers/session';
 
@@ -88,8 +87,6 @@ export default function BookingsScreen() {
       setBookings(myBookings);
       setHostableIds(new Set(hostable.filter((b) => !b.existingEventId).map((b) => b.bookingId)));
       setError(false);
-      // A booking just made, cancelled or moved shows up here first.
-      if (userId) void syncBookingReminders(userId);
     } catch {
       setError(true);
       setBookings((prev) => prev ?? []);

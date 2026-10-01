@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react-native';
 import React from 'react';
 
 import TabsLayout from '@/app/(tabs)/_layout';
-import { syncBookingReminders } from '@/lib/booking-reminders';
+import { cancelBookingReminders } from '@/lib/booking-reminders';
 import { refreshUnreadCount } from '@/lib/unread';
 
 /**
@@ -18,7 +18,7 @@ jest.mock('@/lib/unread', () => ({
   refreshUnreadCount: jest.fn(async () => {}),
   useUnreadCount: () => mockUnread,
 }));
-jest.mock('@/lib/booking-reminders', () => ({ syncBookingReminders: jest.fn(async () => {}) }));
+jest.mock('@/lib/booking-reminders', () => ({ cancelBookingReminders: jest.fn(async () => {}) }));
 jest.mock('@/providers/session', () => ({ useSession: () => ({ session: { user: { id: 'me' } } }) }));
 jest.mock('expo-notifications', () => ({
   addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
@@ -62,10 +62,10 @@ it('shows no badge when everything is read', async () => {
   expect(screen.queryByText(/^badge:/)).toBeNull();
 });
 
-it('refreshes the unread count and booking reminders when the tabs open', async () => {
+it('refreshes the unread count, and clears reminders an earlier version scheduled, when the tabs open', async () => {
   mockUnread = 0;
   await render(<TabsLayout />);
   expect(refreshUnreadCount).toHaveBeenCalledWith('me');
-  expect(syncBookingReminders).toHaveBeenCalledWith('me');
+  expect(cancelBookingReminders).toHaveBeenCalled();
 });
 

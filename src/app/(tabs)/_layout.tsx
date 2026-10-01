@@ -5,7 +5,7 @@ import { AppState, Platform } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { syncBookingReminders } from '@/lib/booking-reminders';
+import { cancelBookingReminders } from '@/lib/booking-reminders';
 import { refreshUnreadCount, unreadBadgeLabel, useUnreadCount } from '@/lib/unread';
 import { useSession } from '@/providers/session';
 
@@ -22,15 +22,13 @@ export default function TabsLayout() {
   const userId = session?.user.id ?? null;
   const unreadCount = useUnreadCount();
 
-  // What the app knows about the world outside it — the unread count
-  // behind the tab and icon badges, and the phone's booking reminders —
-  // refreshed when the tabs mount, whenever the app returns to the
-  // foreground, and (unread only) when a push lands while it's open.
+  // The unread count behind the tab and icon badges, refreshed when the
+  // tabs mount, whenever the app returns to the foreground, and when a push
+  // lands while it's open. Booking reminders an earlier version scheduled
+  // on this phone are cleared: the server sends them now.
   useEffect(() => {
-    const refresh = () => {
-      void refreshUnreadCount(userId);
-      if (userId) void syncBookingReminders(userId);
-    };
+    void cancelBookingReminders();
+    const refresh = () => void refreshUnreadCount(userId);
     refresh();
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'active') refresh();
