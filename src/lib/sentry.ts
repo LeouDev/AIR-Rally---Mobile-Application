@@ -48,10 +48,10 @@ export function initSentry(): void {
     // against a future SDK version quietly changing a default, and it
     // states in code that they are load-bearing. `onerror` installs
     // ErrorUtils.setGlobalHandler (event-handler throws, timer throws);
-    // `onunhandledrejection` catches rejected promises, which is the
-    // shape of every failed network call in this app. Without them
-    // Sentry sees only render-phase crashes — a small fraction of how
-    // this app actually fails.
+    // `onunhandledrejection` catches rejected promises. Without them
+    // Sentry sees only render-phase crashes. A failed request is neither:
+    // it resolves (with { error }, or as a message) — see reportingFetch
+    // below.
     //
     // Passing an array MERGES with the defaults rather than replacing
     // them (@sentry/core integration.js: [...defaultIntegrations,
@@ -64,6 +64,53 @@ export function initSentry(): void {
       }),
     ],
   });
+}
+
+/** PostgREST/Postgres codes for a request the live schema doesn't know: a
+ * column, table, function or relationship this build expects and the
+ * database lacks. That's client and schema out of step (AGENTS.md: schema
+ * and client ship together), never something the player did. */
+const SCHEMA_MISMATCH = new Set(['42703', '42P01', '42883', 'PGRST200', 'PGRST202', 'PGRST204']);
+const reportedRequests = new Set<string>();
+
+/**
+ * fetch, plus a Sentry event for the failures nothing else reports.
+ * supabase-js resolves with { error } instead of rejecting, and the API
+ * helpers turn failures into messages, so a failed query or checkout never
+ * reaches the global handlers above: the player sees "Couldn't load" and
+ * nobody else ever knows. Reported: server errors and schema mismatches.
+ * Left to the screen: offline, RLS refusals, business-rule errors. Once
+ * per endpoint and failure per launch, so an outage can't spend the
+ * month's quota.
+ */
+export const reportingFetch: typeof fetch = async (input, init) => {
+  const response = await fetch(input, init);
+  if (response.status >= 400) await reportFailedRequest(response.clone(), input, init?.method);
+  return response;
+};
+
+async function reportFailedRequest(response: Response, input: RequestInfo | URL, method = 'GET') {
+  try {
+    const body = (await response.json().catch(() => null)) as { code?: unknown; message?: unknown } | null;
+    const code = typeof body?.code === 'string' ? body.code : null;
+    if (response.status < 500 && !(code && SCHEMA_MISMATCH.has(code))) return;
+
+    const url = typeof input === 'string' ? input : 'url' in input ? input.url : input.href;
+    const path = url
+      .split('?')[0]
+      .replace(/^https?:\/\/[^/]+/, '')
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id');
+    const failure = `${method} ${path} → ${response.status}${code ? ` ${code}` : ''}`;
+    if (reportedRequests.has(failure)) return;
+    reportedRequests.add(failure);
+
+    Sentry.captureMessage(`Request failed: ${failure}`, {
+      level: 'error',
+      extra: { message: typeof body?.message === 'string' ? body.message : null },
+    });
+  } catch {
+    // Reporting must never be what breaks a request.
+  }
 }
 
 export { Sentry };

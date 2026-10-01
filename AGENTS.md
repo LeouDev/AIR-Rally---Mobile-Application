@@ -43,14 +43,20 @@ the fingerprint after touching it**, rather than reasoning about whether it shou
 ## Publishing
 
 ```bash
-npx eas update --branch production --platform ios --environment production \
-  --message "<summary> [$(git rev-parse --short HEAD)]"
+scripts/publish-ota.sh "<what changed>"
 ```
+
+The script enforces the rules below instead of trusting anyone to remember them. It publishes
+`origin/main` from its own throwaway worktree with real dependencies, refuses unless a finished App
+Store build has the same runtime, puts the sha in the message and checks the served manifest
+afterwards. `DRY_RUN=1` runs every check without publishing. Publish by hand only if the script
+itself is broken, and then follow every rule below.
 
 - **`--environment production` is right, and unrelated to the build profiles.** In `eas.json` the
   profile named `preview` points at production and `development` points at staging. Resolve the
   URL, never trust the name.
-- **EAS stores no commit field.** Put the sha in `--message` or the publish is unattributable.
+- **EAS records the commit** (`gitCommitHash`) on every update, but `eas update:list` and the
+  dashboard list only the message, so the sha still goes in `--message`.
 - **Publish from a dedicated clean worktree**, and assert `HEAD == origin/main` in a way that
   *blocks*. `git status --porcelain` only proves the tree is clean — it says nothing about which
   branch you are on. A publish has already gone out from a feature branch someone else had checked
@@ -64,9 +70,11 @@ npx eas update --branch production --platform ios --environment production \
 - **Verify from the served manifest afterwards, not from CLI output.** Use full 40-character
   runtime strings and check byte counts are non-zero, so an empty response can't pose as
   "unaffected".
-- **A user receives an update on their *next full relaunch*.** Nothing in this app calls
-  `reloadAsync`, so there is no in-session path to apply one. Rollback is another publish — minutes
-  for us, next-relaunch for them.
+- **A user receives an update on their *next full relaunch*, or sooner through the restart
+  prompt.** `components/update-prompt.tsx` checks when the app returns to the foreground, downloads
+  a waiting update and offers `Updates.reloadAsync()`, except during a ranked match's lobby,
+  officiating or live phase. Rollback is another publish: minutes for us, the next relaunch or
+  accepted prompt for them.
 - **Anything published must also be on `main`.** Work that was published from a branch and never
   merged gets silently reverted by the next publish. Check content, not just patch-equivalence:
   `git cherry` can report "not equivalent" for a change whose content did reach `main` by another
@@ -98,6 +106,9 @@ the web repo without a route here is invisible until a user taps it.
 
 ## Tests must discriminate
 
+- **CI runs `tsc --noEmit` and `jest` on every pull request and push to `main`**
+  (`.github/workflows/ci.yml`). Keep both green; lint isn't in it until its existing errors are
+  fixed.
 - **Mutation-test every test you touch**: revert the fix and confirm the test fails. A test that
   passes against both versions proves nothing.
 - **Negative tests must name the specific error**, not merely that something threw.
