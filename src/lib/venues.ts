@@ -10,11 +10,9 @@ export function publicImageUrl(storagePath: string): string {
 
 export type VenueSortOption = 'recommended' | 'price_asc' | 'price_desc' | 'rating';
 
-/** Same shape as the web's MarketplaceFilters, minus the geolocation
- * radius filter. expo-location ships as a dependency from build 10, but
- * no code requests permission yet, so there is still no position to
- * filter on — the blocker moved from "needs a native rebuild" to "needs
- * a decision about when to prompt". */
+/** Same shape as the web's MarketplaceFilters. `near` is the web's
+ * lat/lng/radius trio, set by Explore's "Near me" toggle — location is
+ * only asked for when that's tapped, never at launch. */
 export type MarketplaceFilters = {
   q?: string;
   indoorOutdoor?: 'indoor' | 'outdoor';
@@ -26,9 +24,30 @@ export type MarketplaceFilters = {
   availableOn?: string;
   availableAt?: string;
   sort?: VenueSortOption;
+  near?: { lat: number; lng: number; radiusKm: number };
 };
 
-export type MarketplaceVenue = VenueMarketplaceRow & { openStatus: OpenStatus };
+export type MarketplaceVenue = VenueMarketplaceRow & { openStatus: OpenStatus; distanceKm?: number };
+
+/** Great-circle distance — the web's haversineDistanceKm, ported as-is. */
+export function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** "800 m" under a kilometre, "2.3 km" above. */
+export function formatDistance(km: number): string {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
+// ponytail: the radius cut runs in JS over up to this many venues, same
+// no-PostGIS trade-off as the web. Move it into SQL (earthdistance or
+// PostGIS) once the marketplace outgrows a few hundred active venues.
+const NEAR_ME_FETCH_LIMIT = 500;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -141,9 +160,22 @@ export async function listMarketplaceVenues(filters: MarketplaceFilters = {}): P
       query = query.order('average_rating', { ascending: false }).order('review_count', { ascending: false });
   }
 
-  const { data, error } = await query.limit(50);
+  // With "near me", fetch past the 50-row page first: cutting to 50 before
+  // the radius filter would silently drop nearby venues.
+  const { data, error } = await query.limit(filters.near ? NEAR_ME_FETCH_LIMIT : 50);
   if (error) throw error;
-  const venues = data ?? [];
+  let venues: (VenueMarketplaceRow & { distanceKm?: number })[] = data ?? [];
+  if (filters.near) {
+    const { lat, lng, radiusKm } = filters.near;
+    const nearby = venues
+      .filter((v) => v.latitude !== null && v.longitude !== null)
+      .map((v) => ({ ...v, distanceKm: haversineDistanceKm(lat, lng, v.latitude!, v.longitude!) }))
+      .filter((v) => v.distanceKm <= radiusKm);
+    // Nearest first under the default sort; an explicit price or rating
+    // sort keeps its order, as on the web.
+    if (!filters.sort || filters.sort === 'recommended') nearby.sort((a, b) => a.distanceKm - b.distanceKm);
+    venues = nearby.slice(0, 50);
+  }
   if (venues.length === 0) return [];
 
   // Live open/closed badge — one batched hours query for the whole page

@@ -14,6 +14,11 @@
  *   /ranked/match/<id>            → /ranked/<id>         depth differs
  *   /bookings/<id>/confirmation   → /booking/<id>        name and depth
  *   /court-side/<userId>          → /player/<userId>     name differs
+ *   /events                       → /play                the list lives on the Play tab
+ *   /explore                      → /                    the Explore tab is the root
+ *   /profile/credits              → /credits             app has its own screen
+ *   /profile/rank                 → /profile             RankCard is on Profile
+ *   /profile/rank/history         → /ranked/games        same page, different name
  *
  * DELIBERATELY NOT REMAPPED, and none of these should ever be added to
  * the AASA either:
@@ -86,6 +91,13 @@ const REWRITES: { pattern: RegExp; to: (m: RegExpMatchArray) => string }[] = [
   // Single segment only — `/court-side/club/<id>` has two and must fall
   // through to the passthrough, where it already matches the app's route.
   { pattern: new RegExp(`^/court-side/${SEG}/?$`), to: (m) => `/player/${m[1]}` },
+  // Pages the web has that this app keeps somewhere else. Each must exist
+  // before the AASA claims its path, or the link lands on "Page not found".
+  { pattern: /^\/events\/?$/, to: () => '/play' },
+  { pattern: /^\/explore\/?$/, to: () => '/' },
+  { pattern: /^\/profile\/credits\/?$/, to: () => '/credits' },
+  { pattern: /^\/profile\/rank\/history\/?$/, to: () => '/ranked/games' },
+  { pattern: /^\/profile\/rank\/?$/, to: () => '/profile' },
 ];
 
 /**

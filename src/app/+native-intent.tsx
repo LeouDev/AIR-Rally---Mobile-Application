@@ -1,4 +1,5 @@
 import { webPathToAppPath } from '@/lib/deep-link-target';
+import { rememberIncomingLink } from '@/lib/pending-link';
 
 /**
  * Rewrites incoming Universal Links to routes this app can render.
@@ -10,10 +11,16 @@ import { webPathToAppPath } from '@/lib/deep-link-target';
  * only logic here is a guard: any failure hands back the original path
  * and the user lands on not-found, which is the state they'd have been
  * in anyway. A tapped link must never be able to crash the app.
+ *
+ * Every incoming link is also remembered (lib/pending-link.ts): if nobody
+ * is signed in, the session guard swaps it for the sign-in screen, and
+ * the root layout replays it once sign-in completes.
  */
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string {
   try {
-    return webPathToAppPath(path);
+    const appPath = webPathToAppPath(path);
+    rememberIncomingLink(appPath);
+    return appPath;
   } catch {
     return path;
   }

@@ -8,10 +8,10 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { VenueMarketplaceRow } from '@/lib/database.types';
 import type { OpenStatus } from '@/lib/open-status';
-import { publicImageUrl } from '@/lib/venues';
+import { formatDistance, publicImageUrl } from '@/lib/venues';
 
 type VenueCardProps = {
-  venue: VenueMarketplaceRow & { openStatus?: OpenStatus };
+  venue: VenueMarketplaceRow & { openStatus?: OpenStatus; distanceKm?: number };
   isFavorited?: boolean;
   onToggleFavorite?: () => void;
 };
@@ -87,7 +87,9 @@ export function VenueCard({ venue, isFavorited, onToggleFavorite }: VenueCardPro
           </View>
 
           <ThemedText type="small" themeColor="subtle" numberOfLines={1}>
-            {[venue.city, venue.address].filter(Boolean).join(' · ') || 'Location on request'}
+            {[venue.distanceKm !== undefined ? formatDistance(venue.distanceKm) : null, venue.city, venue.address]
+              .filter(Boolean)
+              .join(' · ') || 'Location on request'}
           </ThemedText>
           <ThemedText type="small" themeColor="subtle">
             {venue.active_court_count} {venue.active_court_count === 1 ? 'court' : 'courts'}

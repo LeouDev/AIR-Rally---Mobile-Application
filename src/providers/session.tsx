@@ -1,8 +1,10 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useEffect, useRef, useState, type PropsWithChildren } from 'react';
 
+import { cancelBookingReminders } from '@/lib/booking-reminders';
 import { registerDevicePushToken, unregisterDevicePushToken } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
+import { refreshUnreadCount } from '@/lib/unread';
 
 type SessionContextValue = {
   session: Session | null;
@@ -104,6 +106,16 @@ export function SessionProvider({ children }: PropsWithChildren) {
     registeredForUserId.current = null;
     await supabase.auth.signOut();
   };
+
+  // However the session ends — this button, a sign-out on the web, an
+  // expired refresh token — nothing of that account should outlive it on
+  // this phone: its unread badge on the app icon, or its booking
+  // reminders. Idempotent, so it simply runs whenever nobody is signed in.
+  useEffect(() => {
+    if (!isLoaded || session?.user.id) return;
+    void refreshUnreadCount(null);
+    void cancelBookingReminders();
+  }, [isLoaded, session?.user.id]);
 
   const markAgreementAccepted = () => setNeedsAgreement(false);
 

@@ -1,6 +1,6 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, type ErrorBoundaryProps, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { EnvironmentBanner } from '@/components/environment-banner';
 import { ErrorScreen } from '@/components/error-screen';
@@ -9,6 +9,7 @@ import { UpdatePrompt } from '@/components/update-prompt';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationObserver } from '@/lib/notifications-runtime';
+import { takePendingLink } from '@/lib/pending-link';
 import { initSentry } from '@/lib/sentry';
 import { SessionProvider, useSession } from '@/providers/session';
 
@@ -46,6 +47,29 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
  */
 function NotificationObserver() {
   useNotificationObserver();
+  return null;
+}
+
+/**
+ * Replays a link that opened the app while nobody was signed in (see
+ * lib/pending-link.ts). The session guard turned it into the sign-in
+ * screen, so on the signed-out → signed-in transition the player is taken
+ * where they were going instead of to Explore.
+ */
+function PendingLinkObserver({ signedIn }: { signedIn: boolean }) {
+  const wasSignedIn = useRef(signedIn);
+  // 0 when the app started signed out: any link since launch counts.
+  const signedOutSince = useRef(0);
+
+  useEffect(() => {
+    if (signedIn && !wasSignedIn.current) {
+      const link = takePendingLink(signedOutSince.current);
+      if (link) router.push(link as Href);
+    } else if (!signedIn && wasSignedIn.current) {
+      signedOutSince.current = Date.now();
+    }
+    wasSignedIn.current = signedIn;
+  }, [signedIn]);
   return null;
 }
 
@@ -112,6 +136,7 @@ function RootNavigator() {
           it here instead of scoping it narrowly. */}
       <UpdatePrompt />
       <NotificationObserver />
+      <PendingLinkObserver signedIn={session !== null && needsAgreement === false} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={session !== null && needsAgreement === false}>
           <Stack.Screen name="(tabs)" />

@@ -1,7 +1,15 @@
+import * as Notifications from 'expo-notifications';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useEffect } from 'react';
+import { AppState, Platform } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { syncBookingReminders } from '@/lib/booking-reminders';
+import { refreshUnreadCount, unreadBadgeLabel, useUnreadCount } from '@/lib/unread';
+import { useSession } from '@/providers/session';
+
+const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
 /**
  * Player-side tabs. SF Symbols carry the iOS icons; Android falls back
@@ -10,6 +18,31 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 export default function TabsLayout() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  const unreadCount = useUnreadCount();
+
+  // What the app knows about the world outside it — the unread count
+  // behind the tab and icon badges, and the phone's booking reminders —
+  // refreshed when the tabs mount, whenever the app returns to the
+  // foreground, and (unread only) when a push lands while it's open.
+  useEffect(() => {
+    const refresh = () => {
+      void refreshUnreadCount(userId);
+      if (userId) void syncBookingReminders(userId);
+    };
+    refresh();
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    const pushReceived = isNative
+      ? Notifications.addNotificationReceivedListener(() => void refreshUnreadCount(userId))
+      : null;
+    return () => {
+      appState.remove();
+      pushReceived?.remove();
+    };
+  }, [userId]);
 
   return (
     <NativeTabs
@@ -35,6 +68,7 @@ export default function TabsLayout() {
       <NativeTabs.Trigger name="notifications">
         <NativeTabs.Trigger.Label>Alerts</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'bell', selected: 'bell.fill' }} />
+        <NativeTabs.Trigger.Badge hidden={unreadCount === 0}>{unreadBadgeLabel(unreadCount)}</NativeTabs.Trigger.Badge>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="profile">

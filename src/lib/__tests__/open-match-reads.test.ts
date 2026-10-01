@@ -1,4 +1,4 @@
-import { getMyJoinRequest, listOpenMatchesForCity } from '@/lib/open-match';
+import { getMyJoinRequest, listJoinedPlayers, listOpenMatchesForCity } from '@/lib/open-match';
 import { supabase } from '@/lib/supabase';
 
 jest.mock('@/lib/supabase', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
@@ -68,4 +68,17 @@ it('reads the newest request when the player joined, left and joined again', asy
   const request = await getMyJoinRequest('om-1', 'me');
 
   expect(request).toMatchObject({ id: 'req-2', status: 'accepted' });
+});
+
+it("lists who joined the host's game by name, through public_profiles", async () => {
+  mockFrom.mockImplementation((name: string) =>
+    name === 'open_match_join_requests'
+      ? table([{ id: 'req-1', user_id: 'robin', status: 'accepted', created_at: '2026-09-01T10:00:00Z' }])
+      : table([{ id: 'robin', display_name: 'Robin', avatar_url: null }])
+  );
+
+  const players = await listJoinedPlayers('om-1');
+
+  expect(players).toEqual([{ requestId: 'req-1', profile: { id: 'robin', display_name: 'Robin', avatar_url: null } }]);
+  expect(mockFrom).toHaveBeenCalledWith('public_profiles');
 });

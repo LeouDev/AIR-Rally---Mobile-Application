@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/post-card';
@@ -10,21 +11,26 @@ import { useToast } from '@/components/ui/toast';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
+  cancelOpenMatch,
   expiresInLabel,
   getMyJoinRequest,
+  kickAcceptedPlayer,
+  listJoinedPlayers,
   RankedError,
   requestToJoinOpenMatch,
+  startOpenMatchFull,
+  startOpenMatchSingles,
   withdrawJoinRequest,
+  type JoinedPlayer,
   type OpenMatchJoinRequest,
   type OpenMatchListing,
 } from '@/lib/open-match';
 
 /**
- * The viewer-side half of the join flow — request, withdraw, and see
- * your own request's status. Host-side management (accept/decline/kick,
- * seeing who's pending) is a separate screen, not this one: the design
- * is explicit that a requester never sees other requesters' identities
- * or outcomes, so this sheet only ever asks about ITS OWN viewer's row.
+ * The join flow for a viewer — request, withdraw, and see your own
+ * request's status — and, when the viewer is the HOST, the management
+ * panel instead (HostControls below). A requester still never sees other
+ * requesters' identities: only the host's panel lists who has joined.
  *
  * `openMatch` is a snapshot from the browse list at the moment it was
  * tapped, not a live subscription — a host accepting/declining/kicking
@@ -71,8 +77,12 @@ function OpenMatchDetailSheetBody({
   // seen — a rejected join (rank gap, game full) looked like nothing.
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // A host has no join request of their own — the server rejects one
+  // ("You are already hosting this match") — so they get the host panel.
+  const isHost = openMatch.host_id === currentUserId;
 
   useEffect(() => {
+    if (isHost) return;
     let cancelled = false;
     getMyJoinRequest(openMatch.id, currentUserId)
       .then((result) => {
@@ -84,7 +94,7 @@ function OpenMatchDetailSheetBody({
     return () => {
       cancelled = true;
     };
-  }, [openMatch.id, currentUserId]);
+  }, [openMatch.id, currentUserId, isHost]);
 
   // Migration 120: request_to_join_open_match auto-accepts on a passing
   // rank-gap check — there is no host review step and no 'pending' row
@@ -153,7 +163,7 @@ function OpenMatchDetailSheetBody({
             <Avatar profile={openMatch.host} size={56} />
             <View style={styles.hostText}>
               <ThemedText type="subtitle" numberOfLines={1}>
-                {openMatch.host?.display_name ?? 'A player'}&apos;s game
+                {isHost ? 'Your game' : `${openMatch.host?.display_name ?? 'A player'}'s game`}
               </ThemedText>
               <ThemedText type="small" themeColor="subtle">
                 {openMatch.acceptedCount} {openMatch.acceptedCount === 1 ? 'player' : 'players'} in ·{' '}
@@ -162,7 +172,9 @@ function OpenMatchDetailSheetBody({
             </View>
           </View>
 
-          {loadError ? (
+          {isHost ? (
+            <HostControls openMatch={openMatch} onClose={onClose} />
+          ) : loadError ? (
             <ThemedText type="small" themeColor="destructive">
               Couldn&apos;t load your request status. Try again.
             </ThemedText>
@@ -181,6 +193,161 @@ function OpenMatchDetailSheetBody({
         </View>
       </SafeAreaView>
     </ThemedView>
+  );
+}
+
+/**
+ * The host's side, which had no UI at all: the RPCs existed (kick,
+ * cancel, start singles/doubles) with nothing calling them, and tapping
+ * your own game opened the joiner's "Request to join" sheet. The case
+ * that mattered most: at kickoff the server converts exactly 2 players to
+ * singles or exactly 4 to doubles and silently EXPIRES anything else — so
+ * a host stuck at 3 needs to see that and be able to remove one.
+ */
+function HostControls({ openMatch, onClose }: { openMatch: OpenMatchListing; onClose: () => void }) {
+  const theme = useTheme();
+  // undefined = loading. The host counts toward the total but isn't a row.
+  const [players, setPlayers] = useState<JoinedPlayer[] | undefined>(undefined);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadCount, setReloadCount] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listJoinedPlayers(openMatch.id)
+      .then((rows) => {
+        if (cancelled) return;
+        setPlayers(rows);
+        setLoadError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openMatch.id, reloadCount]);
+
+  const run = async (action: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      await action();
+    } catch (err) {
+      setActionError(err instanceof RankedError ? err.message : "That didn't go through. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = (player: JoinedPlayer) => {
+    const name = player.profile?.display_name ?? 'this player';
+    Alert.alert(`Remove ${name}?`, "They'll be taken out of this game.", [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () =>
+          run(async () => {
+            await kickAcceptedPlayer(player.requestId);
+            setReloadCount((n) => n + 1);
+          }),
+      },
+    ]);
+  };
+
+  const start = (startMatch: (openMatchId: string) => Promise<string>) =>
+    run(async () => {
+      const matchId = await startMatch(openMatch.id);
+      onClose();
+      router.push({ pathname: '/ranked/[matchId]', params: { matchId } });
+    });
+
+  const cancel = () => {
+    Alert.alert('Cancel this game?', 'Everyone who joined is taken out, and the game comes off the list.', [
+      { text: 'Keep game', style: 'cancel' },
+      {
+        text: 'Cancel game',
+        style: 'destructive',
+        onPress: () =>
+          run(async () => {
+            await cancelOpenMatch(openMatch.id);
+            onClose();
+          }),
+      },
+    ]);
+  };
+
+  if (loadError) {
+    return (
+      <View style={styles.stackSmall}>
+        <ThemedText type="small" themeColor="destructive">
+          Couldn&apos;t load who has joined.
+        </ThemedText>
+        <Button title="Try again" variant="secondary" onPress={() => setReloadCount((n) => n + 1)} />
+      </View>
+    );
+  }
+  if (players === undefined) {
+    return (
+      <ThemedText type="small" themeColor="subtle">
+        Loading players…
+      </ThemedText>
+    );
+  }
+
+  const total = players.length + 1;
+  return (
+    <View style={styles.stackSmall}>
+      <ThemedText type="smallBold">You&apos;re hosting · {total} of 4 in</ThemedText>
+      {players.map((player) => (
+        <View key={player.requestId} style={[styles.playerRow, { borderBottomColor: theme.hairline }]}>
+          <Avatar profile={player.profile} size={32} />
+          <ThemedText type="small" style={styles.playerName} numberOfLines={1}>
+            {player.profile?.display_name ?? 'A player'}
+          </ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${player.profile?.display_name ?? 'player'}`}
+            onPress={() => remove(player)}
+            disabled={busy}
+            hitSlop={12}>
+            <ThemedText type="smallBold" themeColor="destructive">
+              Remove
+            </ThemedText>
+          </Pressable>
+        </View>
+      ))}
+
+      {total === 2 ? (
+        <>
+          <Button title="Start singles now" onPress={() => start(startOpenMatchSingles)} disabled={busy} loading={busy} />
+          <ThemedText type="caption" themeColor="mutedForeground">
+            Or wait — two more players makes it doubles.
+          </ThemedText>
+        </>
+      ) : total === 4 ? (
+        <Button title="Start doubles now" onPress={() => start(startOpenMatchFull)} disabled={busy} loading={busy} />
+      ) : total === 3 ? (
+        <ThemedText type="small" themeColor="subtle">
+          Three players can&apos;t start: one more makes doubles, or remove a player to start singles. If it&apos;s
+          still three at kickoff, the game expires.
+        </ThemedText>
+      ) : (
+        <ThemedText type="small" themeColor="subtle">
+          No one has joined yet. If nobody joins before kickoff, the game expires.
+        </ThemedText>
+      )}
+
+      {actionError ? (
+        <ThemedText type="small" themeColor="destructive">
+          {actionError}
+        </ThemedText>
+      ) : null}
+      <Button title="Cancel game" variant="ghost" onPress={cancel} disabled={busy} />
+    </View>
   );
 }
 
@@ -286,5 +453,16 @@ const styles = StyleSheet.create({
   },
   stackSmall: {
     gap: Spacing.two,
+  },
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 44,
+    borderBottomWidth: 1,
+  },
+  playerName: {
+    flex: 1,
+    minWidth: 0,
   },
 });

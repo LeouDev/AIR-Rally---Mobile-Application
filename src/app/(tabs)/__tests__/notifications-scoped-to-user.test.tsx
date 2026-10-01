@@ -27,6 +27,9 @@ const select = jest.fn();
 const updateEqUserId = jest.fn();
 
 jest.mock('@/lib/supabase', () => ({ supabase: { from: jest.fn() } }));
+// The badge refresh is its own query, tested in unread.test.ts; this file
+// pins the LIST query's predicate.
+jest.mock('@/lib/unread', () => ({ refreshUnreadCount: jest.fn(async () => {}) }));
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
   useFocusEffect: (cb: () => void) => {

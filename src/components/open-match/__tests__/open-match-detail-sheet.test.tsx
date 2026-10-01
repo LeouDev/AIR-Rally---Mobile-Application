@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 
 import { OpenMatchDetailSheet } from '@/components/open-match/open-match-detail-sheet';
 import {
@@ -33,7 +34,13 @@ jest.mock('@/lib/open-match', () => ({
   getMyJoinRequest: jest.fn(),
   requestToJoinOpenMatch: jest.fn(),
   withdrawJoinRequest: jest.fn(),
+  listJoinedPlayers: jest.fn(),
+  kickAcceptedPlayer: jest.fn(),
+  cancelOpenMatch: jest.fn(),
+  startOpenMatchSingles: jest.fn(),
+  startOpenMatchFull: jest.fn(),
 }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 
 const mockToastShow = jest.fn();
 jest.mock('@/components/ui/toast', () => ({ useToast: () => ({ show: mockToastShow }) }));
@@ -192,4 +199,104 @@ it('degrades the same way for "pending" — unreachable post-120, but not specia
   await renderSheet();
 
   await screen.findByText(/Status unavailable/);
+});
+
+describe('the host side', () => {
+  // The host had no UI at all: tapping your own game opened the joiner's
+  // sheet, and "Request to join" failed with "You are already hosting this
+  // match". The kick / cancel / start RPCs existed with nothing calling them.
+  const robin = { requestId: 'req-robin', profile: { id: 'robin', display_name: 'Robin', avatar_url: null } };
+  const sam = { requestId: 'req-sam', profile: { id: 'sam', display_name: 'Sam', avatar_url: null } };
+  const mocked = jest.requireMock('@/lib/open-match') as Record<string, jest.Mock>;
+  const { router } = jest.requireMock('expo-router') as { router: { push: jest.Mock } };
+
+  async function renderAsHost(onClose = jest.fn()) {
+    await render(
+      <OpenMatchDetailSheet visible onClose={onClose} openMatch={openMatch({ host_id: 'me' })} currentUserId="me" />
+    );
+    return onClose;
+  }
+
+  // Alert.alert's buttons, pressed by label — the confirm step is the point.
+  // Returns the handler's promise so the test can wait for its work.
+  function pressAlertButton(label: string) {
+    const buttons = (jest.mocked(Alert.alert).mock.calls.at(-1)?.[2] ?? []) as {
+      text: string;
+      onPress?: () => unknown;
+    }[];
+    return buttons.find((b) => b.text === label)?.onPress?.();
+  }
+
+  beforeEach(() => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    // clearAllMocks keeps queued *Once values; a test that consumes fewer
+    // than it queued would otherwise leak them into the next one.
+    for (const fn of ['listJoinedPlayers', 'kickAcceptedPlayer', 'cancelOpenMatch', 'startOpenMatchSingles']) {
+      mocked[fn].mockReset();
+    }
+    // What the pre-fix sheet asked for: the host has no request row, so it
+    // offered "Request to join" — the mutation these tests must catch.
+    mockGetMyJoinRequest.mockResolvedValue(null);
+  });
+
+  it('gets the host panel instead of "Request to join"', async () => {
+    mocked.listJoinedPlayers.mockResolvedValue([]);
+    await renderAsHost();
+
+    await screen.findByText(/You.re hosting · 1 of 4 in/);
+    expect(screen.getByText('Your game')).toBeTruthy();
+    expect(screen.queryByText('Request to join')).toBeNull();
+    expect(mockGetMyJoinRequest).not.toHaveBeenCalled();
+  });
+
+  it('with one player in, starts singles and takes the host into the match', async () => {
+    mocked.listJoinedPlayers.mockResolvedValue([robin]);
+    mocked.startOpenMatchSingles.mockResolvedValue('match-9');
+    const onClose = await renderAsHost();
+
+    await fireEvent.press(await screen.findByText('Start singles now'));
+
+    expect(mocked.startOpenMatchSingles).toHaveBeenCalledWith('open-1');
+    expect(onClose).toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/ranked/[matchId]', params: { matchId: 'match-9' } });
+  });
+
+  it('at three players offers no start, and says what happens at kickoff', async () => {
+    mocked.listJoinedPlayers.mockResolvedValue([robin, sam]);
+    await renderAsHost();
+
+    await screen.findByText(/Three players can.t start/);
+    expect(screen.queryByText('Start singles now')).toBeNull();
+    expect(screen.queryByText('Start doubles now')).toBeNull();
+  });
+
+  it('removes a player only after confirming, then reloads the list', async () => {
+    mocked.listJoinedPlayers.mockResolvedValueOnce([robin, sam]).mockResolvedValueOnce([sam]);
+    mocked.kickAcceptedPlayer.mockResolvedValue(undefined);
+    await renderAsHost();
+
+    await fireEvent.press(await screen.findByLabelText('Remove Robin'));
+    expect(mocked.kickAcceptedPlayer).not.toHaveBeenCalled();
+    await act(async () => {
+      await pressAlertButton('Remove');
+    });
+
+    expect(mocked.kickAcceptedPlayer).toHaveBeenCalledWith('req-robin');
+    await screen.findByText(/You.re hosting · 2 of 4 in/);
+  });
+
+  it('cancels the game only after confirming, then closes', async () => {
+    mocked.listJoinedPlayers.mockResolvedValue([robin]);
+    mocked.cancelOpenMatch.mockResolvedValue(undefined);
+    const onClose = await renderAsHost();
+
+    await fireEvent.press(await screen.findByText('Cancel game'));
+    expect(mocked.cancelOpenMatch).not.toHaveBeenCalled();
+    await act(async () => {
+      await pressAlertButton('Cancel game');
+    });
+
+    expect(mocked.cancelOpenMatch).toHaveBeenCalledWith('open-1');
+    expect(onClose).toHaveBeenCalled();
+  });
 });

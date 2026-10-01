@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
+  Linking,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -24,6 +26,7 @@ import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import type { Amenity } from '@/lib/database.types';
 import { addFavorite, listFavoriteVenueIds, removeFavorite } from '@/lib/favorites';
+import { getCurrentCoords, NEAR_ME_RADIUS_KM } from '@/lib/near-me';
 import {
   listAmenities,
   listMarketplaceVenues,
@@ -59,6 +62,7 @@ export default function ExploreScreen() {
   const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [surfaceTypes, setSurfaceTypes] = useState<string[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [locating, setLocating] = useState(false);
   const requestSeq = useRef(0);
 
   const load = useCallback(async (q: string, activeFilters: MarketplaceFilters) => {
@@ -141,6 +145,33 @@ export default function ExploreScreen() {
   };
 
   const activeFilterCount = countActiveFilters(filters);
+  // Anything narrowing the list — the empty state offers a way back.
+  const narrowed = Boolean(search) || activeFilterCount > 0 || filters.near !== undefined;
+
+  /** "Near me": location is asked for here, on the tap, never at launch. */
+  const toggleNearMe = async () => {
+    if (filters.near) {
+      setFilters((current) => ({ ...current, near: undefined }));
+      return;
+    }
+    if (locating) return;
+    setLocating(true);
+    try {
+      const coords = await getCurrentCoords();
+      if (coords === 'denied') {
+        Alert.alert('Location is off', 'Allow AIR/Rally to use your location in Settings to see courts near you.', [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]);
+        return;
+      }
+      setFilters((current) => ({ ...current, near: { ...coords, radiusKm: NEAR_ME_RADIUS_KM } }));
+    } catch {
+      Alert.alert("Couldn't find your location", 'Check that Location Services are on, then try again.');
+    } finally {
+      setLocating(false);
+    }
+  };
 
   // The empty state's only way back to a populated list. Before the
   // venue-request form existed here, an empty result was a small static
@@ -206,6 +237,21 @@ export default function ExploreScreen() {
                   </View>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel="Courts near me"
+                    accessibilityState={{ selected: filters.near !== undefined, busy: locating }}
+                    onPress={toggleNearMe}
+                    style={[
+                      styles.filterButton,
+                      { backgroundColor: filters.near ? theme.secondary : theme.card, borderColor: theme.input },
+                    ]}>
+                    <Ionicons
+                      name={filters.near ? 'navigate' : 'navigate-outline'}
+                      size={20}
+                      color={filters.near ? theme.secondaryForeground : theme.foreground}
+                    />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel={
                       activeFilterCount > 0 ? `Filters, ${activeFilterCount} active` : 'Filters'
                     }
@@ -224,6 +270,11 @@ export default function ExploreScreen() {
                     ) : null}
                   </Pressable>
                 </View>
+                {filters.near ? (
+                  <ThemedText type="small" themeColor="subtle">
+                    Within {NEAR_ME_RADIUS_KM} km of you · nearest first
+                  </ThemedText>
+                ) : null}
                 {error ? (
                   <ThemedText type="small" themeColor="destructive">
                     {error}
@@ -239,26 +290,26 @@ export default function ExploreScreen() {
                 </View>
               ) : userId ? (
                 <View style={styles.emptyStack}>
-                  {search || activeFilterCount > 0 ? (
+                  {narrowed ? (
                     <Button title="Clear search & filters" variant="ghost" onPress={clearSearchAndFilters} />
                   ) : null}
                   <VenueRequestForm
-                    key={search || activeFilterCount > 0 ? 'searching' : 'empty'}
+                    key={narrowed ? 'searching' : 'empty'}
                     userId={userId}
-                    variant={search || activeFilterCount > 0 ? 'searching' : 'empty'}
+                    variant={narrowed ? 'searching' : 'empty'}
                     initialPlaceName={search.trim()}
                   />
                 </View>
               ) : (
                 <View style={styles.emptyStack}>
-                  {search || activeFilterCount > 0 ? (
+                  {narrowed ? (
                     <Button title="Clear search & filters" variant="ghost" onPress={clearSearchAndFilters} />
                   ) : null}
                   <View
                     style={[styles.empty, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <ThemedText type="subtitle">No venues found</ThemedText>
                     <ThemedText type="small" themeColor="subtle">
-                      {search || activeFilterCount > 0
+                      {narrowed
                         ? 'Try a different name, area, or fewer filters.'
                         : 'Venues appear here as owners come aboard.'}
                     </ThemedText>

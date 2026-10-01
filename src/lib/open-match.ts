@@ -297,17 +297,49 @@ export async function cancelOpenMatch(openMatchId: string): Promise<void> {
  * cron, resolve_open_matches_at_kickoff) or by the host starting early
  * via this RPC or startOpenMatchFull. At exactly 3, no start is
  * possible at all — the host's only moves are kick one or wait for a 4th. */
-export async function startOpenMatchSingles(openMatchId: string): Promise<void> {
-  const { error } = await rpc('start_open_match_singles', { p_open_match_id: openMatchId });
+export async function startOpenMatchSingles(openMatchId: string): Promise<string> {
+  const { data, error } = await rpc('start_open_match_singles', { p_open_match_id: openMatchId });
   if (error) throwRanked(error);
+  // The ranked_matches row it became — convert_open_match_to_singles returns it.
+  return data as string;
 }
 
 /** Host only, exactly 4 accepted — migration 120's new counterpart to
  * startOpenMatchSingles, letting a full doubles match start before its
  * scheduled kickoff instead of waiting for the cron sweep. */
-export async function startOpenMatchFull(openMatchId: string): Promise<void> {
-  const { error } = await rpc('start_open_match_full', { p_open_match_id: openMatchId });
+export async function startOpenMatchFull(openMatchId: string): Promise<string> {
+  const { data, error } = await rpc('start_open_match_full', { p_open_match_id: openMatchId });
   if (error) throwRanked(error);
+  return data as string;
+}
+
+export type JoinedPlayer = { requestId: string; profile: PublicProfile | null };
+
+/** Host only — who is in the host's own game, oldest join first. The join
+ * requests' RLS lets the host read every row on their match; names come
+ * from public_profiles (profiles' own RLS is own-row-only). The host is
+ * not a row here: they count toward the total but can't be removed. */
+export async function listJoinedPlayers(openMatchId: string): Promise<JoinedPlayer[]> {
+  const { data, error } = await supabase
+    .from('open_match_join_requests')
+    .select('id, user_id')
+    .eq('open_match_id', openMatchId)
+    .eq('status', 'accepted')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  const rows = (data ?? []) as { id: string; user_id: string }[];
+  if (rows.length === 0) return [];
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from('public_profiles')
+    .select('id, display_name, avatar_url')
+    .in(
+      'id',
+      rows.map((r) => r.user_id)
+    );
+  if (profilesError) throw profilesError;
+  const byId = new Map((profiles ?? []).map((p) => [p.id, p as PublicProfile]));
+  return rows.map((r) => ({ requestId: r.id, profile: byId.get(r.user_id) ?? null }));
 }
 
 export type OpenMatchListing = OpenMatch & {
