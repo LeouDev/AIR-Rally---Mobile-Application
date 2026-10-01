@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EventJoinRequests } from '@/components/events/event-join-requests';
+import { LoadError } from '@/components/load-error';
 import { Avatar } from '@/components/post-card';
 import { ReportAction } from '@/components/report-action';
 import { ThemedText } from '@/components/themed-text';
@@ -46,6 +47,8 @@ export default function EventDetailScreen() {
   const { show } = useToast();
 
   const [event, setEvent] = useState<EventDetail | null | undefined>(undefined);
+  // Failed ≠ "isn't available" — see LoadError.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [myStatus, setMyStatus] = useState<EventAttendeeStatus | null>(null);
   const [pendingRequests, setPendingRequests] = useState<PendingJoinRequest[]>([]);
   const [working, setWorking] = useState(false);
@@ -63,6 +66,7 @@ export default function EventDetailScreen() {
     getEventDetail(id)
       .then((detail) => {
         setEvent(detail);
+        setLoadFailed(false);
         if (detail && userId) {
           listMyEventStatuses(userId, [id]).then((statuses) => setMyStatus(statuses.get(id) ?? null));
           if (detail.creator_id === userId) {
@@ -70,7 +74,7 @@ export default function EventDetailScreen() {
           }
         }
       })
-      .catch(() => setEvent(null));
+      .catch(() => setLoadFailed(true));
     getActiveMatchForEvent(id)
       .then(setActiveRankedMatch)
       .catch(() => setActiveRankedMatch(null));
@@ -150,7 +154,15 @@ export default function EventDetailScreen() {
       />
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <ScrollView contentContainerStyle={styles.scroll}>
-          {event === undefined ? (
+          {event === undefined && loadFailed ? (
+            <LoadError
+              title="Couldn't load this game"
+              onRetry={() => {
+                setLoadFailed(false);
+                load();
+              }}
+            />
+          ) : event === undefined ? (
             <View style={styles.block}>
               <Skeleton height={28} width="70%" radius={Radius.sm} />
               <Skeleton height={100} radius={Radius.xl} />

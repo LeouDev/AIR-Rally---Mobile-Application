@@ -127,3 +127,18 @@ it('tapping a row opens the detail sheet for THAT game, not a different one', as
   expect(mockGetMyJoinRequest).toHaveBeenCalledWith('open-2', 'me');
   expect(mockGetMyJoinRequest).not.toHaveBeenCalledWith('open-1', 'me');
 });
+
+it('refetches when the Play tab refreshes, so "Pull to retry" actually retries', async () => {
+  // key={citySlug} only remounts on a city change, so before refreshToken
+  // the list loaded once per app session: focus, pull-to-refresh and
+  // joining a game never refreshed it, and an error stuck until relaunch.
+  mockListOpenMatchesForCity.mockRejectedValueOnce(new Error('Network request failed'));
+  const view = await render(<OpenGamesSection citySlug="mandaue" currentUserId="me" refreshToken={1} />);
+  await screen.findByText(/Couldn.t load open games/);
+
+  mockListOpenMatchesForCity.mockResolvedValue([game()]);
+  await view.rerender(<OpenGamesSection citySlug="mandaue" currentUserId="me" refreshToken={2} />);
+
+  await screen.findByText("Robin's game");
+  expect(screen.queryByText(/Couldn.t load open games/)).toBeNull();
+});

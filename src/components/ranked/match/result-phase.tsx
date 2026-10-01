@@ -252,6 +252,17 @@ function AwaitingConfirmationView({ match, currentUserId }: { match: RankedMatch
             />
           ) : null}
           <Button title="Submit dispute" onPress={submitDispute} disabled={!reason || busy} />
+          {/* The way back: tapping Dispute hides Accept, and without
+              this a mis-tap left the player only one way forward. */}
+          <Button
+            title="Never mind"
+            variant="ghost"
+            onPress={() => {
+              setDisputing(false);
+              setReason(null);
+            }}
+            disabled={busy}
+          />
         </View>
       ) : (
         <View style={styles.stackSmall}>

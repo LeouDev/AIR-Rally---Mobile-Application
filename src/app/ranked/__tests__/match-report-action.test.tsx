@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
 import RankedMatchScreen from '@/app/ranked/[matchId]';
@@ -32,7 +32,7 @@ jest.mock('@/lib/ranked', () => ({
 }));
 
 jest.mock('@/hooks/use-ranked-match', () => ({
-  useRankedMatch: (_matchId: string, initial: unknown) => initial,
+  useRankedMatch: (_matchId: string, initial: unknown) => [initial, jest.fn()],
 }));
 
 jest.mock('@/providers/session', () => ({
@@ -100,8 +100,17 @@ it('offers no header action while the match is still loading', async () => {
   expect(capturedHeaderRight).toBeUndefined();
 });
 
-it('offers no header action when the match failed to load', async () => {
-  mockGetMatch.mockRejectedValue(new Error('not found'));
+it('offers no header action when the match failed to load — and says it failed, not that it is gone', async () => {
+  mockGetMatch.mockRejectedValue(new Error('Network request failed'));
+  await render(<RankedMatchScreen />);
+
+  await waitFor(() => expect(screen.getByText("Couldn't load this match")).toBeTruthy());
+  expect(screen.queryByText('Match not found')).toBeNull();
+  expect(capturedHeaderRight).toBeUndefined();
+});
+
+it('offers no header action when the match does not exist', async () => {
+  mockGetMatch.mockResolvedValue(null);
   await render(<RankedMatchScreen />);
 
   await waitFor(() => expect(screen.getByText('Match not found')).toBeTruthy());
@@ -125,4 +134,14 @@ it('mounts ReportAction for this match once it has loaded', async () => {
   expect(mockReportAction).toHaveBeenCalledWith(
     expect.objectContaining({ targetType: 'ranked_match', targetId: 'match-1', targetLabel: 'match' })
   );
+});
+
+it('"Try again" after a failed load actually fetches the match again', async () => {
+  mockGetMatch.mockRejectedValueOnce(new Error('Network request failed')).mockResolvedValueOnce(null);
+  await render(<RankedMatchScreen />);
+
+  await fireEvent.press(await screen.findByText('Try again'));
+
+  await waitFor(() => expect(screen.getByText('Match not found')).toBeTruthy());
+  expect(mockGetMatch).toHaveBeenCalledTimes(2);
 });

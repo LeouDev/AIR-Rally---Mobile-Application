@@ -113,7 +113,7 @@ export default function CreditsScreen() {
                   {balance === null ? '—' : formatCreditBalance(balance)}
                 </ThemedText>
                 <View style={styles.bookButton}>
-                  <Button title="Book a court" onPress={() => router.push('/(tabs)')} />
+                  <Button title="Book a court" onPress={() => router.dismissTo('/(tabs)')} />
                 </View>
               </View>
 

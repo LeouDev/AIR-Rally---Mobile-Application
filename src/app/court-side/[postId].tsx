@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Alert, FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadError } from '@/components/load-error';
 import { Avatar, PostCard } from '@/components/post-card';
 import { ReportAction } from '@/components/report-action';
 import { ThemedText } from '@/components/themed-text';
@@ -40,6 +41,9 @@ export default function PostDetailScreen() {
   const { show } = useToast();
 
   const [post, setPost] = useState<PostWithAuthor | null | undefined>(undefined);
+  // This load had no catch: a failed comments read left the skeleton up
+  // forever, and a failed post read said "This post isn't available".
+  const [loadFailed, setLoadFailed] = useState(false);
   const [comments, setComments] = useState<PostCommentWithAuthor[] | null>(null);
   const [liked, setLiked] = useState(false);
   const [reshared, setReshared] = useState(false);
@@ -49,27 +53,33 @@ export default function PostDetailScreen() {
 
   const load = useCallback(async () => {
     if (!postId) return;
-    const [postResult, commentRows] = await Promise.all([
-      supabase.from('posts').select('*').eq('id', postId).maybeSingle(),
-      listCommentsForPost(postId),
-    ]);
-    if (postResult.error || !postResult.data) {
-      setPost(null);
-      return;
-    }
-    const authorResult = await supabase.from('public_profiles').select('*').eq('id', postResult.data.user_id).maybeSingle();
-    setPost({ ...postResult.data, author: authorResult.data ?? null });
-    setComments(commentRows);
-    if (userId) {
-      const [likedIds, resharedIds] = await Promise.all([
-        listLikedPostIds(userId, [postId]),
-        listResharedPostIds(userId, [postId]),
+    try {
+      const [postResult, commentRows] = await Promise.all([
+        supabase.from('posts').select('*').eq('id', postId).maybeSingle(),
+        listCommentsForPost(postId),
       ]);
-      setLiked(likedIds.includes(postId));
-      setReshared(resharedIds.includes(postId));
-      if (postResult.data.user_id !== userId) {
-        isFollowing(userId, postResult.data.user_id).then(setFollowing).catch(() => {});
+      if (postResult.error) throw postResult.error;
+      if (!postResult.data) {
+        setPost(null);
+        return;
       }
+      const authorResult = await supabase.from('public_profiles').select('*').eq('id', postResult.data.user_id).maybeSingle();
+      setPost({ ...postResult.data, author: authorResult.data ?? null });
+      setComments(commentRows);
+      if (userId) {
+        const [likedIds, resharedIds] = await Promise.all([
+          listLikedPostIds(userId, [postId]),
+          listResharedPostIds(userId, [postId]),
+        ]);
+        setLiked(likedIds.includes(postId));
+        setReshared(resharedIds.includes(postId));
+        if (postResult.data.user_id !== userId) {
+          isFollowing(userId, postResult.data.user_id).then(setFollowing).catch(() => {});
+        }
+      }
+      setLoadFailed(false);
+    } catch {
+      setLoadFailed(true);
     }
   }, [postId, userId]);
 
@@ -158,7 +168,15 @@ export default function PostDetailScreen() {
             under-compensated. useKeyboardAwareScroll on the list below
             uses insets, which need no offset. */}
         <View style={styles.flex}>
-          {post === undefined ? (
+          {post === undefined && loadFailed ? (
+            <LoadError
+              title="Couldn't load this post"
+              onRetry={() => {
+                setLoadFailed(false);
+                load();
+              }}
+            />
+          ) : post === undefined ? (
             <View style={styles.block}>
               <Skeleton height={140} radius={Radius.xl} />
             </View>

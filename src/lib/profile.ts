@@ -6,7 +6,6 @@ export type UpdateProfileValues = {
   lastName: string;
   displayName: string;
   phone: string;
-  avatarUrl?: string;
 };
 
 /** Same phone shape the web's updateProfileSchema accepts — digits,
@@ -22,8 +21,22 @@ export async function updateProfile(userId: string, values: UpdateProfileValues)
       last_name: values.lastName.trim(),
       display_name: values.displayName.trim(),
       phone: values.phone.trim() || null,
-      ...(values.avatarUrl ? { avatar_url: values.avatarUrl } : {}),
     })
+    .eq('id', userId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/** Writes the photo and nothing else. The photo flow used to go through
+ * updateProfile with whatever names the Profile tab had loaded — blank
+ * strings if that read had failed, stale ones if they'd since been
+ * edited on the web — so changing a photo could wipe a name or phone. */
+export async function updateAvatarUrl(userId: string, avatarUrl: string): Promise<Profile> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ avatar_url: avatarUrl })
     .eq('id', userId)
     .select()
     .single();

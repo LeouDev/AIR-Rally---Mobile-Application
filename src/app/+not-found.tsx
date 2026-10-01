@@ -23,7 +23,7 @@ export default function NotFoundScreen() {
           <ThemedText themeColor="subtle">
             That link doesn't lead anywhere anymore. Head back to the app.
           </ThemedText>
-          <Button title="Go to Explore" onPress={() => router.replace('/')} />
+          <Button title="Go to Explore" onPress={() => router.dismissTo('/')} />
           <Link href="/" style={styles.link}>
             <ThemedText type="small" themeColor="primary">
               Go home

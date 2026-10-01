@@ -85,12 +85,16 @@ function normalizeBookingRow(row: Record<string, unknown>): BookingWithCourt {
   };
 }
 
-/** The user's own bookings (RLS-scoped), newest start first, with court
- * and venue names embedded via the real foreign keys. */
-export async function listMyBookings(): Promise<BookingWithCourt[]> {
+/** The user's own bookings, newest start first, with court and venue
+ * names embedded via the real foreign keys. Filtered by user IN THE
+ * QUERY: the bookings SELECT policy also lets venue owners read their
+ * venues' bookings and admins read everyone's, so RLS alone filled an
+ * owner's personal Bookings tab with their customers' bookings. */
+export async function listMyBookings(userId: string): Promise<BookingWithCourt[]> {
   const { data, error } = await supabase
     .from('bookings')
     .select('*, courts(name, venues(name, timezone))')
+    .eq('user_id', userId)
     .order('start_time', { ascending: false })
     .limit(100);
   if (error) throw error;

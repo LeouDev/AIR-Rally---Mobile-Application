@@ -19,7 +19,7 @@ import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
 import { formatCentavos } from '@/lib/bookings';
 import type { Profile } from '@/lib/database.types';
 import { getFollowCounts, type FollowCounts } from '@/lib/follows';
-import { updateProfile } from '@/lib/profile';
+import { updateAvatarUrl } from '@/lib/profile';
 import { getProfileStats, type ProfileStats } from '@/lib/profile-stats';
 import { getPlayerMatchTotals } from '@/lib/ranked';
 import { supabase } from '@/lib/supabase';
@@ -106,14 +106,7 @@ export default function ProfileScreen() {
     setUploadingAvatar(true);
     try {
       const url = await uploadAvatar(userId, picked);
-      const updated = await updateProfile(userId, {
-        firstName: profile?.first_name ?? '',
-        lastName: profile?.last_name ?? '',
-        displayName: profile?.display_name ?? '',
-        phone: profile?.phone ?? '',
-        avatarUrl: url,
-      });
-      setProfile(updated);
+      setProfile(await updateAvatarUrl(userId, url));
     } catch {
       // The avatar just stays as it was; nothing to roll back. But this
       // used to fail fully silently — a picked photo could look accepted

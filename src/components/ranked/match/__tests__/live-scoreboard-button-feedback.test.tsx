@@ -190,3 +190,31 @@ it('Undo still looks dimmed at 0-0 even while nothing is busy — its own condit
   expect(looksDimmed(screen.getByLabelText('Team A won the rally'))).toBe(false);
   expect(looksDimmed(screen.getByLabelText('Team B won the rally'))).toBe(false);
 });
+
+it('keeps the scoring buttons blocked until the refreshed score lands, not just until the RPC returns', async () => {
+  // record_ranked_point returns void, and this screen only redraws the
+  // score after Realtime + getMatch(). Re-enabling on the RPC alone left
+  // a window where a tap "did nothing" — so the scorekeeper tapped again
+  // and recorded a second point.
+  mockRecordPoint.mockResolvedValue(undefined);
+  let finishRefresh: () => void = () => {};
+  const onChanged = jest.fn(() => new Promise<void>((resolve) => (finishRefresh = resolve)));
+
+  const me = participant();
+  const opp = participant({ user_id: 'opp', team: 'b', profile: { id: 'opp', display_name: 'Robin', avatar_url: null } });
+  const match = { ...matchFixture(), players: [me, opp], scorekeeper: null, team_a_club: null, team_b_club: null };
+
+  await render(<LiveScoreboard match={match} currentUserId="me" onChanged={onChanged} />);
+  await fireEvent.press(screen.getByLabelText('Team A won the rally'));
+  await act(async () => {});
+
+  // The point is recorded, but the new score isn't on screen yet.
+  expect(mockRecordPoint).toHaveBeenCalledTimes(1);
+  expect(onChanged).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText('Team A won the rally').props.accessibilityState.disabled).toBe(true);
+
+  await act(async () => {
+    finishRefresh();
+  });
+  expect(screen.getByLabelText('Team A won the rally').props.accessibilityState.disabled).toBeFalsy();
+});

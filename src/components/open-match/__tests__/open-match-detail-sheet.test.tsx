@@ -87,7 +87,7 @@ it('offers "Request to join" when the viewer has never requested', async () => {
 
 it('a successful request lands as accepted immediately — no waiting state', async () => {
   mockGetMyJoinRequest.mockResolvedValue(null);
-  mockRequestToJoinOpenMatch.mockResolvedValue(undefined);
+  mockRequestToJoinOpenMatch.mockResolvedValue('req-new');
   await renderSheet(openMatch({ id: 'open-42' }));
 
   const button = await screen.findByText('Request to join');
@@ -110,9 +110,29 @@ it('keeps the sheet open and shows the founder\'s own error text when the reques
     fireEvent.press(button);
   });
 
-  expect(mockToastShow).toHaveBeenCalledWith('You cannot party/play with this player, rank gap is too high.', 'error');
+  // In the sheet itself: a toast renders in the root view, underneath
+  // this page-sheet Modal, where nobody can see it.
+  expect(screen.getByText('You cannot party/play with this player, rank gap is too high.')).toBeTruthy();
   // Stayed open on the request screen — did not silently flip to "accepted".
   expect(screen.getByText('Request to join')).toBeTruthy();
+});
+
+it('leaving right after joining withdraws the request the join actually created', async () => {
+  // A placeholder id used to stand in for the new row, and
+  // withdraw_join_request failed its uuid cast on every tap.
+  mockGetMyJoinRequest.mockResolvedValue(null);
+  mockRequestToJoinOpenMatch.mockResolvedValue('3bff1573-28a8-44b5-87bb-3077743b7290');
+  mockWithdrawJoinRequest.mockResolvedValue(undefined);
+  await renderSheet();
+
+  await act(async () => {
+    fireEvent.press(await screen.findByText('Request to join'));
+  });
+  await act(async () => {
+    fireEvent.press(await screen.findByText('Leave game'));
+  });
+
+  expect(mockWithdrawJoinRequest).toHaveBeenCalledWith('3bff1573-28a8-44b5-87bb-3077743b7290');
 });
 
 it('shows an accepted request with a Leave game option', async () => {

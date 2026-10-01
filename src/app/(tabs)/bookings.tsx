@@ -81,7 +81,7 @@ export default function BookingsScreen() {
   const load = useCallback(async () => {
     try {
       const [myBookings, hostable] = await Promise.all([
-        listMyBookings(),
+        userId ? listMyBookings(userId) : Promise.resolve([]),
         userId ? listHostableBookings(userId) : Promise.resolve([]),
       ]);
       setBookings(myBookings);

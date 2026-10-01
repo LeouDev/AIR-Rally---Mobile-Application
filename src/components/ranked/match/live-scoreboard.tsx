@@ -28,7 +28,17 @@ import {
  */
 type ScoreAction = 'pointA' | 'pointB' | 'undo' | 'submit' | 'cancel';
 
-export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDetail; currentUserId: string }) {
+export function LiveScoreboard({
+  match,
+  currentUserId,
+  onChanged,
+}: {
+  match: RankedMatchDetail;
+  currentUserId: string;
+  /** Refetches `match` — awaited after every write so the buttons stay
+   * busy until the new score is on screen (useRankedMatch's refresh). */
+  onChanged?: () => Promise<void>;
+}) {
   const theme = useTheme();
   // One RPC in flight at a time, still — a scorekeeper double-tapping
   // must never record two points or race two writes against the same
@@ -53,6 +63,11 @@ export function LiveScoreboard({ match, currentUserId }: { match: RankedMatchDet
     setError(null);
     setPending(key);
     action()
+      // Hold the buttons until the new score is actually on screen. The
+      // RPC returns before Realtime + getMatch() redraw it, and a
+      // scorekeeper who taps and sees no change taps again — a second
+      // point in a rated match.
+      .then(() => onChanged?.())
       .catch((err) => {
         setError(err instanceof RankedError ? err.message : "That didn't go through. Try again.");
       })

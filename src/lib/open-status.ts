@@ -39,24 +39,27 @@ export type OpenStatus = {
 
 /** Port of the web's computeOpenStatus — same "Open now · closes 9pm" /
  * "Closed · opens 6am" / "Closed today" labeling, purely from operating
- * hours (no booking lookups), so it stays cheap across a whole results grid. */
+ * hours (no booking lookups), so it stays cheap across a whole results grid.
+ *
+ * A day can have several windows (unique on venue + day + start_time, e.g.
+ * "6 AM – 12 PM, 1 PM – 11 PM"), so all of today's are considered —
+ * reading just the first one called a venue with a midday break
+ * "Closed today" all afternoon. */
 export function computeOpenStatus(operatingHours: VenueOperatingHours[], timezone: string, now: Date = new Date()): OpenStatus {
   const dayOfWeek = localDayOfWeek(now, timezone);
   const nowMinutes = localMinutesOfDay(now, timezone);
-  const today = operatingHours.find((h) => h.day_of_week === dayOfWeek);
+  const windows = operatingHours
+    .filter((h) => h.day_of_week === dayOfWeek)
+    .map((h) => ({ start: toMinutes(h.start_time), end: toMinutes(h.end_time) }))
+    .sort((a, b) => a.start - b.start);
 
-  if (!today) {
-    return { isOpenNow: false, label: 'Closed today' };
+  const current = windows.find((w) => nowMinutes >= w.start && nowMinutes < w.end);
+  if (current) {
+    return { isOpenNow: true, label: `Open now · closes ${formatHourLabel(current.end)}` };
   }
-
-  const startMinutes = toMinutes(today.start_time);
-  const endMinutes = toMinutes(today.end_time);
-
-  if (nowMinutes >= startMinutes && nowMinutes < endMinutes) {
-    return { isOpenNow: true, label: `Open now · closes ${formatHourLabel(endMinutes)}` };
-  }
-  if (nowMinutes < startMinutes) {
-    return { isOpenNow: false, label: `Closed · opens ${formatHourLabel(startMinutes)}` };
+  const next = windows.find((w) => nowMinutes < w.start);
+  if (next) {
+    return { isOpenNow: false, label: `Closed · opens ${formatHourLabel(next.start)}` };
   }
   return { isOpenNow: false, label: 'Closed today' };
 }

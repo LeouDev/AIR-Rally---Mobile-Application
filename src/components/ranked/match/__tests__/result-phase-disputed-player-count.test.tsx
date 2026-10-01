@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 
 import { ResultPhase } from '@/components/ranked/match/result-phase';
@@ -122,5 +122,34 @@ describe('ResultPhase — DisputedView player count derived from match.players',
 
     await screen.findByText('Result disputed');
     expect(screen.getByText(/All 4 players have been notified\./)).toBeTruthy();
+  });
+});
+
+describe('ResultPhase — a dispute can be backed out of', () => {
+  it('"Never mind" brings Accept back after a mis-tapped Dispute', async () => {
+    // Tapping Dispute hides Accept, and the dispute view had no way back —
+    // a player who tapped it by accident could only file a dispute.
+    const match: RankedMatchDetail = {
+      ...matchFixture({ status: 'awaiting_confirmation' }),
+      players: [
+        participant({ user_id: 'me', team: 'a', result_response: 'pending' }),
+        participant({
+          user_id: 'opp',
+          team: 'b',
+          result_response: 'pending',
+          profile: { id: 'opp', display_name: 'Robin', avatar_url: null },
+        }),
+      ],
+      scorekeeper: null,
+      team_a_club: null,
+      team_b_club: null,
+    };
+    await render(<ResultPhase match={match} currentUserId="me" />);
+
+    await fireEvent.press(await screen.findByText('Dispute'));
+    expect(screen.queryByText('Accept')).toBeNull();
+
+    await fireEvent.press(screen.getByText('Never mind'));
+    expect(screen.getByText('Accept')).toBeTruthy();
   });
 });

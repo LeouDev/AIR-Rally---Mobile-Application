@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadError } from '@/components/load-error';
 import { Avatar, PostCard } from '@/components/post-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -60,6 +61,9 @@ export default function CourtSideScreen() {
   const [myClubs, setMyClubs] = useState<Club[]>([]);
 
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
+  // A failed first load used to set posts to [] — "No posts yet", as if
+  // the feed were empty. Kept apart so it can say so and offer a retry.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [nextCursor, setNextCursor] = useState<FeedCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -105,8 +109,9 @@ export default function CourtSideScreen() {
         setEventStatuses(statuses);
         setFollowingIds(new Set(following));
       }
+      setLoadFailed(false);
     } catch {
-      setPosts([]);
+      setLoadFailed(true);
     }
   }, [userId, scope]);
 
@@ -396,6 +401,7 @@ export default function CourtSideScreen() {
                           // meaningless once scope changes underneath it.
                           setPosts(null);
                           setNextCursor(null);
+                          setLoadFailed(false);
                           setActiveTab(tab);
                         }}
                         style={styles.tab}
@@ -502,7 +508,9 @@ export default function CourtSideScreen() {
               </View>
             }
             ListEmptyComponent={
-              posts === null ? (
+              posts === null && loadFailed ? (
+                <LoadError title="Couldn't load the feed" onRetry={onRefresh} />
+              ) : posts === null ? (
                 <View style={styles.skeletons}>
                   <Skeleton height={140} radius={Radius.xl} />
                   <Skeleton height={140} radius={Radius.xl} />
