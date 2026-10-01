@@ -93,35 +93,39 @@ export function OpenGamesSection({
         </View>
       ) : (
         <View style={[styles.list, { borderColor: theme.border, backgroundColor: theme.card }]}>
-          {games.map((game, i) => (
-            <Pressable
-              key={game.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${game.host?.display_name ?? 'A player'}'s open game`}
-              onPress={() => setSelectedGame(game)}
-              style={({ pressed }) => [
-                styles.row,
-                i < games.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.hairline },
-                pressed && styles.pressed,
-              ]}>
-              <Avatar profile={game.host} size={40} />
-              <View style={styles.rowText}>
-                <ThemedText type="smallBold" numberOfLines={1}>
-                  {game.host?.display_name ?? 'A player'}&apos;s game
-                </ThemedText>
-                <ThemedText type="caption" themeColor="mutedForeground">
-                  {game.acceptedCount} {game.acceptedCount === 1 ? 'player' : 'players'} in
-                  {/* Migration 120: reaching 4 accepted no longer converts
-                      the match or changes its status — it stays 'open'
-                      until the real match is created at scheduled_at or a
-                      manual host start, which can now be days out. Without
-                      this, a full match reads exactly like a joinable one
-                      right up until the server rejects the request. */}
-                  {game.acceptedCount >= 4 ? ' · Full' : ''} · {expiresInLabel(game.scheduled_at)}
-                </ThemedText>
-              </View>
-            </Pressable>
-          ))}
+          {games.map((game, i) => {
+            const title =
+              game.host_id === currentUserId ? 'Your game' : `${game.host?.display_name ?? 'A player'}'s game`;
+            return (
+              <Pressable
+                key={game.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${title}, open game`}
+                onPress={() => setSelectedGame(game)}
+                style={({ pressed }) => [
+                  styles.row,
+                  i < games.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.hairline },
+                  pressed && styles.pressed,
+                ]}>
+                <Avatar profile={game.host} size={40} />
+                <View style={styles.rowText}>
+                  <ThemedText type="smallBold" numberOfLines={1}>
+                    {title}
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="mutedForeground">
+                    {game.acceptedCount} {game.acceptedCount === 1 ? 'player' : 'players'} in
+                    {/* Migration 120: reaching 4 accepted no longer converts
+                        the match or changes its status — it stays 'open'
+                        until the real match is created at scheduled_at or a
+                        manual host start, which can now be days out. Without
+                        this, a full match reads exactly like a joinable one
+                        right up until the server rejects the request. */}
+                    {game.acceptedCount >= 4 ? ' · Full' : ''} · {expiresInLabel(game.scheduled_at)}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       )}
 

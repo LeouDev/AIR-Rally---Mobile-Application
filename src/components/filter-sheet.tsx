@@ -83,14 +83,11 @@ type FilterSheetProps = {
 
 /**
  * Same filter set as the web's FilterBar (court type, price range, min
- * rating, surface, open-on date/time, amenities) minus distance — that
- * one needs a device location. expo-location is now a dependency (added
- * unused for build 10) but nothing requests permission yet, so there is
- * still no location to filter by; adding distance means deciding when to
- * prompt, which is a separate call. Date
- * and time are plain text fields rather than a native picker for the
- * same reason: no @react-native-community/datetimepicker dependency to
- * avoid another native-rebuild detour.
+ * rating, surface, open-on date/time, amenities). Distance isn't here: it
+ * is Explore's own "Near me" toggle, which asks for location on the tap.
+ * Date and time are plain text fields rather than a native picker: no
+ * @react-native-community/datetimepicker dependency, to avoid a
+ * native-rebuild detour.
  */
 export function FilterSheet({ visible, onClose, filters, onApply, amenities, surfaceTypes }: FilterSheetProps) {
   const theme = useTheme();
@@ -133,7 +130,9 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
   };
 
   const reset = () => {
-    setDraft({ sort: draft.sort });
+    // "Near me" has its own toggle on Explore, so resetting the sheet's
+    // filters leaves it alone.
+    setDraft({ sort: draft.sort, near: draft.near });
     setMinPriceInput('');
     setMaxPriceInput('');
     setDateInput('');

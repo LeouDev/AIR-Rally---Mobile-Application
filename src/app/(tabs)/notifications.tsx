@@ -12,6 +12,7 @@ import type { Notification } from '@/lib/database.types';
 import { resolveNotificationTarget } from '@/lib/notification-links';
 import { formatRelativeTime } from '@/lib/relative-time';
 import { supabase } from '@/lib/supabase';
+import { refreshUnreadCount } from '@/lib/unread';
 import { useSession } from '@/providers/session';
 
 /**
@@ -65,6 +66,8 @@ export default function NotificationsScreen() {
     } else {
       setNotifications(data);
       setError(false);
+      // The tab and icon badges count every unread row, not just these 50.
+      void refreshUnreadCount(userId);
     }
   }, [userId]);
 
@@ -106,6 +109,7 @@ export default function NotificationsScreen() {
               prev?.map((n) => (n.id === notification.id ? { ...n, read_at: null } : n)) ?? prev
             );
           }
+          void refreshUnreadCount(userId);
         });
     }
 
@@ -119,12 +123,39 @@ export default function NotificationsScreen() {
     }
   }, [userId]);
 
+  const hasUnread = notifications?.some((n) => n.read_at === null) ?? false;
+
+  /** Optimistic, like a single tap: the list clears at once and rolls back
+   * if the write fails. Filtered by user, same as the single-row update. */
+  const markAllRead = async () => {
+    if (!userId || !notifications) return;
+    const unreadIds = new Set(notifications.filter((n) => n.read_at === null).map((n) => n.id));
+    const readAt = new Date().toISOString();
+    setNotifications((prev) => prev?.map((n) => (unreadIds.has(n.id) ? { ...n, read_at: readAt } : n)) ?? prev);
+    const { error: updateError } = await supabase
+      .from('notifications')
+      .update({ read_at: readAt })
+      .eq('user_id', userId)
+      .is('read_at', null);
+    if (updateError) {
+      setNotifications((prev) => prev?.map((n) => (unreadIds.has(n.id) ? { ...n, read_at: null } : n)) ?? prev);
+    }
+    void refreshUnreadCount(userId);
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="title" style={styles.heading}>
-          Alerts
-        </ThemedText>
+        <View style={styles.headingRow}>
+          <ThemedText type="title">Alerts</ThemedText>
+          {hasUnread ? (
+            <Pressable accessibilityRole="button" onPress={markAllRead} hitSlop={12}>
+              <ThemedText type="smallBold" themeColor="primary">
+                Mark all read
+              </ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
         {error && notifications !== null ? (
           <ThemedText type="small" themeColor="destructive">
             Couldn&apos;t refresh your alerts. Pull to retry.
@@ -206,7 +237,10 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  heading: {
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingTop: Spacing.three,
   },
   list: {

@@ -38,6 +38,22 @@ describe('rewrites the shapes web and app disagree on', () => {
     expect(webPathToAppPath('/bookings/bk_9/confirmation')).toBe('/booking/bk_9');
   });
 
+  // Web pages this app keeps under another name. Each must land on a real
+  // screen before the AASA claims it, or the link opens "Page not found".
+  it.each([
+    ['/events', '/play'],
+    ['/explore', '/'],
+    ['/profile/credits', '/credits'],
+    ['/profile/rank', '/profile'],
+    ['/profile/rank/history', '/ranked/games'],
+  ])('maps %s to %s', (web, app) => {
+    expect(webPathToAppPath(web)).toBe(app);
+  });
+
+  it('keeps an event detail link as it is — only the bare list moves to Play', () => {
+    expect(webPathToAppPath('/events/e1')).toBe('/events/e1');
+  });
+
   it('accepts the absolute URL form Universal Links actually deliver', () => {
     expect(webPathToAppPath('https://air-rally.com/courts/abc-123')).toBe('/venue/abc-123');
   });
