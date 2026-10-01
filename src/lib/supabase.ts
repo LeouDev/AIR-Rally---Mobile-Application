@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
 import type { Database } from '@/lib/database.types';
+import { reportingFetch } from '@/lib/sentry';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_KEY;
@@ -38,7 +39,9 @@ export const AUTH_STORAGE_KEY = `sb-${new URL(url).hostname.split('.')[0]}-auth-
  * flow the web app uses via its /auth/callback route, and the only one
  * that gives OAuth a `code` to exchange rather than tokens embedded in a
  * URL fragment, which is far less reliable to retrieve from a custom
- * `airrally://` redirect.
+ * `airrally://` redirect. Every request goes through reportingFetch, so
+ * server errors and schema mismatches reach Sentry although supabase-js
+ * never throws them.
  */
 export const supabase = createClient<Database>(url, key, {
   auth: {
@@ -49,6 +52,7 @@ export const supabase = createClient<Database>(url, key, {
     detectSessionInUrl: false,
     flowType: 'pkce',
   },
+  global: { fetch: reportingFetch },
 });
 
 /**

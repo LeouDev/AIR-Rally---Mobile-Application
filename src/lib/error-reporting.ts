@@ -69,9 +69,10 @@ function buildReport(error: unknown): ErrorReport {
  *   - A throw inside an event handler (the `Reserve & pay` press, a
  *     retry tap). React error boundaries only catch errors thrown
  *     during render, commit, or lifecycle — never in a callback.
- *   - A rejected promise in an async handler, which is the shape of
- *     every failed network call in this app. Those surface as caught
- *     errors and toasts, and reach nothing here.
+ *   - A rejected promise in an async handler. (A failed request rarely
+ *     rejects at all: supabase-js resolves with { error } and the API
+ *     helpers return a message. reportingFetch in lib/sentry.ts reports
+ *     those.)
  *   - A throw inside a timer or subscription callback.
  *
  * The distinction that matters: none of these render the branded error

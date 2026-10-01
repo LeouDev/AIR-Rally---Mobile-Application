@@ -1,3 +1,4 @@
+import { reportingFetch } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -19,7 +20,7 @@ export async function deleteAccount(): Promise<DeleteAccountResult> {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/mobile/account/delete`, {
+    const response = await reportingFetch(`${API_URL}/api/mobile/account/delete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,3 +1,4 @@
+import { reportingFetch } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -38,7 +39,7 @@ async function callApi<T>(
   }
 
   try {
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await reportingFetch(`${API_URL}${path}`, {
       method: payload === undefined ? 'GET' : 'POST',
       headers: {
         'Content-Type': 'application/json',
