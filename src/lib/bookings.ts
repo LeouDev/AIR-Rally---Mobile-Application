@@ -101,22 +101,6 @@ export async function listMyBookings(userId: string): Promise<BookingWithCourt[]
   return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeBookingRow);
 }
 
-/** Confirmed bookings that haven't started, soonest first — what booking
- * reminders are scheduled from. Filtered by user in the query, for the
- * same reason as listMyBookings. */
-export async function listUpcomingConfirmedBookings(userId: string, limit = 20): Promise<BookingWithCourt[]> {
-  const { data, error } = await supabase
-    .from('bookings')
-    .select('*, courts(name, venues(name, timezone))')
-    .eq('user_id', userId)
-    .eq('status', 'confirmed')
-    .gt('start_time', new Date().toISOString())
-    .order('start_time', { ascending: true })
-    .limit(limit);
-  if (error) throw error;
-  return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalizeBookingRow);
-}
-
 export async function getBookingWithCourt(bookingId: string): Promise<BookingWithCourt | null> {
   const { data, error } = await supabase
     .from('bookings')
