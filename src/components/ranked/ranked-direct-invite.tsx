@@ -207,7 +207,7 @@ export function RankedDirectInvite({
                 </ThemedText>
               </View>
               {isHost ? (
-                <ThemedText type="caption" themeColor="rally" style={styles.roleLabel}>
+                <ThemedText type="caption" themeColor="primaryText" style={styles.roleLabel}>
                   HOST
                 </ThemedText>
               ) : (

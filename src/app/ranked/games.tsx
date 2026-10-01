@@ -231,7 +231,7 @@ function GamesStatsCard({ rank }: { rank: PlayerRank | null }) {
           <ThemedText type="caption" themeColor="mutedForeground">
             Win Rate
           </ThemedText>
-          <ThemedText type="subtitle" themeColor="primary">
+          <ThemedText type="subtitle" themeColor="primaryText">
             {formatWinRate(rank)}
           </ThemedText>
         </View>

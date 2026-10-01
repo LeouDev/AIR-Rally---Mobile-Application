@@ -25,7 +25,7 @@ export default function NotFoundScreen() {
           </ThemedText>
           <Button title="Go to Explore" onPress={() => router.dismissTo('/')} />
           <Link href="/" style={styles.link}>
-            <ThemedText type="small" themeColor="primary">
+            <ThemedText type="small" themeColor="primaryText">
               Go home
             </ThemedText>
           </Link>

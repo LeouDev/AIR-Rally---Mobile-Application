@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import BookingStatusScreen from '@/app/booking/[id]/index';
 import type { BookingWithCourt } from '@/lib/bookings';
 import { getBookingWithCourt } from '@/lib/bookings';
+import { offerPushNotifications } from '@/lib/push';
 
 /**
  * A confirmed, still-upcoming booking that used AIR/Rally Credits used
@@ -36,6 +37,7 @@ jest.mock('@/lib/bookings', () => ({
 }));
 
 jest.mock('@/lib/checkout', () => ({ cancelBookingViaApi: jest.fn() }));
+jest.mock('@/lib/push', () => ({ offerPushNotifications: jest.fn(async () => {}) }));
 
 const mockGetBooking = getBookingWithCourt as jest.MockedFunction<typeof getBookingWithCourt>;
 
@@ -191,5 +193,32 @@ describe('BookingStatusScreen — leaving for the Bookings tab', () => {
 
     expect(router.dismissTo).toHaveBeenCalledWith('/(tabs)/bookings');
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('BookingStatusScreen — offering notifications at the right moment', () => {
+  // Push used to be asked for on first launch, before sign-in, with no
+  // reason given. A court just booked is the moment it obviously helps.
+  beforeEach(() => {
+    // This file doesn't clear mocks between tests; earlier tests' future
+    // bookings would otherwise count here.
+    jest.mocked(offerPushNotifications).mockClear();
+  });
+
+  it('offers notifications once the booking is confirmed and still ahead', async () => {
+    mockGetBooking.mockResolvedValue(bookingFixture({ status: 'confirmed', start_time: FAR_FUTURE }));
+    await render(<BookingStatusScreen />);
+
+    await waitFor(() => expect(offerPushNotifications).toHaveBeenCalledWith('Your court is booked.'));
+  });
+
+  it('does not offer them for a booking that already happened', async () => {
+    mockGetBooking.mockResolvedValue(
+      bookingFixture({ status: 'confirmed', start_time: '2020-01-01T01:00:00.000Z', end_time: '2020-01-01T02:00:00.000Z' })
+    );
+    await render(<BookingStatusScreen />);
+
+    await screen.findByText('Booking confirmed');
+    expect(offerPushNotifications).not.toHaveBeenCalled();
   });
 });

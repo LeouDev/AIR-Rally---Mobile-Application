@@ -74,7 +74,7 @@ function CityPickerSheetBody({ onClose, currentCitySlug, onSelect }: Omit<CityPi
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <ThemedText type="heading">Where do you play?</ThemedText>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={8}>
-            <ThemedText type="smallBold" themeColor="primary">
+            <ThemedText type="smallBold" themeColor="primaryText">
               Cancel
             </ThemedText>
           </Pressable>

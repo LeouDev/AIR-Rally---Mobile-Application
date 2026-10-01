@@ -95,7 +95,7 @@ export default function ForgotPasswordScreen() {
 
             <View style={styles.footer}>
               <Link href="/sign-in">
-                <ThemedText type="smallBold" themeColor="primary">
+                <ThemedText type="smallBold" themeColor="primaryText">
                   Back to sign in
                 </ThemedText>
               </Link>

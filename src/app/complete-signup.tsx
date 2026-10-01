@@ -83,7 +83,7 @@ export default function CompleteSignupScreen() {
               I agree to the{' '}
               <ThemedText
                 type="small"
-                themeColor="primary"
+                themeColor="primaryText"
                 accessibilityRole="link"
                 onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}>
                 AIR/Rally User Agreement (v{CURRENT_AGREEMENT_VERSION})

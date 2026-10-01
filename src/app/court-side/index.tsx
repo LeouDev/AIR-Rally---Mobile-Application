@@ -361,7 +361,7 @@ export default function CourtSideScreen() {
             ListHeaderComponent={
               <View>
                 <View style={styles.header}>
-                  <ThemedText type="caption" themeColor="primary" style={styles.eyebrow}>
+                  <ThemedText type="caption" themeColor="primaryText" style={styles.eyebrow}>
                     COURT/SIDE
                   </ThemedText>
                   <ThemedText type="title" style={styles.headline}>
@@ -374,7 +374,7 @@ export default function CourtSideScreen() {
                       style={styles.myRallyLink}
                       hitSlop={6}>
                       <Ionicons name="people" size={16} color={theme.primary} />
-                      <ThemedText type="smallBold" themeColor="primary">
+                      <ThemedText type="smallBold" themeColor="primaryText">
                         My/Rally
                       </ThemedText>
                     </Pressable>

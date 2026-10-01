@@ -17,6 +17,7 @@ import {
   type BookingWithCourt,
 } from '@/lib/bookings';
 import { cancelBookingViaApi, type CancelOutcome } from '@/lib/checkout';
+import { offerPushNotifications } from '@/lib/push';
 
 /** How long to keep polling a pending booking before assuming the payment
  * isn't coming through this sitting — matches the web's in-flight window
@@ -75,6 +76,15 @@ export default function BookingStatusScreen() {
     void poll();
     return stopPolling;
   }, [poll, stopPolling]);
+
+  // The moment notifications most obviously help: a court just booked
+  // (and still ahead — not an old booking opened from history).
+  const confirmedStart = booking?.status === 'confirmed' ? booking.start_time : null;
+  useEffect(() => {
+    if (confirmedStart && new Date(confirmedStart).getTime() > Date.now()) {
+      void offerPushNotifications('Your court is booked.');
+    }
+  }, [confirmedStart]);
 
   const onRefresh = async () => {
     setRefreshing(true);

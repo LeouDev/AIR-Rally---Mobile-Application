@@ -202,7 +202,7 @@ export default function PlayScreen() {
                 ]}>
                 <View style={styles.cardHeader}>
                   <View style={styles.titleBlock}>
-                    <ThemedText type="caption" themeColor="primary" style={styles.eyebrow}>
+                    <ThemedText type="caption" themeColor="primaryText" style={styles.eyebrow}>
                       Open Play
                     </ThemedText>
                     <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>

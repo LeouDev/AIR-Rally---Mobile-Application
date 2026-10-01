@@ -26,6 +26,7 @@ import {
   type PendingJoinRequest,
 } from '@/lib/events';
 import { createPost } from '@/lib/posts';
+import { offerPushNotifications } from '@/lib/push';
 import { getActiveMatchForEvent, matchStatusLabel } from '@/lib/ranked';
 import { useSession } from '@/providers/session';
 
@@ -93,6 +94,13 @@ export default function EventDetailScreen() {
         setMessage(myStatus === 'pending_approval' ? 'Request withdrawn.' : "You've left this game.");
       } else {
         const status = await joinEvent(userId, id);
+        void offerPushNotifications(
+          status === 'waitlisted'
+            ? "You're on the waitlist."
+            : status === 'pending_approval'
+              ? 'Your request is sent.'
+              : "You're in this game."
+        );
         setMessage(
           status === 'waitlisted'
             ? "You're on the waitlist — we'll move you up if a spot opens."

@@ -277,7 +277,7 @@ export default function VenueDetailScreen() {
                         styles.galleryDot,
                         {
                           backgroundColor:
-                            index === galleryIndex ? theme.rallyForeground : 'rgba(246,241,232,0.5)',
+                            index === galleryIndex ? theme.navyForeground : 'rgba(246,241,232,0.5)',
                         },
                       ]}
                     />
@@ -340,7 +340,7 @@ export default function VenueDetailScreen() {
                     accessibilityRole="button"
                     onPress={() => Linking.openURL(directions)}
                     style={styles.directionsLink}>
-                    <ThemedText type="smallBold" themeColor="primary">
+                    <ThemedText type="smallBold" themeColor="primaryText">
                       Get directions →
                     </ThemedText>
                   </Pressable>
@@ -418,14 +418,14 @@ export default function VenueDetailScreen() {
                   </ThemedText>
                   {venue.phone ? (
                     <Pressable accessibilityRole="button" onPress={() => Linking.openURL(`tel:${venue.phone}`)}>
-                      <ThemedText type="small" themeColor="primary">
+                      <ThemedText type="small" themeColor="primaryText">
                         {venue.phone}
                       </ThemedText>
                     </Pressable>
                   ) : null}
                   {venue.email ? (
                     <Pressable accessibilityRole="button" onPress={() => Linking.openURL(`mailto:${venue.email}`)}>
-                      <ThemedText type="small" themeColor="primary">
+                      <ThemedText type="small" themeColor="primaryText">
                         {venue.email}
                       </ThemedText>
                     </Pressable>

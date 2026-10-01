@@ -16,6 +16,13 @@ if (!url || !key) {
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
+/** Where supabase-js keeps the session — exactly its own default
+ * (`sb-<project-ref>-auth-token`), so passing it below changes nothing and
+ * signs nobody out. Named so the session provider can read the stored
+ * session when supabase-js won't hand it back: offline, with an expired
+ * access token it can't refresh yet. */
+export const AUTH_STORAGE_KEY = `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
+
 /**
  * Same Supabase project as air-rally.com — the mobile app talks to it
  * directly and relies on the exact RLS policies the web app already
@@ -36,6 +43,7 @@ const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 export const supabase = createClient<Database>(url, key, {
   auth: {
     ...(isNative ? { storage: AsyncStorage } : {}),
+    storageKey: AUTH_STORAGE_KEY,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

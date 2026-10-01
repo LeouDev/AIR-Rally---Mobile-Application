@@ -22,11 +22,13 @@ export type PickedAvatar = { uri: string; mimeType: string };
 /** Opens the native photo library with square cropping built into the OS
  * picker UI (allowsEditing + aspect) — no separate crop library needed,
  * unlike the web's react-easy-crop dialog. Returns null if the user
- * cancelled or permission was denied. */
+ * cancelled.
+ *
+ * No photo-library permission request: the system picker runs outside the
+ * app and needs none (expo-image-picker: "Requires MEDIA_LIBRARY on iOS 10
+ * only"). Asking anyway gated the picker on it — one "Don't Allow" and
+ * the photo button silently did nothing, for good. */
 export async function pickAvatarImage(): Promise<PickedAvatar | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) return null;
-
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsEditing: true,

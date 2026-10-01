@@ -160,7 +160,7 @@ function LeaderboardRow({ entry, isMe }: { entry: RankedLeaderboardRow; isMe: bo
           Tier {entry.tier}
         </ThemedText>
       </View>
-      <ThemedText type="smallBold" themeColor="primary" style={styles.star}>
+      <ThemedText type="smallBold" themeColor="primaryText" style={styles.star}>
         {pipNumeral(entry.pips)}
       </ThemedText>
       <ThemedText type="smallBold" style={styles.rating}>

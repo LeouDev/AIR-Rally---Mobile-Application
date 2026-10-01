@@ -68,7 +68,7 @@ function RatingFreezeSheetBody({ onClose, userId, onConfirm }: Omit<RatingFreeze
               sheet, with the fuller explanation demoted below it. */}
           <ThemedText type="heading">{onConfirm ? 'Playing without a booking' : 'Your court not here?'}</ThemedText>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={8}>
-            <ThemedText type="smallBold" themeColor="primary">
+            <ThemedText type="smallBold" themeColor="primaryText">
               Close
             </ThemedText>
           </Pressable>

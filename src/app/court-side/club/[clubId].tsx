@@ -147,7 +147,7 @@ export default function MyClubScreen() {
               ItemSeparatorComponent={() => <View style={{ height: Spacing.three }} />}
               ListHeaderComponent={
                 <View style={styles.header}>
-                  <ThemedText type="caption" themeColor="primary" style={styles.eyebrow}>
+                  <ThemedText type="caption" themeColor="primaryText" style={styles.eyebrow}>
                     MY CLUB
                   </ThemedText>
                   <ThemedText type="title" style={styles.headline}>

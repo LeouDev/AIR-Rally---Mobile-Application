@@ -255,7 +255,7 @@ export default function SupportScreen() {
                 Prefer email? Reach us at{' '}
                 <ThemedText
                   type="small"
-                  themeColor="primary"
+                  themeColor="primaryText"
                   onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}>
                   {SUPPORT_EMAIL}
                 </ThemedText>

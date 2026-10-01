@@ -13,13 +13,11 @@ export const MAX_POST_IMAGE_BYTES = 5 * 1024 * 1024;
 export type PickedPostImage = { uri: string; mimeType: string; fileName: string | null };
 
 /** Opens the native photo library for up to `remaining` images. Returns
- * an empty array if the user cancelled or permission was denied — never
- * throws for either, same posture as pickAvatarImage(). */
+ * an empty array if the user cancelled — never throws for it, same
+ * posture as pickAvatarImage(), and like it asks for no photo-library
+ * permission (the system picker needs none). */
 export async function pickPostImages(remaining: number): Promise<PickedPostImage[]> {
   if (remaining <= 0) return [];
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) return [];
-
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsMultipleSelection: true,
