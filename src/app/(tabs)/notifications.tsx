@@ -150,7 +150,7 @@ export default function NotificationsScreen() {
           <ThemedText type="title">Alerts</ThemedText>
           {hasUnread ? (
             <Pressable accessibilityRole="button" onPress={markAllRead} hitSlop={12}>
-              <ThemedText type="smallBold" themeColor="primary">
+              <ThemedText type="smallBold" themeColor="primaryText">
                 Mark all read
               </ThemedText>
             </Pressable>

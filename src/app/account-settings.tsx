@@ -171,7 +171,7 @@ function NotificationsToggle({ userId, initialEnabled }: { userId: string; initi
           <View
             style={[
               styles.switchThumb,
-              { backgroundColor: theme.primaryForeground, transform: [{ translateX: enabled ? 20 : 2 }] },
+              { backgroundColor: theme.card, transform: [{ translateX: enabled ? 20 : 2 }] },
             ]}
           />
         </Pressable>
@@ -247,7 +247,7 @@ function SupportLinks() {
     <View style={styles.block}>
       <ThemedText type="subtitle">Support</ThemedText>
       <Pressable accessibilityRole="link" onPress={() => Linking.openURL('https://air-rally.com/support')}>
-        <ThemedText type="small" themeColor="primary">
+        <ThemedText type="small" themeColor="primaryText">
           Get help
         </ThemedText>
       </Pressable>
@@ -262,14 +262,14 @@ function LegalLinks() {
       <Pressable
         accessibilityRole="button"
         onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}>
-        <ThemedText type="small" themeColor="primary">
+        <ThemedText type="small" themeColor="primaryText">
           User Agreement
         </ThemedText>
       </Pressable>
       <Pressable
         accessibilityRole="button"
         onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'privacy' } })}>
-        <ThemedText type="small" themeColor="primary">
+        <ThemedText type="small" themeColor="primaryText">
           Privacy Policy
         </ThemedText>
       </Pressable>

@@ -104,7 +104,7 @@ function ReportSheetBody({ onClose, targetType, targetId, targetLabel }: Omit<Re
             <View style={[styles.header, { borderBottomColor: theme.border }]}>
               <ThemedText type="heading">Report {targetLabel}</ThemedText>
               <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={8}>
-                <ThemedText type="smallBold" themeColor="primary">
+                <ThemedText type="smallBold" themeColor="primaryText">
                   Cancel
                 </ThemedText>
               </Pressable>

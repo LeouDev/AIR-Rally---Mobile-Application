@@ -196,7 +196,7 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
             {/* "Cancel", not "Done": this discards the draft — only Apply
                 saves — and on iOS a top-right "Done" means confirm. */}
             <Pressable accessibilityRole="button" onPress={onClose} hitSlop={8}>
-              <ThemedText type="smallBold" themeColor="primary">
+              <ThemedText type="smallBold" themeColor="primaryText">
                 Cancel
               </ThemedText>
             </Pressable>
@@ -315,7 +315,7 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
                         { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
                       ]}>
                       <ThemedText type="small">Any date</ThemedText>
-                      <ThemedText type="caption" themeColor="primary">
+                      <ThemedText type="caption" themeColor="primaryText">
                         Choose a date
                       </ThemedText>
                     </Pressable>
@@ -364,7 +364,7 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
                                 styles.openOnEmpty,
                                 { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
                               ]}>
-                              <ThemedText type="small" themeColor="primary">
+                              <ThemedText type="small" themeColor="primaryText">
                                 Any time
                               </ThemedText>
                             </Pressable>
@@ -395,7 +395,7 @@ export function FilterSheet({ visible, onClose, filters, onApply, amenities, sur
                       }}
                       hitSlop={8}
                       style={({ pressed }) => [styles.openOnClear, { opacity: pressed ? 0.6 : 1 }]}>
-                      <ThemedText type="caption" themeColor="primary">
+                      <ThemedText type="caption" themeColor="primaryText">
                         Clear date and time
                       </ThemedText>
                     </Pressable>

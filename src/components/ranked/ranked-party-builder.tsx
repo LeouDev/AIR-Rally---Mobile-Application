@@ -305,7 +305,7 @@ export function RankedPartyBuilder({
                 )}
               </View>
               {slot.isHost ? (
-                <ThemedText type="caption" themeColor="rally" style={styles.roleLabel}>
+                <ThemedText type="caption" themeColor="primaryText" style={styles.roleLabel}>
                   {slot.roleLabel}
                 </ThemedText>
               ) : slot.player ? (

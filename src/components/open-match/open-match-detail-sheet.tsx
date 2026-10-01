@@ -25,6 +25,7 @@ import {
   type OpenMatchJoinRequest,
   type OpenMatchListing,
 } from '@/lib/open-match';
+import { offerPushNotifications } from '@/lib/push';
 
 /**
  * The join flow for a viewer — request, withdraw, and see your own
@@ -119,6 +120,7 @@ function OpenMatchDetailSheetBody({
         created_at: new Date().toISOString(),
       });
       show("You're in!", 'success');
+      void offerPushNotifications("You're in this game.");
     } catch (err) {
       // Stays open — a closed sheet after a failed request would look
       // identical to one that went through.
@@ -152,7 +154,7 @@ function OpenMatchDetailSheetBody({
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <ThemedText type="heading">Open game</ThemedText>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={8}>
-            <ThemedText type="smallBold" themeColor="primary">
+            <ThemedText type="smallBold" themeColor="primaryText">
               Close
             </ThemedText>
           </Pressable>
@@ -385,7 +387,7 @@ function RequestStatusBody({
     case 'accepted':
       return (
         <View style={styles.stackSmall}>
-          <ThemedText type="smallBold" themeColor="primary">
+          <ThemedText type="smallBold" themeColor="primaryText">
             You&apos;re in.
           </ThemedText>
           <Button title="Leave game" variant="outline" onPress={onLeave} disabled={busy} loading={busy} />

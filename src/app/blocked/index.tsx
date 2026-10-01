@@ -77,7 +77,7 @@ export default function BlockedPlayersScreen() {
                 accessibilityLabel={`Unblock ${item.display_name ?? 'this player'}`}
                 onPress={() => unblock(item)}
                 hitSlop={8}>
-                <ThemedText type="smallBold" themeColor="primary">
+                <ThemedText type="smallBold" themeColor="primaryText">
                   Unblock
                 </ThemedText>
               </Pressable>

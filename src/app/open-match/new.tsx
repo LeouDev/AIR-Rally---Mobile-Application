@@ -14,6 +14,7 @@ import { useKeyboardAwareScroll } from '@/hooks/use-keyboard-aware-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import { formatFilterDate, formatFilterTime, parseFilterDate, parseFilterTime } from '@/lib/filter-dates';
 import { createOpenMatch, getMyCity, setMyCity, type City } from '@/lib/open-match';
+import { offerPushNotifications } from '@/lib/push';
 import { RankedError } from '@/lib/ranked';
 import { listMarketplaceVenues, type MarketplaceVenue } from '@/lib/venues';
 import { useSession } from '@/providers/session';
@@ -147,6 +148,7 @@ export default function NewOpenMatchScreen() {
         label: selectedVenue ? undefined : venueQuery.trim() || undefined,
       });
       show('Game posted — players nearby will be notified.', 'success');
+      void offerPushNotifications('Your game is posted.');
       router.dismissTo('/(tabs)/play');
     } catch (e) {
       show(e instanceof RankedError ? e.message : "That didn't go through. Try again.", 'error');

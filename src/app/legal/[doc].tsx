@@ -56,7 +56,7 @@ export default function LegalDocumentScreen() {
               See also{' '}
               <ThemedText
                 type="small"
-                themeColor="primary"
+                themeColor="primaryText"
                 onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: otherKey } })}>
                 the {otherTitle}
               </ThemedText>

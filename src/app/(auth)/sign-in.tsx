@@ -94,7 +94,7 @@ export default function SignInScreen() {
               ) : null}
 
               <Link href="/forgot-password" style={styles.forgotLink}>
-                <ThemedText type="small" themeColor="primary">
+                <ThemedText type="small" themeColor="primaryText">
                   Forgot password?
                 </ThemedText>
               </Link>
@@ -107,7 +107,7 @@ export default function SignInScreen() {
                 New to AIR/Rally?
               </ThemedText>
               <Link href="/sign-up">
-                <ThemedText type="smallBold" themeColor="primary">
+                <ThemedText type="smallBold" themeColor="primaryText">
                   Create an account
                 </ThemedText>
               </Link>

@@ -141,7 +141,7 @@ function renderContent(content: string) {
   const parts = content.split(/(@[a-zA-Z0-9_]+)/g);
   return parts.map((part, i) =>
     part.startsWith('@') ? (
-      <ThemedText key={i} type="small" themeColor="primary" style={styles.mention}>
+      <ThemedText key={i} type="small" themeColor="primaryText" style={styles.mention}>
         {part}
       </ThemedText>
     ) : (

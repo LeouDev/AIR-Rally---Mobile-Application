@@ -1,3 +1,4 @@
+import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
@@ -52,15 +53,18 @@ export function useNotificationObserver(): void {
   useEffect(() => {
     if (!isNative) return;
 
-    // Presentation permission, asked once (only while undetermined — a
-    // "no" is respected). The token-registration path also asks, but it
-    // exits early on simulators, which would leave dev builds unable to
-    // show any banner at all.
-    Notifications.getPermissionsAsync().then(({ status }) => {
-      if (status === 'undetermined') {
-        Notifications.requestPermissionsAsync();
-      }
-    });
+    // Simulators only: they never register a push token, so without this
+    // a dev build could never show a banner. On a real phone the ask waits
+    // for a moment that explains it (offerPushNotifications in lib/push.ts)
+    // — asking here, on first launch before sign-in, spent iOS's one-time
+    // prompt with no context.
+    if (!Device.isDevice) {
+      Notifications.getPermissionsAsync().then(({ status }) => {
+        if (status === 'undetermined') {
+          Notifications.requestPermissionsAsync();
+        }
+      });
+    }
 
     let coldStartHandled = false;
 

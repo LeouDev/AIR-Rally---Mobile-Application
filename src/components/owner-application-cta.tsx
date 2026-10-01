@@ -61,7 +61,7 @@ export function OwnerApplicationCTA({ ownerStatus }: { ownerStatus: OwnerStatus 
           </ThemedText>
         </View>
       </View>
-      <ThemedText type="smallBold" themeColor="primary" style={styles.cta}>
+      <ThemedText type="smallBold" themeColor="primaryText" style={styles.cta}>
         Start Owner Application →
       </ThemedText>
     </Pressable>

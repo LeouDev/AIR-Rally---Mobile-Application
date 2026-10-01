@@ -116,7 +116,7 @@ export function VenueReviews({ venueId }: { venueId: string }) {
         </ThemedText>
         {eligibility?.eligible && !alreadyReviewed && !showForm ? (
           <Pressable accessibilityRole="button" onPress={() => setShowForm(true)}>
-            <ThemedText type="smallBold" themeColor="primary">
+            <ThemedText type="smallBold" themeColor="primaryText">
               Write a review
             </ThemedText>
           </Pressable>

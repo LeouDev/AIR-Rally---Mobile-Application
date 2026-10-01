@@ -120,7 +120,7 @@ function TeamIdentitySheetBody({
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
             <ThemedText type="heading">Team identity</ThemedText>
             <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={8}>
-              <ThemedText type="smallBold" themeColor="primary">
+              <ThemedText type="smallBold" themeColor="primaryText">
                 Cancel
               </ThemedText>
             </Pressable>

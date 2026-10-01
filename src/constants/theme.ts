@@ -23,8 +23,16 @@ const light = {
 
   // Rally Orange — the energetic, "go" color.
   primary: '#f3700f',
-  primaryForeground: '#ffffff',
+  // Navy, not white: white on #f3700f is 2.94:1, failing WCAG even for
+  // large text — every primary button label, read outdoors at a court.
+  // Navy on it is 5.09:1.
+  primaryForeground: '#0f2747',
   primaryPressed: '#d85f06',
+  // Rally Orange for TEXT on light surfaces. #f3700f itself is 2.62:1 on
+  // the cream ground and 2.94:1 on white; this keeps the hue and clears
+  // 4.5:1 on cream, white and muted. On navy, the bright orange already
+  // passes (5.09:1), so text there stays `primary`/`rally`.
+  primaryText: '#a84c07',
 
   // Deep Navy — trust, structure, nav/header surfaces.
   secondary: '#0f2747',
@@ -67,7 +75,8 @@ const light = {
   navyForeground: '#f6f1e8',
   navyRaised: '#183658',
   rally: '#f3700f',
-  rallyForeground: '#ffffff',
+  // Same reason as primaryForeground.
+  rallyForeground: '#0f2747',
 } as const;
 
 export type ThemeColor = keyof typeof light;
@@ -81,8 +90,9 @@ const dark: Record<ThemeColor, string> = {
   cardForeground: '#f6f1e8',
 
   primary: '#f3700f',
-  primaryForeground: '#ffffff',
+  primaryForeground: '#0f2747',
   primaryPressed: '#d85f06',
+  primaryText: '#f3700f',
 
   // Navy is the ground here, so the "navy surface" role lifts a step.
   secondary: '#1e3b5f',
@@ -128,7 +138,7 @@ const dark: Record<ThemeColor, string> = {
   navyForeground: '#f6f1e8',
   navyRaised: '#1e3b5f',
   rally: '#f3700f',
-  rallyForeground: '#ffffff',
+  rallyForeground: '#0f2747',
 };
 
 export const Colors: { light: Record<ThemeColor, string>; dark: Record<ThemeColor, string> } = {

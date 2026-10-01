@@ -295,7 +295,7 @@ export default function SignUpScreen() {
                   I agree to the{' '}
                   <ThemedText
                     type="small"
-                    themeColor="primary"
+                    themeColor="primaryText"
                     onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}>
                     AIR/Rally User Agreement (v{CURRENT_AGREEMENT_VERSION})
                   </ThemedText>
@@ -317,7 +317,7 @@ export default function SignUpScreen() {
                 Already have an account?
               </ThemedText>
               <Link href="/sign-in">
-                <ThemedText type="smallBold" themeColor="primary">
+                <ThemedText type="smallBold" themeColor="primaryText">
                   Sign in
                 </ThemedText>
               </Link>
