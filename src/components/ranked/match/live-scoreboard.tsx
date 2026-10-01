@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
@@ -60,6 +61,9 @@ export function LiveScoreboard({
 
   const run = (key: ScoreAction, action: () => Promise<void>) => {
     if (busy) return;
+    // Felt the moment the tap registers, before the server answers, by a
+    // scorekeeper whose eyes are on the court rather than the phone.
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setError(null);
     setPending(key);
     action()

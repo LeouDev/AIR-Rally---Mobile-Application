@@ -2,16 +2,17 @@
   "expo": {
     "name": "AIR/Rally",
     "slug": "air-rally",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "airrally",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/images/app-icon.png",
       "bundleIdentifier": "com.airrally.app",
       "associatedDomains": [
-        "applinks:air-rally.com"
+        "applinks:air-rally.com",
+        "webcredentials:air-rally.com"
       ],
       "supportsTablet": false,
       "infoPlist": {

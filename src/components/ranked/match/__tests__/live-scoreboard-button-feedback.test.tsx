@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import React from 'react';
 
 import { LiveScoreboard } from '@/components/ranked/match/live-scoreboard';
@@ -40,6 +41,11 @@ function looksDimmed(element: { props: { style?: unknown } }): boolean {
   const flat = (Array.isArray(element.props.style) ? element.props.style : [element.props.style]).flat(Infinity);
   return flat.some((s) => typeof s === 'object' && s !== null && (s as { opacity?: number }).opacity === 0.5);
 }
+
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(() => Promise.resolve()),
+  ImpactFeedbackStyle: { Light: 'light' },
+}));
 
 jest.mock('@/lib/ranked', () => ({
   ...jest.requireActual('@/lib/ranked'),
@@ -217,4 +223,22 @@ it('keeps the scoring buttons blocked until the refreshed score lands, not just 
     finishRefresh();
   });
   expect(screen.getByLabelText('Team A won the rally').props.accessibilityState.disabled).toBeFalsy();
+});
+
+it('confirms a scoring tap with a haptic before the server answers', async () => {
+  let resolveRecordPoint: () => void = () => {};
+  mockRecordPoint.mockReturnValue(new Promise<void>((resolve) => (resolveRecordPoint = resolve)));
+  const me = participant();
+  const opp = participant({ user_id: 'opp', team: 'b', profile: { id: 'opp', display_name: 'Robin', avatar_url: null } });
+  const match = { ...matchFixture(), players: [me, opp], scorekeeper: null, team_a_club: null, team_b_club: null };
+
+  await render(<LiveScoreboard match={match} currentUserId="me" />);
+  await fireEvent.press(screen.getByLabelText('Team A won the rally'));
+
+  expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
+  expect(Haptics.impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+
+  await act(async () => {
+    resolveRecordPoint();
+  });
 });
